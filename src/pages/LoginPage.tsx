@@ -130,6 +130,10 @@ export function LoginPage() {
             🔒&nbsp;This is a restricted government portal. Unauthorised access is
             strictly prohibited and may be subject to legal action under the IT Act, 2000.
           </p>
+          <p className="login-foot login-foot-secondary">
+            Your session is stored only in this browser tab. Opening the same link in another tab
+            requires signing in again. After 30 minutes without activity you are signed out automatically.
+          </p>
         </div>
       </div>
     </div>

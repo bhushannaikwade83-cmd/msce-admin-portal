@@ -815,6 +815,15 @@ body::before {
   margin-top: 1.1rem;
 }
 
+.login-foot-secondary {
+  margin-top: 0.5rem;
+  max-width: 26rem;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.45;
+  opacity: 0.92;
+}
+
 /* ============================================================
    BUTTONS
    ============================================================ */

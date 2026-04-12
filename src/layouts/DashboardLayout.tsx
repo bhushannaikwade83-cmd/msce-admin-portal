@@ -133,9 +133,9 @@ export function DashboardLayout({ userEmail, activeTab, onTab, onSignOut, childr
               </div>
             </div>
             <div className="dash-topbar-right">
-              <div className="dash-session-info">
+              <div className="dash-session-info" title="Sign-in applies to this browser tab only. Idle 30 minutes signs you out.">
                 <span className="dash-session-dot" aria-hidden />
-                Active session
+                Secured tab session
               </div>
             </div>
           </header>

@@ -20,6 +20,9 @@ export type AuthState = {
 
 export const AuthContext = createContext<AuthState | null>(null)
 
+/** No user input for this long → sign out (reduces risk from unattended unlocked screens). */
+const IDLE_SIGN_OUT_MS = 30 * 60 * 1000
+
 /** Auth + config banner live here so children always see a valid context (HMR-safe). */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -51,6 +54,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  const signOut = useCallback(async () => {
+    const client = getSupabase()
+    const { error } = await client.auth.signOut({ scope: 'global' })
+    if (error) {
+      await client.auth.signOut({ scope: 'local' })
+    }
+  }, [])
+
+  /** Auto sign-out after idle (this tab only; pairs with per-tab session storage). */
+  useEffect(() => {
+    if (!session) return
+    let lastActivity = Date.now()
+    const touch = () => {
+      lastActivity = Date.now()
+    }
+    const opts: AddEventListenerOptions = { capture: true, passive: true }
+    const events: (keyof WindowEventMap)[] = [
+      'mousedown',
+      'keydown',
+      'scroll',
+      'touchstart',
+      'click',
+    ]
+    for (const ev of events) {
+      window.addEventListener(ev, touch, opts)
+    }
+    const tick = window.setInterval(() => {
+      if (Date.now() - lastActivity >= IDLE_SIGN_OUT_MS) {
+        void signOut()
+      }
+    }, 60_000)
+    return () => {
+      for (const ev of events) {
+        window.removeEventListener(ev, touch, opts)
+      }
+      window.clearInterval(tick)
+    }
+  }, [session, signOut])
+
   const signIn = useCallback(async (email: string, password: string) => {
     try {
       const client = getSupabase()
@@ -67,16 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
       return { error: raw }
-    }
-  }, [])
-
-  const signOut = useCallback(async () => {
-    const client = getSupabase()
-    // Global: revoke refresh token on Supabase (invalidates this session everywhere).
-    const { error } = await client.auth.signOut({ scope: 'global' })
-    if (error) {
-      // Offline or server unreachable — still clear this browser’s session.
-      await client.auth.signOut({ scope: 'local' })
     }
   }, [])
 
