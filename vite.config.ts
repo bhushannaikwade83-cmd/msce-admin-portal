@@ -42,23 +42,42 @@ function loadMergedEnv(): Record<string, string> {
   }
 }
 
-function resolveSupabaseFromMerged(merged: Record<string, string>): {
+/**
+ * Supabase URL/keys for `define` at build time.
+ * 1) `.env` files (merged) win locally so a stray shell export does not override your real project.
+ * 2) `process.env` is used when files are empty — required for Vercel/CI (no committed `.env.local`).
+ */
+function resolveSupabase(merged: Record<string, string>): {
   url: string
   anonKey: string
   storageBucket: string
 } {
-  // Files only — never process.env. A shell `export VITE_SUPABASE_URL=https://your_project.supabase.co`
-  // would otherwise override via Vite loadEnv + import.meta.env and break the client bundle.
-  const url = merged.VITE_SUPABASE_URL || merged.SUPABASE_URL || ''
-  const anonKey = merged.VITE_SUPABASE_ANON_KEY || merged.SUPABASE_ANON_KEY || ''
-  const storageBucket = merged.VITE_STORAGE_BUCKET || ''
-  return { url: url.trim(), anonKey: anonKey.trim(), storageBucket: storageBucket.trim() }
+  const url =
+    (merged.VITE_SUPABASE_URL || merged.SUPABASE_URL || '').trim() ||
+    (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim()
+  const anonKey =
+    (merged.VITE_SUPABASE_ANON_KEY || merged.SUPABASE_ANON_KEY || '').trim() ||
+    (
+      process.env.VITE_SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      ''
+    ).trim()
+  const storageBucket =
+    (merged.VITE_STORAGE_BUCKET || '').trim() ||
+    (process.env.VITE_STORAGE_BUCKET || '').trim()
+  return { url, anonKey, storageBucket }
 }
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const merged = loadMergedEnv()
-  const { url, anonKey, storageBucket } = resolveSupabaseFromMerged(merged)
+  const { url, anonKey, storageBucket } = resolveSupabase(merged)
+  if (mode === 'production' && (!url || !anonKey)) {
+    console.warn(
+      '[vite] Production build: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are empty. ' +
+        'Set them in Vercel → Project → Settings → Environment Variables (or use merged .env files for local builds).',
+    )
+  }
   if (url.includes('your_project') || url.includes('xxxx')) {
     console.warn(
       '[vite] SUPABASE_URL looks like a placeholder. Fix .env / tools/admin-portal-react/.env.local — not the shell.',
@@ -94,7 +113,9 @@ export default defineConfig(({ mode }) => {
       __EDUSETU_STORAGE_BUCKET__: JSON.stringify(storageBucket),
       __EDUSETU_USE_SUPABASE_PROXY__: JSON.stringify(devProxyEnabled),
       /** Production: set VITE_B2_SIGN_API to your HTTPS endpoint that accepts POST { objectPath } → { url }. */
-      __EDUSETU_B2_SIGN_API__: JSON.stringify((merged.VITE_B2_SIGN_API || '').trim()),
+      __EDUSETU_B2_SIGN_API__: JSON.stringify(
+        (merged.VITE_B2_SIGN_API || process.env.VITE_B2_SIGN_API || '').trim(),
+      ),
     },
     server: {
       proxy: {

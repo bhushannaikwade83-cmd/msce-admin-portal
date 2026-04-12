@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
 export type DashboardTab =
   | 'overview'
@@ -13,7 +13,7 @@ type Props = {
   userEmail: string | null
   activeTab: DashboardTab
   onTab: (t: DashboardTab) => void
-  onSignOut: () => void
+  onSignOut: () => void | Promise<void>
   children: ReactNode
 }
 
@@ -35,7 +35,18 @@ const tabs: TabDef[] = [
 ]
 
 export function DashboardLayout({ userEmail, activeTab, onTab, onSignOut, children }: Props) {
+  const [signingOut, setSigningOut] = useState(false)
   const currentTab = tabs.find((x) => x.id === activeTab)
+
+  async function handleSignOut() {
+    if (signingOut) return
+    setSigningOut(true)
+    try {
+      await onSignOut()
+    } finally {
+      setSigningOut(false)
+    }
+  }
 
   function renderNav() {
     const nodes: ReactNode[] = []
@@ -100,9 +111,11 @@ export function DashboardLayout({ userEmail, activeTab, onTab, onSignOut, childr
             <button
               type="button"
               className="btn btn-ghost btn-block btn-sm"
-              onClick={() => void onSignOut()}
+              disabled={signingOut}
+              aria-busy={signingOut}
+              onClick={() => void handleSignOut()}
             >
-              🚪 Sign Out
+              {signingOut ? '⏳ Signing out…' : '🚪 Sign Out'}
             </button>
           </div>
         </aside>

@@ -72,7 +72,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const client = getSupabase()
-    await client.auth.signOut()
+    // Global: revoke refresh token on Supabase (invalidates this session everywhere).
+    const { error } = await client.auth.signOut({ scope: 'global' })
+    if (error) {
+      // Offline or server unreachable — still clear this browser’s session.
+      await client.auth.signOut({ scope: 'local' })
+    }
   }, [])
 
   const value = useMemo(

@@ -35,7 +35,7 @@ export function getSupabaseConfig(): { url: string; anonKey: string } {
   const anonKey = __EDUSETU_SUPABASE_ANON_KEY__?.trim()
   if (!baseUrl || !anonKey) {
     throw new Error(
-      'Missing Supabase URL/anon key. Use the same project root .env as the Flutter app: SUPABASE_URL and SUPABASE_ANON_KEY (or VITE_SUPABASE_* in tools/admin-portal-react/.env.local).',
+      'Missing Supabase URL/anon key. For local dev: add SUPABASE_URL and SUPABASE_ANON_KEY (or VITE_SUPABASE_*) to .env.local. For Vercel: set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Project → Settings → Environment Variables, then redeploy.',
     )
   }
   return { url: effectiveSupabaseUrl(baseUrl), anonKey }
@@ -63,6 +63,9 @@ export function getSupabase(): SupabaseClient {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      flowType: 'pkce',
+      /** Isolates tokens from other apps on the same origin and avoids default key collisions. */
+      storageKey: 'msce-admin-portal.auth',
     },
   })
   ;(cached as unknown as Record<string, string>)[URL_MARK] = url

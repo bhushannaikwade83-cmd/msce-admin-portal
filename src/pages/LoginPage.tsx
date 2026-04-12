@@ -12,7 +12,9 @@ export function LoginPage() {
     e.preventDefault()
     setMessage(null)
     setBusy(true)
-    const { error } = await signIn(email.trim(), password)
+    const trimmed = email.trim()
+    const { error } = await signIn(trimmed, password)
+    setPassword('')
     setBusy(false)
     if (error) setMessage(error.message)
   }
@@ -74,14 +76,26 @@ export function LoginPage() {
               <p className="login-lead">Use your MSCE operator credentials to access the portal.</p>
             </div>
 
-            <form onSubmit={onSubmit} className="login-form">
+            <form
+              onSubmit={onSubmit}
+              className="login-form"
+              method="post"
+              action="#"
+              autoComplete="on"
+            >
               <label className="login-label">
                 <span>Official Email Address</span>
                 <input
+                  id="login-email"
+                  name="email"
                   type="email"
+                  inputMode="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="officer@msce.gov.in"
                   required
                 />
@@ -89,6 +103,8 @@ export function LoginPage() {
               <label className="login-label">
                 <span>Password</span>
                 <input
+                  id="login-password"
+                  name="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
