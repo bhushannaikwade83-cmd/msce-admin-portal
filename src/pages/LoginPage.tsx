@@ -45,11 +45,11 @@ export function LoginPage() {
             <ul className="login-feature-list">
               <li>
                 <span className="login-feature-icon" aria-hidden>✔</span>
-                Approve institute admin registrations from the mobile app
+                Create institute and admin setup details for the mobile app
               </li>
               <li>
                 <span className="login-feature-icon" aria-hidden>🏫</span>
-                Manage institute directory — add, activate, and review
+                Manage institute directory and website onboarding data
               </li>
               <li>
                 <span className="login-feature-icon" aria-hidden>🔒</span>
@@ -57,7 +57,7 @@ export function LoginPage() {
               </li>
               <li>
                 <span className="login-feature-icon" aria-hidden>👤</span>
-                Coder or super_admin roles required for approvals
+                Single super admin account for website access
               </li>
               <li>
                 <span className="login-feature-icon" aria-hidden>📦</span>
@@ -73,7 +73,7 @@ export function LoginPage() {
             <div className="login-card-header">
               <div className="login-card-emblem" aria-hidden>🔐</div>
               <h2 className="login-heading">Authorised Sign In</h2>
-              <p className="login-lead">Use your MSCE operator credentials to access the portal.</p>
+              <p className="login-lead">Use the website admin account credentials to access the portal.</p>
             </div>
 
             <form
@@ -96,7 +96,7 @@ export function LoginPage() {
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
-                  placeholder="officer@msce.gov.in"
+                  placeholder="admin@gmail.com"
                   required
                 />
               </label>

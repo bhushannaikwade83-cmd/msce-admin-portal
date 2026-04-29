@@ -3,7 +3,6 @@ import { useState, type ReactNode } from 'react'
 export type DashboardTab =
   | 'overview'
   | 'institutes'
-  | 'admins'
   | 'add'
   | 'students'
   | 'reports'
@@ -27,8 +26,7 @@ type TabDef = {
 const tabs: TabDef[] = [
   { id: 'overview',    label: 'Dashboard',             icon: '🏠', section: 'Main' },
   { id: 'institutes',  label: 'Institutes',             icon: '🏫', section: 'Management' },
-  { id: 'admins',      label: 'Pending Approvals',      icon: '✅' },
-  { id: 'add',         label: 'Add Institute',          icon: '➕' },
+  { id: 'add',         label: 'Add Institute Admin',    icon: '➕' },
   { id: 'students',    label: 'Students & Attendance',  icon: '👨‍🎓' },
   { id: 'reports',     label: 'Reports',                icon: '📑' },
   { id: 'storage',     label: 'Storage',                icon: '📦', section: 'System' },

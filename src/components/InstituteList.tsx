@@ -100,6 +100,14 @@ function buildAdminGpsLines(
 
 type Props = { reloadToken?: number; embedded?: boolean }
 
+type AdminInviteRow = {
+  institute_id: string
+  full_name: string | null
+  phone: string | null
+  email: string | null
+  claimed: boolean | null
+}
+
 export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
   const { user } = useAuth()
   const [rows, setRows] = useState<InstituteRow[]>([])
@@ -110,6 +118,7 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
   const [gpsColExists, setGpsColExists] = useState<boolean | null>(null) // null = unknown yet
   /** institute_id → each admin’s GPS row (profiles + gps_settings, RLS-scoped) */
   const [gpsAdminsByInstitute, setGpsAdminsByInstitute] = useState<Record<string, AdminGpsLine[]>>({})
+  const [adminInvitesByInstitute, setAdminInvitesByInstitute] = useState<Record<string, AdminInviteRow | null>>({})
   const [reportBusyId, setReportBusyId] = useState<string | null>(null)
 
   function exportDirectoryCsv() {
@@ -154,6 +163,14 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
       if (qErr) throw qErr
       const fetched = (data ?? []) as InstituteRow[]
       setRows(fetched)
+      const { data: inviteData } = await sb
+        .from('admin_invites')
+        .select('institute_id, full_name, phone, email, claimed')
+      const inviteMap: Record<string, AdminInviteRow | null> = {}
+      for (const row of (inviteData ?? []) as AdminInviteRow[]) {
+        inviteMap[row.institute_id] = row
+      }
+      setAdminInvitesByInstitute(inviteMap)
       // Detect whether gps_locked column exists in this schema
       if (fetched.length > 0) {
         setGpsColExists('gps_locked' in fetched[0])
@@ -231,49 +248,6 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
     }
     void load()
   }, [load, user, reloadToken])
-
-  const pending = rows.filter((r) => r.is_active === false)
-
-  async function approveInstitute(id: string) {
-    setError(null)
-    setInfo(null)
-    setBusyId(id)
-    try {
-      const sb = getSupabase()
-      const now = new Date().toISOString()
-      const { error: uErr } = await sb.from('institutes').update({ is_active: true, updated_at: now }).eq('id', id)
-      if (uErr) throw uErr
-      setInfo(`Institute ${id} approved (active).`)
-      await load()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  async function approveAllPending() {
-    if (!pending.length) return
-    setError(null)
-    setInfo(null)
-    setBusyId('__all__')
-    try {
-      const sb = getSupabase()
-      const now = new Date().toISOString()
-      let failed = 0
-      for (const p of pending) {
-        const { error: uErr } = await sb.from('institutes').update({ is_active: true, updated_at: now }).eq('id', p.id)
-        if (uErr) failed++
-      }
-      if (failed) setError(`${failed} update(s) failed (check RLS / role).`)
-      else setInfo('All pending institutes approved.')
-      await load()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusyId(null)
-    }
-  }
 
   /** `gps_settings` row for (institute_id, admin_id); audit fields use the signed-in user. */
   async function toggleGpsForAdmin(instituteId: string, adminId: string, currentLocked: boolean) {
@@ -356,59 +330,6 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
       {error ? <p className="error">{error}</p> : null}
       {info ? <p className="success">{info}</p> : null}
 
-      {user && pending.length > 0 ? (
-        <>
-          <h3 className="h3">Pending institutes (approve one-by-one)</h3>
-          <div className="row" style={{ marginBottom: '0.75rem' }}>
-            <button
-              type="button"
-              className="btn btn-success"
-              onClick={() => void approveAllPending()}
-              disabled={busyId !== null}
-            >
-              {busyId === '__all__' ? 'Approving…' : `Approve all pending (${pending.length})`}
-            </button>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Code</th>
-                  <th>ID</th>
-                  <th>City</th>
-                  <th>Pincode</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {pending.map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.name ?? '—'}</td>
-                    <td>{r.institute_code ?? '—'}</td>
-                    <td>
-                      <code className="tiny">{r.id}</code>
-                    </td>
-                    <td>{r.city ?? '—'}</td>
-                    <td>{r.pincode ?? '—'}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-success btn-sm"
-                        disabled={busyId !== null}
-                        onClick={() => void approveInstitute(r.id)}
-                      >
-                        {busyId === r.id ? '…' : 'Approve'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : null}
-
       {!embedded ? <h3 className="h3">Directory</h3> : null}
       <div className="table-wrap">
         <table>
@@ -420,6 +341,7 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
               <th>City</th>
               <th>Pincode</th>
               <th>State</th>
+              <th>Admin setup</th>
               <th>Active</th>
               <th>GPS{user ? ' (per admin)' : ''}</th>
               {user ? (
@@ -433,7 +355,7 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
           <tbody>
             {rows.length === 0 && !loading ? (
               <tr>
-                <td colSpan={user ? 10 : 8} className="muted">
+                <td colSpan={user ? 11 : 9} className="muted">
                   No rows (or configure Supabase env first).
                 </td>
               </tr>
@@ -441,6 +363,7 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
               rows.map((r) => {
                 const lines = user ? (gpsAdminsByInstitute[r.id] ?? []) : []
                 const isGpsLockedLegacy = r.gps_locked === true
+                const invite = adminInvitesByInstitute[r.id]
                 return (
                   <tr key={r.id}>
                     <td>{r.name ?? '—'}</td>
@@ -451,6 +374,18 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
                     <td>{r.city ?? '—'}</td>
                     <td>{r.pincode ?? '—'}</td>
                     <td>{r.state ?? '—'}</td>
+                    <td>
+                      {invite ? (
+                        <div className="small">
+                          <div><strong>{invite.full_name ?? '—'}</strong></div>
+                          <div>{invite.phone ?? '—'}</div>
+                          <div>{invite.email ?? '—'}</div>
+                          <div className="muted">{invite.claimed ? 'Password created' : 'Waiting in app'}</div>
+                        </div>
+                      ) : (
+                        <span className="badge badge-muted">Not added</span>
+                      )}
+                    </td>
                     <td>{r.is_active !== false ? <span className="badge ok">Yes</span> : <span className="badge">No</span>}</td>
                     <td>
                       {user ? (
@@ -528,18 +463,7 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
                             {reportBusyId === r.id ? '…' : '📄 Roster'}
                           </button>
                         </td>
-                        <td className="actions-cell">
-                          {r.is_active === false && (
-                            <button
-                              type="button"
-                              className="btn btn-success btn-sm"
-                              disabled={busyId !== null}
-                              onClick={() => void approveInstitute(r.id)}
-                            >
-                              {busyId === r.id ? '…' : 'Approve'}
-                            </button>
-                          )}
-                        </td>
+                        <td className="actions-cell" />
                       </>
                     ) : null}
                   </tr>

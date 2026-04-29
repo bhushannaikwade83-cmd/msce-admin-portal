@@ -5,7 +5,6 @@ import { DashboardLayout, type DashboardTab } from './layouts/DashboardLayout'
 import { LoginPage } from './pages/LoginPage'
 import { AddInstituteForm } from './components/AddInstituteForm'
 import { InstituteList } from './components/InstituteList'
-import { PendingAdmins } from './components/PendingAdmins'
 import { StorageSection } from './components/StorageSection'
 import { OverviewPanel } from './components/OverviewPanel'
 import { StudentsSection } from './components/StudentsSection'
@@ -64,7 +63,6 @@ function AuthenticatedApp() {
     >
       {tab === 'overview' && <OverviewPanel />}
       {tab === 'institutes' && <InstituteList reloadToken={instituteReload} embedded />}
-      {tab === 'admins' && <PendingAdmins embedded />}
       {tab === 'add'      && <AddInstituteForm onCreated={() => setInstituteReload((n) => n + 1)} embedded />}
       {tab === 'students' && <StudentsSection embedded />}
       {tab === 'reports' && <ReportsSection embedded />}

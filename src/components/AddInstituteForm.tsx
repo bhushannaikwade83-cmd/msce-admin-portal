@@ -17,7 +17,6 @@ function formatSupabaseInsertError(err: {
 
 const empty = {
   id: '',
-  institute_code: '',
   name: '',
   address: '',
   city: '',
@@ -26,6 +25,9 @@ const empty = {
   pincode: '',
   country: 'India',
   mobile_no: '',
+  admin_full_name: '',
+  admin_mobile: '',
+  admin_email: '',
 }
 
 type Props = { onCreated: () => void; embedded?: boolean }
@@ -45,7 +47,7 @@ export function AddInstituteForm({ onCreated, embedded = false }: Props) {
     return (
       <div className="card muted">
         <h2>Add institute</h2>
-        <p className="small">Sign in as a <strong>coder</strong> or <strong>super_admin</strong> to insert into <code>institutes</code> (RLS).</p>
+        <p className="small">Sign in as the website <strong>super_admin</strong> account to save institute and admin setup data.</p>
       </div>
     )
   }
@@ -103,68 +105,52 @@ export function AddInstituteForm({ onCreated, embedded = false }: Props) {
         setBusy(false)
         return
       }
-      const code = form.institute_code.trim()
-      if (code) {
-        const dupCode = await sb.from('institutes').select('id').eq('institute_code', code).maybeSingle()
-        if (dupCode.data) {
-          setErr(`Institute code "${code}" is already used.`)
-          setBusy(false)
-          return
-        }
+      const pincode = form.pincode.replace(/\D/g, '').slice(0, 6)
+      const adminName = form.admin_full_name.trim()
+      const adminMobile = form.admin_mobile.trim()
+      const adminEmail = form.admin_email.trim().toLowerCase()
+      if (!adminName || !adminMobile || !adminEmail) {
+        setErr('Admin full name, mobile number, and email are required.')
+        setBusy(false)
+        return
       }
 
-      const now = new Date().toISOString()
-      const is_active = !startInactive
-      const pincode = form.pincode.replace(/\D/g, '').slice(0, 6)
-
-      const { error: insErr } = await sb.from('institutes').insert({
-        id,
-        institute_code: code,
-        name,
-        location: '',
-        address: form.address.trim(),
-        city: form.city.trim(),
-        district: form.district.trim(),
-        taluka: form.taluka.trim(),
-        state: MH_STATE,
-        country: form.country.trim() || 'India',
-        mobile_no: form.mobile_no.trim(),
-        is_active,
-        user_count: 0,
-        student_count: 0,
-        created_at: now,
-        updated_at: now,
+      const { data, error: rpcErr } = await sb.rpc('create_institute_admin_setup', {
+        p_institute_id: id,
+        p_institute_name: name,
+        p_institute_address: form.address.trim(),
+        p_institute_city: form.city.trim(),
+        p_institute_mobile: form.mobile_no.trim(),
+        p_admin_full_name: adminName,
+        p_admin_mobile: adminMobile,
+        p_admin_email: adminEmail,
       })
-      if (insErr) {
-        throw new Error(formatSupabaseInsertError(insErr))
+      if (rpcErr) {
+        throw new Error(formatSupabaseInsertError(rpcErr))
+      }
+      if (!data?.success) {
+        throw new Error(data?.message ?? 'Could not save institute admin setup.')
       }
 
       let pincodeNote = ''
       if (pincode.length === 6) {
-        const { error: pinErr } = await sb.from('institutes').update({ pincode }).eq('id', id)
+        const { error: pinErr } = await sb
+          .from('institutes')
+          .update({
+            pincode,
+            district: form.district.trim(),
+            taluka: form.taluka.trim(),
+            state: MH_STATE,
+            country: form.country.trim() || 'India',
+            is_active: !startInactive,
+          })
+          .eq('id', id)
         if (pinErr) {
           pincodeNote = ` Pincode not stored — run migration 011_institutes_pincode.sql. (${pinErr.message})`
         }
       }
 
-      const { error: geoErr } = await sb.from('institute_geofence').upsert(
-        {
-          institute_id: id,
-          radius: 30,
-          data: { enabled: false, latitude: 0, longitude: 0 },
-          updated_at: now,
-        },
-        { onConflict: 'institute_id' },
-      )
-      if (geoErr) {
-        setMsg(`Institute created; geofence row warning: ${geoErr.message}.${pincodeNote}`)
-      } else {
-        setMsg(
-          (is_active
-            ? 'Institute created and active (visible in app directory).'
-            : 'Institute created as inactive — use “Approve” in the list below when ready.') + pincodeNote,
-        )
-      }
+      setMsg('Institute and admin setup saved for the app.' + pincodeNote)
 
       setForm(empty)
       setStartInactive(true)
@@ -183,16 +169,12 @@ export function AddInstituteForm({ onCreated, embedded = false }: Props) {
     <div className={shell}>
       {!embedded ? <h2>Add institute</h2> : <p className="section-kicker">New tenant</p>}
       <p className="muted small">
-        Inserts into <code>public.institutes</code> (state is fixed to <strong>Maharashtra</strong>). Enter a 6-digit pincode to load district and taluka. Requires <code>pincode</code> column — run <code>supabase/migrations/011_institutes_pincode.sql</code> in the Supabase SQL Editor once.
+        Saves institute details plus admin full name, mobile number, and email for the app onboarding flow. Enter a 6-digit pincode to load district and taluka.
       </p>
       <form className="form-grid" onSubmit={onSubmit}>
         <label>
           Institute ID <span className="req">*</span>
-          <input value={form.id} onChange={(e) => set('id', e.target.value)} placeholder="e.g. 3333, inst_pune_01" required />
-        </label>
-        <label>
-          Institute code
-          <input value={form.institute_code} onChange={(e) => set('institute_code', e.target.value)} placeholder="Short code (unique if set)" />
+          <input value={form.id} onChange={(e) => set('id', e.target.value.replace(/\D/g, ''))} placeholder="e.g. 3333" required />
         </label>
         <label className="span-2">
           Name <span className="req">*</span>
@@ -240,13 +222,25 @@ export function AddInstituteForm({ onCreated, embedded = false }: Props) {
           Mobile
           <input value={form.mobile_no} onChange={(e) => set('mobile_no', e.target.value)} />
         </label>
+        <label className="span-2">
+          Admin full name <span className="req">*</span>
+          <input value={form.admin_full_name} onChange={(e) => set('admin_full_name', e.target.value)} required />
+        </label>
+        <label>
+          Admin mobile number <span className="req">*</span>
+          <input value={form.admin_mobile} onChange={(e) => set('admin_mobile', e.target.value)} required />
+        </label>
+        <label>
+          Admin email <span className="req">*</span>
+          <input value={form.admin_email} onChange={(e) => set('admin_email', e.target.value)} type="email" required />
+        </label>
         <label className="checkbox span-2">
           <input type="checkbox" checked={startInactive} onChange={(e) => setStartInactive(e.target.checked)} />
-          Start as <strong>inactive</strong> (hidden from public institute list until you approve below)
+          Start as <strong>inactive</strong> in institute list
         </label>
         <div className="span-2 row">
           <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? 'Saving…' : 'Create institute'}
+            {busy ? 'Saving…' : 'Save institute + admin'}
           </button>
         </div>
       </form>
