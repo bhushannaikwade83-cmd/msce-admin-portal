@@ -1,9 +1,12 @@
 /**
- * Reports — pick institute, then institute-wide or per-student attendance CSV.
+ * Reports — pick institute, then institute-wide or per-student attendance PDF.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { jsPDF } from 'jspdf'
+import 'jspdf-autotable'
 import { getSupabase } from '../lib/supabase'
 import { csvEscape } from '../lib/reportCsv'
+import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
 import { discoverSchema, type SchemaConfig } from '../lib/schemaDiscovery'
 import type { InstituteRow } from './InstituteList'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
@@ -144,6 +147,7 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
   const [students, setStudents] = useState<Student[]>([])
   const [studentsLoading, setStudentsLoading] = useState(false)
   const [studentsError, setStudentsError] = useState<string | null>(null)
+  const [studentAttendance, setStudentAttendance] = useState<Map<string, { status: string; date: string }>>(new Map())
   const [search, setSearch] = useState('')
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
   const [month, setMonth] = useState(() => {
@@ -200,6 +204,44 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
         .order('name')
       if (qErr) throw qErr
       setStudents((data ?? []) as Student[])
+
+      // 📊 Load today's attendance status for all students
+      const today = new Date().toISOString().split('T')[0]
+      const attMap = new Map<string, { status: string; date: string }>()
+
+      if (data && data.length > 0) {
+        try {
+          const studentIds = (data as Student[]).map((s) => s.id)
+          const attQuery = applyInstituteCodeFilter(
+            sb.from('attendance_in_out').select('student_id, attendance_date, type, additional'),
+            inst,
+          )
+          const { data: attData, error: attErr } = await attQuery
+            .eq('attendance_date', today)
+            .in('student_id', studentIds)
+
+          if (!attErr && attData) {
+            for (const rec of attData) {
+              const add =
+                rec.additional !== null && typeof rec.additional === 'object'
+                  ? (rec.additional as Record<string, unknown>)
+                  : {}
+              const fromAdd = add.status != null ? String(add.status).toLowerCase() : ''
+              const status =
+                fromAdd ||
+                (String(rec.type ?? '') === 'entry' || String(rec.type ?? '') === 'exit' ? 'present' : 'absent')
+              attMap.set(String(rec.student_id), {
+                status,
+                date: String(rec.attendance_date ?? today),
+              })
+            }
+          }
+        } catch (attLoadErr) {
+          console.warn('Failed to load attendance:', attLoadErr)
+        }
+      }
+
+      setStudentAttendance(attMap)
     } catch (e) {
       setStudents([])
       setStudentsError(e instanceof Error ? e.message : String(e))
@@ -228,6 +270,9 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
   })
 
   const filteredStudents = students.filter((s) => {
+    // ✅ SAFETY: Only show students from current institute (double-check)
+    if (institute && s.institute_id && s.institute_id !== institute.id) return false
+
     const q = search.toLowerCase()
     if (!q) return true
     const name = pick(s, 'name', 'student_name', 'full_name') ?? ''
@@ -258,6 +303,26 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
             .order('date', { ascending: false })
             .range(rangeFrom, rangeTo),
         )
+      } else if (attTable === 'attendance_in_out') {
+        const ids = students.map((s) => s.id)
+        if (ids.length === 0) {
+          setError('No students in this institute — cannot load attendance by student id.')
+          return
+        }
+        for (let i = 0; i < ids.length; i += 100) {
+          const chunk = ids.slice(i, i + 100)
+          const part = await fetchAllPaged((rangeFrom, rangeTo) =>
+            applyInstituteCodeFilter(
+              sb.from(attTable).select('*').in('student_id', chunk),
+              institute,
+            )
+              .gte('attendance_date', from)
+              .lte('attendance_date', to)
+              .order('attendance_date', { ascending: false })
+              .range(rangeFrom, rangeTo),
+          )
+          raw = raw.concat(part)
+        }
       } else {
         const ids = students.map((s) => s.id)
         if (ids.length === 0) {
@@ -270,6 +335,7 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
             sb
               .from(attTable)
               .select('*')
+              .eq('institute_id', institute.id)
               .in('student_id', chunk)
               .gte('date', from)
               .lte('date', to)
@@ -306,7 +372,9 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
         const rec =
           attTable === 'teacher_attendance'
             ? flattenTeacherAttendanceRow(row)
-            : (row as AttendanceRecord)
+            : attTable === 'attendance_in_out'
+              ? (flattenAttendanceInOutRow(row) as AttendanceRecord)
+              : (row as AttendanceRecord)
         const sid = String(rec.student_id ?? row.student_id ?? '')
         const st = String(rec.status ?? '').toLowerCase()
         const displayName = rollMap.get(sid) ?? sid
@@ -376,30 +444,114 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
         '',
         '=== SUMMARY (per student) ===',
       ].join('\n')
-      const meta2 = ['', '', '=== DETAIL (each attendance row) ===', ''].join('\n')
+      // \ud83d\udcc4 Generate PDF Report
+      const doc = new jsPDF()
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const margin = 12
 
-      const summaryCsv =
-        '\ufeff' +
-        meta +
-        '\n' +
-        summaryHeader.map(csvEscape).join(',') +
-        '\n' +
-        summaryRows.map((r) => r.map(csvEscape).join(',')).join('\n') +
-        '\n' +
-        meta2 +
-        '\n' +
-        detailHeader.map(csvEscape).join(',') +
-        '\n' +
-        detailRows.map((r) => r.map(csvEscape).join(',')).join('\n')
+      // Header
+      doc.setFontSize(16)
+      doc.text('Institute Attendance Report', margin, 15)
 
-      const blob = new Blob([summaryCsv], { type: 'text/csv;charset=utf-8;' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `report_institute_${safeFilePart(institute.institute_code ?? institute.id)}_${month}.csv`
-      a.click()
-      URL.revokeObjectURL(url)
-      setInfo(`Downloaded ${detailRows.length} attendance row(s); ${summary.size} student(s) in summary.`)
+      // Info section
+      doc.setFontSize(10)
+      doc.text(`Institute: ${instName}`, margin, 25)
+      doc.text(`Institute Code: ${institute.institute_code || 'N/A'}`, margin, 31)
+      doc.text(`Month: ${month}`, margin, 37)
+      doc.text(`Total Students: ${summary.size}`, margin, 43)
+      doc.text(`Total Records: ${detailRows.length}`, margin, 49)
+      doc.text(`Generated: ${new Date().toLocaleString()}`, margin, 55)
+
+      // Summary Table
+      doc.setFontSize(12)
+      doc.text('Summary (Per Student)', margin, 65)
+
+      const summaryTableData = summaryRows.map((row) => [
+        row[3], // student_name
+        row[4], // roll
+        row[5], // present
+        row[6], // absent
+        row[8], // total
+      ])
+
+      ;(doc as any).autoTable({
+        startY: 72,
+        margin: margin,
+        head: [['Student Name', 'Roll No', 'Present', 'Absent', 'Total']],
+        body: summaryTableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [0, 48, 135],
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 9,
+        },
+        bodyStyles: {
+          fontSize: 8,
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245],
+        },
+        columnStyles: {
+          0: { halign: 'left' },
+          1: { halign: 'center' },
+          2: { halign: 'center' },
+          3: { halign: 'center' },
+          4: { halign: 'center' },
+        },
+        pageBreak: 'always',
+      })
+
+      // Detail Table (on new page)
+      doc.setFontSize(12)
+      doc.text('Detail Records', margin, 20)
+
+      const detailTableData = detailRows.map((row) => [
+        row[2], // date
+        row[4], // student_name
+        row[5], // status
+        row[6], // in_time
+        row[7], // out_time
+      ])
+
+      ;(doc as any).autoTable({
+        startY: 28,
+        margin: margin,
+        head: [['Date', 'Student', 'Status', 'In Time', 'Out Time']],
+        body: detailTableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [0, 48, 135],
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 9,
+        },
+        bodyStyles: {
+          fontSize: 8,
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245],
+        },
+        columnStyles: {
+          0: { halign: 'center' },
+          1: { halign: 'left' },
+          2: { halign: 'center' },
+          3: { halign: 'center' },
+          4: { halign: 'center' },
+        },
+        didDrawPage: () => {
+          // Footer
+          const pageCount = (doc as any).internal.pages.length - 1
+          const currentPage = doc.internal.getCurrentPageInfo().pageNumber
+          doc.setFontSize(8)
+          doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin - 20, pageHeight - 8)
+        },
+      })
+
+      // Download PDF
+      doc.save(`report_institute_${safeFilePart(institute.institute_code ?? institute.id)}_${month}.pdf`)
+      setInfo(`Downloaded ${detailRows.length} attendance record(s); ${summary.size} student(s) in summary.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -433,12 +585,24 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
             .order('date', { ascending: false })
             .range(rangeFrom, rangeTo),
         )
+      } else if (attTable === 'attendance_in_out') {
+        raw = await fetchAllPaged((rangeFrom, rangeTo) =>
+          applyInstituteCodeFilter(
+            sb.from(attTable).select('*').eq('student_id', selectedStudent.id),
+            institute,
+          )
+            .gte('attendance_date', from)
+            .lte('attendance_date', to)
+            .order('attendance_date', { ascending: false })
+            .range(rangeFrom, rangeTo),
+        )
       } else {
         raw = await fetchAllPaged((rangeFrom, rangeTo) =>
           sb
             .from(attTable)
             .select('*')
             .eq('student_id', selectedStudent.id)
+            .eq('institute_id', institute.id)
             .gte('date', from)
             .lte('date', to)
             .order('date', { ascending: false })
@@ -447,7 +611,11 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
       }
 
       const flat = raw.map((row) =>
-        attTable === 'teacher_attendance' ? flattenTeacherAttendanceRow(row) : (row as AttendanceRecord),
+        attTable === 'teacher_attendance'
+          ? flattenTeacherAttendanceRow(row)
+          : attTable === 'attendance_in_out'
+            ? (flattenAttendanceInOutRow(row) as AttendanceRecord)
+            : (row as AttendanceRecord),
       )
       const header = ['date', 'status', 'in_time', 'out_time', 'subject_id', 'record_id', 'in_photo_url', 'out_photo_url']
       const rows = flat.map((rec) => [
@@ -461,28 +629,71 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
         getPhotoOut(rec),
       ])
 
-      const meta = [
-        `report_type,student_attendance`,
-        `institute,${csvEscape(institute.name ?? '')}`,
-        `institute_id,${csvEscape(institute.id)}`,
-        `student,${csvEscape(studentName)}`,
-        `student_id,${csvEscape(selectedStudent.id)}`,
-        `month,${csvEscape(month)}`,
-        `table,${csvEscape(attTable)}`,
-        `generated,${csvEscape(new Date().toISOString())}`,
-        '',
-      ].join('\n')
+      // \ud83d\udcc4 Generate PDF Report
+      const doc = new jsPDF()
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const margin = 12
 
-      const blob = new Blob(['\ufeff' + meta + '\n' + header.map(csvEscape).join(',') + '\n' + rows.map((r) => r.map(csvEscape).join(',')).join('\n')], {
-        type: 'text/csv;charset=utf-8;',
+      // Header
+      doc.setFontSize(16)
+      doc.text('Attendance Report', margin, 15)
+
+      // Info section
+      doc.setFontSize(10)
+      doc.text(`Institute: ${institute.name ?? institute.id}`, margin, 25)
+      doc.text(`Institute ID: ${institute.id}`, margin, 31)
+      doc.text(`Student: ${studentName}`, margin, 37)
+      doc.text(`Student ID: ${selectedStudent.id}`, margin, 43)
+      doc.text(`Month: ${month}`, margin, 49)
+      doc.text(`Generated: ${new Date().toLocaleString()}`, margin, 55)
+
+      // Table
+      const tableData = rows.map((row) => [
+        row[0], // date
+        row[1], // status
+        row[2], // in_time
+        row[3], // out_time
+        row[4], // subject_id
+      ])
+
+      ;(doc as any).autoTable({
+        startY: 62,
+        margin: margin,
+        head: [['Date', 'Status', 'In Time', 'Out Time', 'Subject']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [0, 48, 135],
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 10,
+        },
+        bodyStyles: {
+          fontSize: 9,
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245],
+        },
+        columnStyles: {
+          0: { halign: 'left' },
+          1: { halign: 'center' },
+          2: { halign: 'center' },
+          3: { halign: 'center' },
+          4: { halign: 'left' },
+        },
+        didDrawPage: () => {
+          // Footer
+          const pageCount = (doc as any).internal.pages.length - 1
+          const currentPage = doc.internal.getCurrentPageInfo().pageNumber
+          doc.setFontSize(8)
+          doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin - 20, pageHeight - 8)
+        },
       })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `report_student_${safeFilePart(studentName)}_${month}.csv`
-      a.click()
-      URL.revokeObjectURL(url)
-      setInfo(`Downloaded ${rows.length} row(s) for ${studentName}.`)
+
+      // Download PDF
+      doc.save(`report_student_${safeFilePart(studentName)}_${month}.pdf`)
+      setInfo(`Downloaded ${rows.length} attendance record(s) for ${studentName}.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -633,7 +844,19 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
                 <div className="inst-info-name">Reports for {institute.name}</div>
                 <div className="inst-info-meta">
                   {institute.institute_code && <span>Code: {institute.institute_code}</span>}
-                  {studentsLoading ? <span> · Loading students…</span> : <span> · {students.length} student(s)</span>}
+                  {studentsLoading ? (
+                    <span> · Loading students…</span>
+                  ) : (
+                    <>
+                      <span> · {students.length} student(s)</span>
+                      {studentAttendance.size > 0 && (
+                        <>
+                          <span> · ✓ {Array.from(studentAttendance.values()).filter((a) => a.status === 'present').length} present</span>
+                          <span> · ✕ {Array.from(studentAttendance.values()).filter((a) => a.status !== 'present').length} absent</span>
+                        </>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -674,7 +897,7 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
                   Institute attendance (all students)
                 </h3>
                 <p className="muted small">
-                  One CSV file: <strong>summary</strong> (present / absent / other counts per student) and{' '}
+                  Beautiful PDF report with <strong>summary</strong> (present / absent / other counts per student) and{' '}
                   <strong>detail</strong> (every attendance row in the month).
                 </p>
                 <button
@@ -683,7 +906,7 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
                   disabled={busy || studentsLoading || !schema.attendanceTable}
                   onClick={() => void downloadInstituteReport()}
                 >
-                  {busy ? 'Working…' : '📥 Download institute CSV'}
+                  {busy ? 'Working…' : '📄 Download institute PDF'}
                 </button>
               </div>
             )}
@@ -722,12 +945,25 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
                     <span>Loading students…</span>
                   </div>
                 )}
-                {!studentsLoading && (
+                {!studentsLoading && students.length === 0 && (
+                  <div className="error" style={{ padding: '1rem', textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: '1rem', fontWeight: 500 }}>❌ No students added to this institute</p>
+                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      Add students first, then their attendance will appear here.
+                    </p>
+                  </div>
+                )}
+                {!studentsLoading && students.length > 0 && (
                   <div className="students-grid reports-student-scroll">
                     {filteredStudents.map((s) => {
                       const name = pick(s, 'name', 'student_name', 'full_name') ?? '—'
                       const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno')
                       const sel = selectedStudent?.id === s.id
+                      const attData = studentAttendance.get(s.id)
+                      const attStatus = attData?.status ?? 'absent'
+                      const attBgColor = attStatus === 'present' ? '#d4edda' : '#f8d7da'
+                      const attTextColor = attStatus === 'present' ? '#155724' : '#721c24'
+                      const attIcon = attStatus === 'present' ? '✓' : '✕'
                       return (
                         <button
                           key={s.id}
@@ -743,7 +979,21 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
                           </div>
                           <div className="student-info">
                             <div className="student-name">{name}</div>
-                            {roll && <div className="student-meta">Roll: {roll}</div>}
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
+                              {roll && <div className="student-meta">Roll: {roll}</div>}
+                              <div
+                                style={{
+                                  backgroundColor: attBgColor,
+                                  color: attTextColor,
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 'bold',
+                                }}
+                              >
+                                {attIcon} {attStatus.toUpperCase()}
+                              </div>
+                            </div>
                           </div>
                           <div className="student-arrow">{sel ? '✓' : '›'}</div>
                         </button>
@@ -758,7 +1008,7 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
                     disabled={busy || !selectedStudent || !schema.attendanceTable}
                     onClick={() => void downloadStudentReport()}
                   >
-                    {busy ? 'Working…' : '📥 Download student attendance CSV'}
+                    {busy ? 'Working…' : '📄 Download student attendance PDF'}
                   </button>
                   {selectedStudent && (
                     <span className="muted small" style={{ marginLeft: '0.75rem' }}>

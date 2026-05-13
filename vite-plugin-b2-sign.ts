@@ -1,6 +1,6 @@
 /**
  * Dev-only middleware: POST /api/b2-sign-photo { objectPath }
- * Reads B2B_* via vite.config loadMergedEnv (PROJECTS .env, EDUSETU-ATTENDACE-APP-main/.env, portal .env).
+ * Reads B2B_* via vite.config loadMergedEnv (repo root `.env`, Flutter app `.env`, portal `.env`).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
@@ -61,7 +61,7 @@ function sendJson(res: ServerResponse, code: number, body: Record<string, unknow
 
 export function b2DevSignPlugin(merged: Record<string, string>): Plugin {
   return {
-    name: 'edusetu-b2-dev-sign',
+    name: 'msce-b2-dev-sign',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         if (req.method !== 'POST' || !req.url?.startsWith('/api/b2-sign-photo')) {
@@ -74,7 +74,7 @@ export function b2DevSignPlugin(merged: Record<string, string>): Plugin {
         if (!keyId || !appKey || !bucketId || !bucketName) {
           sendJson(res as ServerResponse, 503, {
             error:
-              'B2 credentials missing: set B2B_KEY_ID, B2B_APPLICATION_KEY, B2B_BUCKET_ID, B2B_BUCKET_NAME in EDUSETU-ATTENDACE-APP-main/.env, PROJECTS/.env, or msce-admin-portal/.env (restart vite dev server after editing).',
+              'B2 credentials missing: set B2B_KEY_ID, B2B_APPLICATION_KEY, B2B_BUCKET_ID, B2B_BUCKET_NAME in repository root `.env`, Flutter app `.env`, or msce-admin-portal/.env (restart vite dev server after editing).',
           })
           return
         }

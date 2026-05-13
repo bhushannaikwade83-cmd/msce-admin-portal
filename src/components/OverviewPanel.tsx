@@ -60,6 +60,15 @@ export function OverviewPanel() {
         </div>
 
         <div className="overview-tile card-elevated">
+          <div className="overview-tile-icon" aria-hidden>🔐</div>
+          <h3>Admins & Access</h3>
+          <p>
+            Review each institute admin, confirm onboarding state, approve access, or
+            disable sign-in without ever exposing passwords in the portal.
+          </p>
+        </div>
+
+        <div className="overview-tile card-elevated">
           <div className="overview-tile-icon" aria-hidden>➕</div>
           <h3>Add Institute</h3>
           <p>
@@ -95,14 +104,6 @@ export function OverviewPanel() {
           </p>
         </div>
 
-        <div className="overview-tile card-elevated">
-          <div className="overview-tile-icon" aria-hidden>🛡️</div>
-          <h3>Secure Session</h3>
-          <p>
-            Sessions are persisted via Supabase Auth with auto-refresh. Sign out
-            from the sidebar footer when your work is complete.
-          </p>
-        </div>
       </div>
     </div>
   )

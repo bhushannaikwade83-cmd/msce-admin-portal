@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** Supabase keys are injected via vite.config define (__EDUSETU_*), not import.meta.env.VITE_*, so shell env cannot override. */
+  /** Supabase keys are injected at build time via `vite.config` `define` (not `import.meta.env.VITE_*`). */
   readonly VITE_SUPABASE_URL?: string
   readonly VITE_SUPABASE_ANON_KEY?: string
   readonly VITE_STORAGE_BUCKET?: string

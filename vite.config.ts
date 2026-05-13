@@ -91,7 +91,7 @@ export default defineConfig(({ mode }) => {
       !merged.B2B_BUCKET_NAME?.trim())
   ) {
     console.warn(
-      '[vite] B2 photo signing disabled until B2B_KEY_ID, B2B_APPLICATION_KEY, B2B_BUCKET_ID, B2B_BUCKET_NAME are set (e.g. in EDUSETU-ATTENDACE-APP-main/.env). POST /api/b2-sign-photo will return 503.',
+      '[vite] B2 photo signing disabled until B2B_KEY_ID, B2B_APPLICATION_KEY, B2B_BUCKET_ID, B2B_BUCKET_NAME are set (e.g. in repository root or msce-admin-portal/.env). POST /api/b2-sign-photo will return 503.',
     )
   }
   /** Opt-in only — avoids Vite proxy 502 / bad shell env; set VITE_SUPABASE_DEV_PROXY=true if the browser blocks *.supabase.co. */

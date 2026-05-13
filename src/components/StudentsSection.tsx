@@ -2,12 +2,13 @@
  * StudentsSection — MSCE Admin Portal
  * Auto-discovers actual table names by probing Supabase.
  * Works regardless of whether your schema uses:
- *   institute_subjects (EduSetu) / subjects / courses / …
- *   teacher_attendance (EduSetu) / attendance_in_out / attendance_records / …
+ *   institute_subjects (alternate schema) / subjects / courses / …
+ *   teacher_attendance (alternate schema) / attendance_in_out / attendance_records / …
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getSupabase } from '../lib/supabase'
+import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
 import { immediateImgSrc, resolvePhotoUrlString } from '../lib/photoUrl'
 import {
   attendanceReportRows,
@@ -118,7 +119,7 @@ function pick(row: Record<string, unknown>, ...keys: string[]): string | null {
   return null
 }
 
-/** EduSetu `teacher_attendance.student_id` is usually roll / sr_no / user_id, not `students.id`. */
+/** `teacher_attendance.student_id` is usually roll / sr_no / user_id, not `students.id`. */
 function studentRollIdentifiers(s: Student): string[] {
   const out: string[] = []
   const add = (v: unknown) => {
@@ -298,11 +299,12 @@ function PhotoThumb({ url, label }: { url: string | null | undefined; label: str
 ══════════════════════════════════════════════════════════════ */
 
 function AttendanceView({
-  student, subject, attTable, onBack,
+  student, subject, attTable, institute, onBack,
 }: {
   student: Student
   subject: Subject
   attTable: string
+  institute: InstituteRow
   onBack: () => void
 }) {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
@@ -322,7 +324,7 @@ function AttendanceView({
       const to   = new Date(+yr, +mo, 0).toISOString().slice(0, 10)
       const instId = pick(student, 'institute_id', 'school_id', 'org_id')
 
-      // EduSetu: per-day doc keyed by roll in `student_id`, times/photos in `payload` JSON
+      // teacher_attendance: per-day doc keyed by roll in `student_id`, times/photos in `payload` JSON
       if (attTable === 'teacher_attendance') {
         const keys = studentRollIdentifiers(student)
         if (keys.length === 0) throw new Error('Student row has no roll / sr_no / id for attendance lookup')
@@ -339,6 +341,23 @@ function AttendanceView({
         return
       }
 
+      if (attTable === 'attendance_in_out') {
+        let q = applyInstituteCodeFilter(
+          sb.from(attTable).select('*').eq('student_id', student.id),
+          institute,
+        )
+          .gte('attendance_date', from)
+          .lte('attendance_date', to)
+        const subjKey = subject.id?.trim()
+        if (subjKey) {
+          q = q.filter('additional->>subject', 'eq', subjKey)
+        }
+        const { data, error: qErr } = await q.order('attendance_date', { ascending: false })
+        if (qErr) throw new Error(qErr.message + (qErr.details ? ` — ${qErr.details}` : ''))
+        setRecords((data ?? []).map((r: Record<string, unknown>) => flattenAttendanceInOutRow(r) as AttendanceRecord))
+        return
+      }
+
       // Generic: filter by student id + optional subject
       let q = sb.from(attTable).select('*').eq('student_id', student.id).gte('date', from).lte('date', to)
       if (subject.id) q = q.eq('subject_id', subject.id)
@@ -351,7 +370,7 @@ function AttendanceView({
     } finally {
       setLoading(false)
     }
-  }, [student, subject.id, attTable, month])
+  }, [student, subject, attTable, month, institute])
 
   useEffect(() => { void load() }, [load])
 
@@ -504,11 +523,12 @@ function AttendanceView({
 ══════════════════════════════════════════════════════════════ */
 
 function SubjectFolders({
-  student, subjectTable, attTable, onBack, onSelectSubject,
+  student, subjectTable, attTable, institute, onBack, onSelectSubject,
 }: {
   student: Student
   subjectTable: string | null
   attTable: string | null
+  institute: InstituteRow
   onBack: () => void
   onSelectSubject: (s: Subject) => void
 }) {
@@ -549,17 +569,46 @@ function SubjectFolders({
           setError(e instanceof Error ? e.message : String(e))
         }
       } else if (attTable) {
-        // No subject table found — derive subjects from distinct subject_id in attendance
-        try {
-          const sb = getSupabase()
-          const { data } = await sb
-            .from(attTable)
-            .select('subject_id')
-            .eq('student_id', student.id)
-          const unique = [...new Set((data ?? []).map((r: Record<string,unknown>) => r.subject_id).filter(Boolean))]
-          setSubjects(unique.map(id => ({ id: String(id), name: `Subject ${id}`, subject_code: null }) as Subject))
-        } catch (e) {
-          setError(e instanceof Error ? e.message : String(e))
+        if (attTable === 'attendance_in_out') {
+          try {
+            const sb = getSupabase()
+            const { data, error: qErr } = await applyInstituteCodeFilter(
+              sb.from(attTable).select('additional').eq('student_id', student.id),
+              institute,
+            ).limit(2000)
+            if (qErr) throw new Error(qErr.message)
+            const names = new Set<string>()
+            for (const r of data ?? []) {
+              const add =
+                r.additional !== null && typeof r.additional === 'object'
+                  ? (r.additional as Record<string, unknown>)
+                  : {}
+              const sub = add.subject != null ? String(add.subject).trim() : ''
+              if (sub !== '') names.add(sub)
+            }
+            if (names.size === 0) {
+              setSubjects([{ id: '', name: 'Attendance', subject_code: null } as Subject])
+            } else {
+              setSubjects(
+                [...names].sort().map((n) => ({ id: n, name: n, subject_code: null }) as Subject),
+              )
+            }
+          } catch (e) {
+            setError(e instanceof Error ? e.message : String(e))
+          }
+        } else {
+          // No subject table found — derive subjects from distinct subject_id in attendance
+          try {
+            const sb = getSupabase()
+            const { data } = await sb
+              .from(attTable)
+              .select('subject_id')
+              .eq('student_id', student.id)
+            const unique = [...new Set((data ?? []).map((r: Record<string, unknown>) => r.subject_id).filter(Boolean))]
+            setSubjects(unique.map((id) => ({ id: String(id), name: `Subject ${id}`, subject_code: null }) as Subject))
+          } catch (e) {
+            setError(e instanceof Error ? e.message : String(e))
+          }
         }
       } else {
         setError('No subjects or attendance table found in your database. Check table names in Supabase.')
@@ -568,7 +617,7 @@ function SubjectFolders({
       setLoading(false)
     }
     void load()
-  }, [student, subjectTable, attTable])
+  }, [student, subjectTable, attTable, institute])
 
   const folderColors = ['#003087', '#FF6600', '#138808', '#7B1FA2', '#0288D1', '#D32F2F', '#795548', '#F57C00']
 
@@ -1035,20 +1084,22 @@ export function StudentsSection({ embedded = false }: { embedded?: boolean }) {
             onSelectStudent={s => { setStudent(s); setSubject(null); setLevel('subjects') }}
           />
         )}
-        {level === 'subjects' && student && (
+        {level === 'subjects' && student && institute && (
           <SubjectFolders
             student={student}
             subjectTable={schema.subjectTable}
             attTable={schema.attendanceTable}
+            institute={institute}
             onBack={() => { setLevel('students'); setStudent(null) }}
             onSelectSubject={s => { setSubject(s); setLevel('attendance') }}
           />
         )}
-        {level === 'attendance' && student && subject && schema.attendanceTable && (
+        {level === 'attendance' && student && subject && schema.attendanceTable && institute && (
           <AttendanceView
             student={student}
             subject={subject}
             attTable={schema.attendanceTable}
+            institute={institute}
             onBack={() => { setLevel('subjects'); setSubject(null) }}
           />
         )}

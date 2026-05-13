@@ -414,7 +414,7 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
                                     ) : (
                                       <span
                                         className="badge badge-muted"
-                                        title="No gps_settings row yet — save location once in the EduSetu app."
+                                        title="No gps_settings row yet — save location once in the MSCE Attendance app."
                                       >
                                         Not set
                                       </span>

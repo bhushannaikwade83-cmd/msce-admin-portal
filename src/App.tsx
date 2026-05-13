@@ -4,6 +4,7 @@ import { useAuth } from './hooks/useAuth'
 import { DashboardLayout, type DashboardTab } from './layouts/DashboardLayout'
 import { LoginPage } from './pages/LoginPage'
 import { AddInstituteForm } from './components/AddInstituteForm'
+import { InstituteAdminsSection } from './components/InstituteAdminsSection'
 import { InstituteList } from './components/InstituteList'
 import { StorageSection } from './components/StorageSection'
 import { OverviewPanel } from './components/OverviewPanel'
@@ -62,6 +63,7 @@ function AuthenticatedApp() {
       onSignOut={signOut}
     >
       {tab === 'overview' && <OverviewPanel />}
+      {tab === 'admins'   && <InstituteAdminsSection embedded />}
       {tab === 'institutes' && <InstituteList reloadToken={instituteReload} embedded />}
       {tab === 'add'      && <AddInstituteForm onCreated={() => setInstituteReload((n) => n + 1)} embedded />}
       {tab === 'students' && <StudentsSection embedded />}
