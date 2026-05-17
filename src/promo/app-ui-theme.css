@@ -1,8 +1,19 @@
 /* MSCE Attendance app UI — matches Flutter AppTheme / screenshot screens */
 
 .app-ui,
-.app-ui #root {
+.app-ui #root,
+html:has(.app-ui) {
   width: 100%;
+}
+
+html:has(.app-ui),
+html:has(.app-ui) body,
+html:has(.app-ui) #root {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
 }
 
 .app-ui {
@@ -24,16 +35,28 @@
   color: var(--text);
   background: var(--bg-grey);
   color-scheme: light;
+  --page-gutter: clamp(20px, 4vw, 48px);
+  width: 100%;
+  max-width: 100vw;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .app-ui .page-shell {
   position: relative;
   overflow-x: hidden;
-  width: 100%;
-  max-width: none;
+  width: 100vw;
+  max-width: 100vw;
   margin: 0;
-  padding: 0 0 88px;
-  background: var(--bg-grey);
+  padding: 0 0 24px;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+/* Override legacy index.css page-shell padding */
+.app-ui.page-shell,
+.app-ui .page-shell.page-shell {
+  padding: 0 0 24px !important;
 }
 
 /* 3D ambient background (light app theme) */
@@ -86,24 +109,80 @@
   z-index: 1;
 }
 
+/* Full-bleed content — same left/right span as navbar */
 .app-ui .app-main,
-.app-ui main.app-main {
-  max-width: 1100px;
-  margin-left: auto;
-  margin-right: auto;
+.app-ui main.app-main,
+.app-ui main {
+  max-width: none !important;
   width: 100%;
+  margin: 0 !important;
   box-sizing: border-box;
 }
 
-.app-ui main {
-  max-width: 1100px;
+.app-ui .section,
+.app-ui .hero,
+.app-ui .guide-grid,
+.app-ui .guide-nav,
+.app-ui .photo-rules-grid,
+.app-ui .screenshot-list,
+.app-ui .screenshot-card,
+.app-ui .download-card,
+.app-ui .section-heading,
+.app-ui .section-heading-card {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
 }
 
-/* Single MSCE app navbar (header + links) */
+.app-ui .section-lead,
+.app-ui .photo-rules-note,
+.app-ui .hero-text,
+.app-ui .hero-copy h2 {
+  max-width: none !important;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.app-ui .section-lead {
+  margin-top: 12px;
+}
+
+.app-ui .photo-rules-note {
+  margin-top: 16px;
+  text-align: left;
+}
+
+.app-ui .section-heading {
+  text-align: left;
+}
+
+.app-ui .section-heading-card {
+  text-align: left;
+}
+
+.app-ui .guide-nav {
+  justify-content: flex-start;
+}
+
+.app-ui .screenshot-layout {
+  grid-template-columns: minmax(220px, 340px) 1fr;
+}
+
+.app-ui .screenshot-frame {
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+/* Single MSCE app navbar — full viewport width, one row */
 .app-navbar {
-  width: 100%;
+  width: 100vw;
+  max-width: 100vw;
+  margin: 0;
+  padding: 0;
   position: sticky;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 25;
   box-sizing: border-box;
   box-shadow:
@@ -127,21 +206,31 @@
 
 .app-navbar-inner {
   width: 100%;
+  max-width: none;
   background: linear-gradient(145deg, var(--blue-dark) 0%, var(--blue) 55%, var(--blue-light) 100%);
   color: #fff;
-  padding: 12px clamp(16px, 3vw, 28px) 14px;
+  padding: 14px var(--page-gutter);
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px 20px;
+  gap: 20px;
+  min-height: 76px;
+  box-sizing: border-box;
 }
 
 .app-navbar-brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 1 1 280px;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.app-navbar-titles {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -173,6 +262,7 @@
 
 .badge-official {
   flex-shrink: 0;
+  margin-left: 8px;
   padding: 6px 14px;
   border-radius: 8px;
   background: var(--saffron);
@@ -180,6 +270,7 @@
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 
 .badge-official-3d {
@@ -190,11 +281,17 @@
 
 .app-navbar-nav {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 10px;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  flex-shrink: 0;
   justify-content: flex-end;
+}
+
+.app-navbar-nav .btn-3d {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* 3D pressable buttons */
@@ -305,7 +402,7 @@
 }
 
 .app-main {
-  padding: 20px clamp(16px, 3vw, 24px) 32px;
+  padding: 20px var(--page-gutter) 32px;
 }
 
 .app-card {
@@ -528,14 +625,15 @@
 }
 
 .app-ui .site-footer {
-  width: 100%;
+  width: 100vw;
+  max-width: 100vw;
   margin: 0;
   box-sizing: border-box;
   background: var(--card);
   border-top: 1px solid var(--border);
   border-color: var(--border);
   color: var(--text-muted);
-  padding: 20px clamp(16px, 3vw, 32px) calc(88px + env(safe-area-inset-bottom));
+  padding: 20px var(--page-gutter) calc(88px + env(safe-area-inset-bottom));
   text-align: center;
 }
 
@@ -550,8 +648,8 @@
   bottom: 0;
   left: 0;
   right: 0;
-  width: 100%;
-  max-width: none;
+  width: 100vw;
+  max-width: 100vw;
   margin: 0;
   transform: none;
   z-index: 30;
@@ -559,7 +657,7 @@
   justify-content: space-around;
   align-items: stretch;
   gap: 0;
-  padding: 10px clamp(8px, 2vw, 24px) calc(10px + env(safe-area-inset-bottom));
+  padding: 10px var(--page-gutter) calc(10px + env(safe-area-inset-bottom));
   background: linear-gradient(180deg, #ffffff 0%, #eef2f7 100%);
   border-top: 1px solid var(--border);
   box-shadow:
@@ -631,15 +729,38 @@
     0 6px 14px rgba(26, 60, 110, 0.25);
 }
 
+@media (max-width: 1100px) {
+  .app-navbar-inner {
+    flex-wrap: wrap;
+    min-height: auto;
+    padding: 12px var(--page-gutter);
+  }
+
+  .app-navbar-nav {
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .app-navbar-nav .btn-3d {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 120px;
+  }
+}
+
 @media (max-width: 900px) {
   .app-ui .hero {
     grid-template-columns: 1fr;
-    padding: 20px;
+    padding: 20px var(--page-gutter);
   }
 
-  .app-navbar-inner {
-    flex-direction: column;
-    align-items: stretch;
+  .app-ui .screenshot-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .app-ui .screenshot-frame {
+    max-width: 360px;
+    margin: 0 auto !important;
   }
 
   .app-navbar-brand {
@@ -648,15 +769,6 @@
 
   .badge-official {
     margin-left: auto;
-  }
-
-  .app-navbar-nav {
-    justify-content: stretch;
-  }
-
-  .app-navbar-nav .btn-3d {
-    flex: 1 1 calc(50% - 6px);
-    min-width: 0;
   }
 
   .app-navbar-titles h1 {

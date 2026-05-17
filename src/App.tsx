@@ -1,8 +1,19 @@
-import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import PromoPage from './promo/PromoPage'
+import { ADMIN_SITE_TITLE, PROMO_SITE_TITLE } from './siteTitle'
 
 const AdminApp = lazy(() => import('./admin/AdminApp'))
+
+function DocumentTitle() {
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    document.title = pathname.startsWith('/admin') ? ADMIN_SITE_TITLE : PROMO_SITE_TITLE
+  }, [pathname])
+
+  return null
+}
 
 function AdminLoading() {
   return (
@@ -24,6 +35,7 @@ function AdminLoading() {
 export default function App() {
   return (
     <BrowserRouter>
+      <DocumentTitle />
       <Routes>
         <Route path="/" element={<PromoPage />} />
         <Route

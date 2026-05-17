@@ -7,7 +7,7 @@ export function ScreenshotWalkthrough() {
         <p className="eyebrow">Visual guide</p>
         <h3>App screens with step-by-step labels</h3>
         <p className="section-lead">
-          Screenshots from the real MSCE Attendance app. Numbers match the callouts beside each image.
+          Screenshots from the MSCE Attendance mobile app. Numbers match the callouts beside each image.
         </p>
       </div>
 

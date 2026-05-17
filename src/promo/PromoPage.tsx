@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   guideNav,
   instituteGuideSections,
@@ -8,6 +7,7 @@ import {
   type GuideSection,
 } from './instituteGuide'
 import { ScreenshotWalkthrough } from './ScreenshotWalkthrough'
+import { PROMO_SITE_TITLE } from '../siteTitle'
 import './index.css'
 import './app-ui-theme.css'
 
@@ -110,6 +110,10 @@ export default function PromoPage() {
   const [tilt, setTilt] = useState<Tilt>({ x: 0, y: 0 })
 
   useEffect(() => {
+    document.title = PROMO_SITE_TITLE
+  }, [])
+
+  useEffect(() => {
     const onMove = (event: MouseEvent) => {
       const x = (event.clientX / window.innerWidth - 0.5) * 10
       const y = (event.clientY / window.innerHeight - 0.5) * 10
@@ -120,7 +124,7 @@ export default function PromoPage() {
   }, [])
 
   return (
-    <div className="page-shell app-ui">
+    <div className="app-ui">
       <div className="bg-3d-layer" aria-hidden>
         <div className="orb orb-one" />
         <div className="orb orb-two" />
@@ -134,8 +138,8 @@ export default function PromoPage() {
           <div className="app-navbar-brand">
             <img src={logo} alt="" className="app-navbar-logo" />
             <div className="app-navbar-titles">
-              <h1>MSCE Attendance | एमएससीई उपस्थिती</h1>
-              <p>Institute guide | संस्था मार्गदर्शक</p>
+              <h1>MSCE ATTENDANCE APP PORTAL | एमएससीई उपस्थिती ऐप पोर्टल</h1>
+              <p>Institute guide &amp; APK download | संस्था मार्गदर्शक</p>
             </div>
             <span className="badge-official badge-official-3d">OFFICIAL</span>
           </div>
@@ -146,9 +150,6 @@ export default function PromoPage() {
             <a className="btn-3d btn-3d-ghost" href="#app-screens">
               Screenshots
             </a>
-            <Link className="btn-3d btn-3d-outline" to="/admin">
-              Web Admin
-            </Link>
             <a className="btn-3d btn-3d-primary" href={apkUrl} download="MSCE-Attendance.apk">
               Download APK
             </a>
@@ -156,6 +157,7 @@ export default function PromoPage() {
         </div>
       </header>
 
+      <div className="page-shell">
       <main className="app-main">
         <section className="hero app-card card-3d">
           <div className="hero-copy">
@@ -270,6 +272,11 @@ export default function PromoPage() {
         </section>
       </main>
 
+      <footer className="site-footer">
+        <p>MSCE ATTENDANCE APP PORTAL — institute usage guide for registration, GPS, and attendance.</p>
+      </footer>
+      </div>
+
       <nav className="app-bottom-nav" aria-label="App navigation (same as mobile app)">
         <a href="#guide" className="app-nav-item">
           <span className="app-nav-icon">⌂</span>
@@ -296,10 +303,6 @@ export default function PromoPage() {
           <span>APK</span>
         </a>
       </nav>
-
-      <footer className="site-footer">
-        <p>MSCE Attendance — institute usage guide. For MSCE council web admin, use Web Admin.</p>
-      </footer>
     </div>
   )
 }
