@@ -6,7 +6,7 @@
  *   teacher_attendance (alternate schema) / attendance_in_out / attendance_records / …
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { getSupabase } from '../lib/supabase'
 import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
 import { immediateImgSrc, resolvePhotoUrlString } from '../lib/photoUrl'
@@ -146,6 +146,188 @@ function flattenTeacherAttendanceRow(row: Record<string, unknown>): AttendanceRe
     in_photo_url: (p.entryPhoto ?? p.photoUrl ?? row.in_photo_url ?? null) as string | null,
     out_photo_url: (p.exitPhoto ?? row.out_photo_url ?? null) as string | null,
   } as AttendanceRecord
+}
+
+function studentFolderLabel(s: Student): string {
+  const label = pick(s, 'class_name', 'class', 'grade', 'standard', 'std')?.trim()
+  return label || 'All students'
+}
+
+function AddStudentPanel({ institute, onAdded }: { institute: InstituteRow; onAdded: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [firstName, setFirstName] = useState('')
+  const [middleName, setMiddleName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [year, setYear] = useState(`Year ${new Date().getFullYear()}`)
+  const [subjectsCsv, setSubjectsCsv] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [ok, setOk] = useState<string | null>(null)
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    setErr(null)
+    setOk(null)
+    const fn = firstName.trim()
+    const mn = middleName.trim()
+    const ln = lastName.trim()
+    if (!fn || !ln) {
+      setErr('First and last name are required.')
+      return
+    }
+    const fullName = `${fn} ${mn} ${ln}`.replace(/\s+/g, ' ').trim()
+    setBusy(true)
+    try {
+      const sb = getSupabase()
+      const nameCompare = `${fn.toLowerCase()} ${mn.toLowerCase()} ${ln.toLowerCase()}`.replace(/\s+/g, ' ').trim()
+      const { data: dupRows } = await sb
+        .from('students')
+        .select('id,first_name,middle_name,last_name,name')
+        .eq('institute_id', institute.id)
+        .ilike('first_name', fn)
+        .ilike('last_name', ln)
+      for (const row of dupRows ?? []) {
+        const r = row as Record<string, unknown>
+        const ex =
+          `${String(r.first_name ?? '').toLowerCase()} ${String(r.middle_name ?? '').toLowerCase()} ${String(r.last_name ?? '').toLowerCase()}`
+            .replace(/\s+/g, ' ')
+            .trim()
+        const nm = String(r.name ?? '')
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .trim()
+        if ((ex && ex === nameCompare) || (nm && nm === fullName.toLowerCase())) {
+          setErr('A student with the same full name is already registered in this institute.')
+          setBusy(false)
+          return
+        }
+      }
+      const { data: peakRaw, error: peakErr } = await sb.rpc('institute_peak_student_numbers', {
+        p_institute_id: institute.id,
+      })
+      if (peakErr) throw peakErr
+      const peak = (peakRaw ?? {}) as { sr_max?: number; roll_max?: number }
+      const base = Math.max(Number(peak.sr_max ?? 0), Number(peak.roll_max ?? 0))
+      const nextSr = String(base + 1)
+      const docId = `MANUAL_${Date.now()}`
+      const subjList = subjectsCsv.split(',').map((s) => s.trim()).filter(Boolean)
+      const payload: Record<string, unknown> = {
+        id: docId,
+        institute_id: institute.id,
+        uid: docId,
+        user_id: nextSr,
+        sr_no: nextSr,
+        name: fullName,
+        first_name: fn,
+        middle_name: mn,
+        last_name: ln,
+        year: year.trim() || `Year ${new Date().getFullYear()}`,
+        role: 'student',
+        status: 'approved',
+        has_device: false,
+        created_at: new Date().toISOString(),
+      }
+      if (subjList.length) {
+        payload.subjects = subjList
+        payload.subject = subjList.join(', ')
+      }
+      const { error: insErr } = await sb.from('students').insert(payload)
+      if (insErr) throw insErr
+      try {
+        const { data: instRow } = await sb.from('institutes').select('student_count').eq('id', institute.id).maybeSingle()
+        const cur = Number((instRow as { student_count?: number } | null)?.student_count ?? 0)
+        await sb.from('institutes').update({ student_count: cur + 1 }).eq('id', institute.id)
+      } catch {
+        /* optional counter — ignore if RLS/column blocks */
+      }
+      setOk(`Saved ${fullName} with roll ${nextSr}. Data is live in the database. Add face photo from the mobile app.`)
+      setFirstName('')
+      setMiddleName('')
+      setLastName('')
+      setSubjectsCsv('')
+      onAdded()
+      setOpen(false)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card-elevated" style={{ padding: '1rem', marginBottom: '1rem' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <strong>Add student</strong>
+          <span className="muted small" style={{ marginLeft: '0.5rem' }}>
+            Inserts into Supabase <code>students</code> for this institute (roll numbers match the app).
+          </span>
+        </div>
+        <button
+          type="button"
+          className={`btn btn-sm ${open ? 'btn-ghost' : 'btn-primary'}`}
+          onClick={() => {
+            setOpen(!open)
+            setErr(null)
+            setOk(null)
+          }}
+        >
+          {open ? 'Close form' : '＋ Add student'}
+        </button>
+      </div>
+      {ok && !open ? (
+        <p className="success small" style={{ marginTop: '0.5rem' }}>
+          {ok}
+        </p>
+      ) : null}
+      {open ? (
+        <form className="form-grid" style={{ marginTop: '0.75rem' }} onSubmit={(e) => void onSubmit(e)}>
+          {err ? (
+            <p className="error span-2" style={{ margin: 0 }}>
+              {err}
+            </p>
+          ) : null}
+          <label>
+            First name <span className="req">*</span>
+            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+          </label>
+          <label>
+            Middle name
+            <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} />
+          </label>
+          <label>
+            Last name <span className="req">*</span>
+            <input value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+          </label>
+          <label>
+            Year / batch label
+            <input value={year} onChange={(e) => setYear(e.target.value)} />
+          </label>
+          <label className="span-2">
+            Subjects (comma-separated, optional)
+            <input
+              value={subjectsCsv}
+              onChange={(e) => setSubjectsCsv(e.target.value)}
+              placeholder="e.g. English, Maths"
+            />
+          </label>
+          <div className="span-2" style={{ display: 'flex', gap: '0.5rem' }}>
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? 'Saving…' : 'Save to database'}
+            </button>
+          </div>
+        </form>
+      ) : null}
+    </div>
+  )
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -750,6 +932,7 @@ function StudentsList({
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState<string | null>(null)
   const [search, setSearch]     = useState('')
+  const [reloadTick, setReloadTick] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -772,17 +955,32 @@ function StudentsList({
     }
     void load()
     setTimeout(() => searchRef.current?.focus(), 100)
-  }, [institute.id])
+  }, [institute.id, reloadTick])
 
-  const filtered = students.filter(s => {
+  const filtered = students.filter((s) => {
     const q = search.toLowerCase()
     if (!q) return true
-    const name    = pick(s, 'name', 'student_name', 'full_name') ?? ''
-    const roll    = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno') ?? ''
-    const cls     = pick(s, 'class_name', 'class', 'grade') ?? ''
-    const email   = pick(s, 'email', 'email_id') ?? ''
-    return [name, roll, cls, email].some(v => v.toLowerCase().includes(q))
+    const name = pick(s, 'name', 'student_name', 'full_name') ?? ''
+    const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno') ?? ''
+    const cls = pick(s, 'class_name', 'class', 'grade') ?? ''
+    const email = pick(s, 'email', 'email_id') ?? ''
+    return [name, roll, cls, email].some((v) => v.toLowerCase().includes(q))
   })
+
+  const grouped = useMemo(() => {
+    const m = new Map<string, Student[]>()
+    const order: string[] = []
+    for (const s of filtered) {
+      const k = studentFolderLabel(s)
+      if (!m.has(k)) {
+        m.set(k, [])
+        order.push(k)
+      }
+      m.get(k)!.push(s)
+    }
+    order.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+    return order.map((folder) => ({ folder, list: m.get(folder)! }))
+  }, [filtered])
 
   return (
     <div className="students-panel">
@@ -807,6 +1005,8 @@ function StudentsList({
           <span className="big-lbl">Students</span>
         </div>
       </div>
+
+      <AddStudentPanel institute={institute} onAdded={() => setReloadTick((t) => t + 1)} />
 
       <div className="search-bar-row">
         <div className="search-bar">
@@ -849,31 +1049,53 @@ function StudentsList({
         </div>
       )}
 
-      <div className="students-grid">
-        {filtered.map(s => {
-          const name  = pick(s, 'name', 'student_name', 'full_name') ?? '—'
-          const roll  = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no')
-          const cls   = pick(s, 'class_name', 'class', 'grade', 'standard', 'std')
-          const sec   = pick(s, 'section', 'div', 'division')
-          const active = s.is_active !== false
+      {!loading && filtered.length > 0 && (
+        <p className="muted small" style={{ margin: '0 0 0.75rem' }}>
+          Students are grouped by class / grade field when present. Click a student to open <strong>subject folders</strong>{' '}
+          and attendance (live from the database).
+        </p>
+      )}
 
-          return (
-            <button key={s.id} className="student-card" onClick={() => onSelectStudent(s)}>
-              <div className="student-avatar">
-                <StudentDisplayPhoto student={s} displayName={name} size="sm" />
-                <span className="student-avatar-initials">{initials(name)}</span>
-              </div>
-              <div className="student-info">
-                <div className="student-name">{name}</div>
-                {roll && <div className="student-meta">Roll: {roll}</div>}
-                {cls  && <div className="student-meta">{cls}{sec ? ` — ${sec}` : ''}</div>}
-              </div>
-              <div className={`student-status-dot ${active ? 'dot-active' : 'dot-inactive'}`} title={active ? 'Active' : 'Inactive'} />
-              <div className="student-arrow">›</div>
-            </button>
-          )
-        })}
-      </div>
+      {grouped.map(({ folder, list: groupList }) => (
+        <div key={folder} style={{ marginBottom: '1.25rem' }}>
+          <div className="section-title-row">
+            <h3 className="section-heading" style={{ margin: 0 }}>
+              📁 {folder}
+            </h3>
+            <span className="section-count">{groupList.length}</span>
+          </div>
+          <div className="students-grid">
+            {groupList.map((s) => {
+              const name = pick(s, 'name', 'student_name', 'full_name') ?? '—'
+              const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no')
+              const cls = pick(s, 'class_name', 'class', 'grade', 'standard', 'std')
+              const sec = pick(s, 'section', 'div', 'division')
+              const active = s.is_active !== false
+
+              return (
+                <button key={s.id} className="student-card" onClick={() => onSelectStudent(s)}>
+                  <div className="student-avatar">
+                    <StudentDisplayPhoto student={s} displayName={name} size="sm" />
+                    <span className="student-avatar-initials">{initials(name)}</span>
+                  </div>
+                  <div className="student-info">
+                    <div className="student-name">{name}</div>
+                    {roll && <div className="student-meta">Roll: {roll}</div>}
+                    {cls && (
+                      <div className="student-meta">
+                        {cls}
+                        {sec ? ` — ${sec}` : ''}
+                      </div>
+                    )}
+                  </div>
+                  <div className={`student-status-dot ${active ? 'dot-active' : 'dot-inactive'}`} title={active ? 'Active' : 'Inactive'} />
+                  <div className="student-arrow">›</div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -923,7 +1145,7 @@ function InstitutePicker({ onSelectInstitute }: { onSelectInstitute: (i: Institu
     <div className="students-panel">
       <div className="overview-notice" style={{ marginBottom: '1.25rem' }}>
         <span>📋</span>
-        <span>Select an institute to browse enrolled students and their subject-wise attendance with entry/exit photos.</span>
+        <span>Select an institute to view all students (grouped by class), add new students to the database, and open each student’s subject folders with live attendance.</span>
       </div>
       <div className="search-bar-row">
         <div className="search-bar">
@@ -1006,13 +1228,44 @@ function InstCard({ inst, onClick }: { inst: InstituteRow; onClick: () => void }
    ROOT — StudentsSection
 ══════════════════════════════════════════════════════════════ */
 
-export function StudentsSection({ embedded = false }: { embedded?: boolean }) {
+export function StudentsSection({
+  embedded = false,
+  jumpToInstituteId = null,
+  onJumpToInstituteHandled,
+}: {
+  embedded?: boolean
+  jumpToInstituteId?: string | null
+  onJumpToInstituteHandled?: () => void
+}) {
   const [level, setLevel]         = useState<DrillLevel>('institutes')
   const [institute, setInstitute] = useState<InstituteRow | null>(null)
   const [student, setStudent]     = useState<Student | null>(null)
   const [subject, setSubject]     = useState<Subject | null>(null)
   const [schema, setSchema]       = useState<SchemaConfig>({ subjectTable: null, attendanceTable: null, discovered: false })
   const [schemaLoading, setSchemaLoading] = useState(true)
+
+  useEffect(() => {
+    if (!jumpToInstituteId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const sb = getSupabase()
+        const { data, error } = await sb.from('institutes').select('*').eq('id', jumpToInstituteId).maybeSingle()
+        if (cancelled) return
+        if (!error && data) {
+          setInstitute(data as InstituteRow)
+          setLevel('students')
+          setStudent(null)
+          setSubject(null)
+        }
+      } finally {
+        if (!cancelled) onJumpToInstituteHandled?.()
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [jumpToInstituteId, onJumpToInstituteHandled])
 
   async function runDiscovery() {
     setSchemaLoading(true)

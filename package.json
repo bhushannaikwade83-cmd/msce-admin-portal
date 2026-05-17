@@ -1,18 +1,21 @@
 {
-  "name": "admin-portal-react",
+  "name": "msce-website",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.9.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

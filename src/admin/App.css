@@ -115,3 +115,42 @@ label.inline input[type='checkbox'] {
   gap: 0.75rem;
   margin-top: 0.75rem;
 }
+
+/* Institute directory — action buttons in one row */
+.inst-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+/* Edit institute modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(10, 18, 40, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  overflow-y: auto;
+}
+
+.modal-panel {
+  width: min(40rem, 100%);
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  padding: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.65rem;
+  margin-bottom: 0.25rem;
+}

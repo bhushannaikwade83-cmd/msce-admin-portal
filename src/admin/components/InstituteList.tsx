@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { getSupabase } from '../lib/supabase'
 import {
@@ -98,7 +98,208 @@ function buildAdminGpsLines(
   return lines.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
 }
 
-type Props = { reloadToken?: number; embedded?: boolean }
+type Props = {
+  reloadToken?: number
+  embedded?: boolean
+  onOpenStudents?: (inst: InstituteRow) => void
+  onOpenReports?: (inst: InstituteRow) => void
+  onAddInstitute?: () => void
+}
+
+type InstituteEditForm = {
+  name: string
+  institute_code: string
+  location: string
+  address: string
+  city: string
+  district: string
+  taluka: string
+  pincode: string
+  state: string
+  country: string
+  mobile_no: string
+  is_active: boolean
+}
+
+function InstituteEditDialog({
+  institute,
+  onClose,
+  onSaved,
+}: {
+  institute: InstituteRow
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const row = institute as Record<string, unknown>
+  const pickR = (...keys: string[]): string =>
+    keys.map((k) => row[k]).find((v) => v !== null && v !== undefined && String(v) !== '')?.toString() ?? ''
+
+  const [form, setForm] = useState<InstituteEditForm>(() => ({
+    name: institute.name ?? '',
+    institute_code: institute.institute_code ?? '',
+    location: pickR('location'),
+    address: pickR('address'),
+    city: institute.city ?? '',
+    district: pickR('district'),
+    taluka: pickR('taluka'),
+    pincode: (institute.pincode ?? '').toString(),
+    state: institute.state ?? '',
+    country: pickR('country') || 'India',
+    mobile_no: pickR('mobile_no'),
+    is_active: institute.is_active !== false,
+  }))
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    setForm({
+      name: institute.name ?? '',
+      institute_code: institute.institute_code ?? '',
+      location: pickR('location'),
+      address: pickR('address'),
+      city: institute.city ?? '',
+      district: pickR('district'),
+      taluka: pickR('taluka'),
+      pincode: (institute.pincode ?? '').toString(),
+      state: institute.state ?? '',
+      country: pickR('country') || 'India',
+      mobile_no: pickR('mobile_no'),
+      is_active: institute.is_active !== false,
+    })
+  }, [institute])
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    setErr(null)
+    const name = form.name.trim()
+    if (!name) {
+      setErr('Name is required.')
+      return
+    }
+    setBusy(true)
+    try {
+      const sb = getSupabase()
+      const pin = form.pincode.replace(/\D/g, '').slice(0, 6)
+      const { error: uErr } = await sb
+        .from('institutes')
+        .update({
+          name,
+          institute_code: form.institute_code.trim() || null,
+          location: form.location.trim() || null,
+          address: form.address.trim() || null,
+          city: form.city.trim() || null,
+          district: form.district.trim() || null,
+          taluka: form.taluka.trim() || null,
+          state: form.state.trim() || null,
+          country: form.country.trim() || 'India',
+          mobile_no: form.mobile_no.trim() || null,
+          pincode: pin.length === 6 ? pin : null,
+          is_active: form.is_active,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', institute.id)
+      if (uErr) throw uErr
+      onSaved()
+      onClose()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal aria-labelledby="inst-edit-title">
+      <div className="modal-panel card-elevated">
+        <div className="modal-head">
+          <h2 id="inst-edit-title" style={{ margin: 0, fontSize: '1.05rem' }}>
+            Edit institute
+          </h2>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <p className="muted small" style={{ margin: '0.5rem 0 1rem' }}>
+          Institute ID <code>{institute.id}</code> — updates are saved to the database immediately.
+        </p>
+        {err ? <p className="error">{err}</p> : null}
+        <form className="form-grid" onSubmit={(e) => void onSubmit(e)}>
+          <label className="span-2">
+            Name <span className="req">*</span>
+            <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+          </label>
+          <label>
+            Institute code
+            <input
+              value={form.institute_code}
+              onChange={(e) => setForm((f) => ({ ...f, institute_code: e.target.value }))}
+            />
+          </label>
+          <label>
+            Mobile
+            <input
+              value={form.mobile_no}
+              onChange={(e) => setForm((f) => ({ ...f, mobile_no: e.target.value }))}
+            />
+          </label>
+          <label className="span-2">
+            Address
+            <input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+          </label>
+          <label>
+            City
+            <input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+          </label>
+          <label>
+            Pincode
+            <input
+              inputMode="numeric"
+              maxLength={6}
+              value={form.pincode}
+              onChange={(e) => setForm((f) => ({ ...f, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+            />
+          </label>
+          <label>
+            District
+            <input value={form.district} onChange={(e) => setForm((f) => ({ ...f, district: e.target.value }))} />
+          </label>
+          <label>
+            Taluka
+            <input value={form.taluka} onChange={(e) => setForm((f) => ({ ...f, taluka: e.target.value }))} />
+          </label>
+          <label>
+            State
+            <input value={form.state} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
+          </label>
+          <label>
+            Country
+            <input value={form.country} onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))} />
+          </label>
+          <label className="span-2">
+            Location (short)
+            <input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
+          </label>
+          <label className="inline span-2">
+            <input
+              type="checkbox"
+              checked={form.is_active}
+              onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
+            />
+            Institute is active (visible in app listings when your RLS allows)
+          </label>
+          <div className="span-2" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? 'Saving…' : 'Save to database'}
+            </button>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 type AdminInviteRow = {
   institute_id: string
@@ -108,7 +309,13 @@ type AdminInviteRow = {
   claimed: boolean | null
 }
 
-export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
+export function InstituteList({
+  reloadToken = 0,
+  embedded = false,
+  onOpenStudents,
+  onOpenReports,
+  onAddInstitute,
+}: Props) {
   const { user } = useAuth()
   const [rows, setRows] = useState<InstituteRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -120,6 +327,18 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
   const [gpsAdminsByInstitute, setGpsAdminsByInstitute] = useState<Record<string, AdminGpsLine[]>>({})
   const [adminInvitesByInstitute, setAdminInvitesByInstitute] = useState<Record<string, AdminInviteRow | null>>({})
   const [reportBusyId, setReportBusyId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [editing, setEditing] = useState<InstituteRow | null>(null)
+
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return rows
+    return rows.filter((r) =>
+      [r.name, r.institute_code, r.id, r.city, r.state, r.pincode]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    )
+  }, [rows, search])
 
   function exportDirectoryCsv() {
     const { header, data } = instituteDirectoryCsvRows(rows)
@@ -299,6 +518,11 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
       <div className="card-head">
         {!embedded ? <h2>Institutes</h2> : <span className="section-kicker">Directory</span>}
         <div className="card-head-actions">
+          {onAddInstitute ? (
+            <button type="button" className="btn btn-primary btn-sm" onClick={onAddInstitute} title="Open add institute form">
+              ➕ New institute
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn btn-ghost btn-sm"
@@ -313,10 +537,32 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
           </button>
         </div>
       </div>
+      <div className="search-bar-row" style={{ marginBottom: '0.75rem' }}>
+        <div className="search-bar">
+          <span className="search-icon">🔍</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search institutes — name, code, city, state, id…"
+            className="search-input"
+            aria-label="Filter institutes"
+          />
+          {search ? (
+            <button type="button" className="search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+              ✕
+            </button>
+          ) : null}
+        </div>
+        <span className="search-count">
+          {loading ? '…' : `${filteredRows.length} of ${rows.length} shown`}
+        </span>
+      </div>
       <p className="muted small">
-        Same <code>institutes</code> table as the Flutter app. If you still see fewer rows than in the Supabase
-        table editor, apply the latest SQL migrations (see <code>supabase/migrations/010_...</code>) so RLS allows
-        listing inactive institutes. <strong>{rows.length}</strong> row{rows.length === 1 ? '' : 's'} loaded.
+        Listing is live from Supabase <code>institutes</code>. Use <strong>Edit</strong> to update a row; use{' '}
+        <strong>Students</strong> / <strong>Reports</strong> for the same tools as those tabs, pre-selected for that
+        institute.
+        <strong> {rows.length}</strong> institute{rows.length === 1 ? '' : 's'} loaded from the database.
         {user ? (
           <>
             {' '}
@@ -344,23 +590,24 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
               <th>Admin setup</th>
               <th>Active</th>
               <th>GPS{user ? ' (per admin)' : ''}</th>
-              {user ? (
-                <>
-                  <th>Report</th>
-                  <th>Actions</th>
-                </>
-              ) : null}
+              {user ? <th>Actions</th> : null}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && !loading ? (
               <tr>
-                <td colSpan={user ? 11 : 9} className="muted">
+                <td colSpan={user ? 10 : 9} className="muted">
                   No rows (or configure Supabase env first).
                 </td>
               </tr>
+            ) : filteredRows.length === 0 && !loading ? (
+              <tr>
+                <td colSpan={user ? 10 : 9} className="muted">
+                  No institutes match “{search}”. Clear the search box to see all {rows.length} row(s).
+                </td>
+              </tr>
             ) : (
-              rows.map((r) => {
+              filteredRows.map((r) => {
                 const lines = user ? (gpsAdminsByInstitute[r.id] ?? []) : []
                 const isGpsLockedLegacy = r.gps_locked === true
                 const invite = adminInvitesByInstitute[r.id]
@@ -451,20 +698,47 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
                       )}
                     </td>
                     {user ? (
-                      <>
-                        <td className="actions-cell">
+                      <td className="actions-cell">
+                        <div className="inst-actions-row">
                           <button
                             type="button"
                             className="btn btn-ghost btn-sm"
                             disabled={reportBusyId !== null}
-                            title="Download student roster CSV for this institute"
+                            title="Download student roster CSV"
                             onClick={() => void exportInstituteRosterCsv(r)}
                           >
                             {reportBusyId === r.id ? '…' : '📄 Roster'}
                           </button>
-                        </td>
-                        <td className="actions-cell" />
-                      </>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            title="Edit institute in database"
+                            onClick={() => setEditing(r)}
+                          >
+                            ✏️ Edit
+                          </button>
+                          {onOpenStudents ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              title="Open Students tab with this institute"
+                              onClick={() => onOpenStudents(r)}
+                            >
+                              👨‍🎓 Students
+                            </button>
+                          ) : null}
+                          {onOpenReports ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              title="Open Reports tab with this institute"
+                              onClick={() => onOpenReports(r)}
+                            >
+                              📑 Reports
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
                     ) : null}
                   </tr>
                 )
@@ -473,6 +747,13 @@ export function InstituteList({ reloadToken = 0, embedded = false }: Props) {
           </tbody>
         </table>
       </div>
+      {editing ? (
+        <InstituteEditDialog
+          institute={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => void load()}
+        />
+      ) : null}
     </div>
   )
 }

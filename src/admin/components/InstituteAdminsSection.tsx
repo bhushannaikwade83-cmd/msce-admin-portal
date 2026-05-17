@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '../lib/supabase'
-import { PendingAdmins } from './PendingAdmins'
 
 type AdminProfileRow = {
   id: string
@@ -12,7 +11,6 @@ type AdminProfileRow = {
   institute_name: string | null
   phone_number: string | null
   created_at: string | null
-  approved_at?: string | null
 }
 
 type InstituteInviteRow = {
@@ -33,6 +31,11 @@ type InstituteRow = {
   is_active: boolean | null
 }
 
+type RemainingInviteRow = InstituteInviteRow & {
+  instituteLabel: string
+  instituteCode: string | null
+}
+
 type AdminRow = {
   id: string
   instituteId: string
@@ -43,7 +46,6 @@ type AdminRow = {
   phoneNumber: string | null
   status: string
   profileCreatedAt: string | null
-  approvedAt: string | null
   inviteName: string | null
   inviteEmail: string | null
   invitePhone: string | null
@@ -115,7 +117,6 @@ function buildRows(
         phoneNumber: p.phone_number ?? null,
         status: normalizeStatus(p.status),
         profileCreatedAt: p.created_at ?? null,
-        approvedAt: p.approved_at ?? null,
         inviteName: invite?.full_name ?? null,
         inviteEmail: invite?.email ?? null,
         invitePhone: invite?.phone ?? null,
@@ -140,7 +141,6 @@ function buildRows(
       phoneNumber: null,
       status: 'invite-only',
       profileCreatedAt: null,
-      approvedAt: null,
       inviteName: invite.full_name ?? null,
       inviteEmail: invite.email ?? null,
       invitePhone: invite.phone ?? null,
@@ -164,6 +164,7 @@ function buildRows(
 
 export function InstituteAdminsSection({ embedded = false }: { embedded?: boolean }) {
   const [rows, setRows] = useState<AdminRow[]>([])
+  const [remainingInvites, setRemainingInvites] = useState<RemainingInviteRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -180,7 +181,7 @@ export function InstituteAdminsSection({ embedded = false }: { embedded?: boolea
       const [profilesRes, invitesRes, institutesRes] = await Promise.all([
         sb
           .from('profiles')
-          .select('id,email,name,role,status,institute_id,institute_name,phone_number,created_at,approved_at')
+          .select('id,email,name,role,status,institute_id,institute_name,phone_number,created_at')
           .eq('role', 'admin')
           .not('institute_id', 'is', null)
           .order('created_at', { ascending: false }),
@@ -198,14 +199,35 @@ export function InstituteAdminsSection({ embedded = false }: { embedded?: boolea
       if (invitesRes.error) throw invitesRes.error
       if (institutesRes.error) throw institutesRes.error
 
+      const institutes = (institutesRes.data ?? []) as InstituteRow[]
+      const institutesById = new Map(institutes.map((r) => [r.id, r]))
+      const rawInvites = (invitesRes.data ?? []) as InstituteInviteRow[]
+
+      const remaining: RemainingInviteRow[] = rawInvites
+        .filter((inv) => inv.claimed !== true)
+        .map((inv) => {
+          const inst = institutesById.get(inv.institute_id)
+          return {
+            ...inv,
+            instituteLabel: inst?.name?.trim() || inv.institute_id,
+            instituteCode: inst?.institute_code ?? null,
+          }
+        })
+        .sort((a, b) =>
+          a.instituteLabel.localeCompare(b.instituteLabel, undefined, { sensitivity: 'base' }),
+        )
+
+      setRemainingInvites(remaining)
+
       const built = buildRows(
         (profilesRes.data ?? []) as AdminProfileRow[],
-        (invitesRes.data ?? []) as InstituteInviteRow[],
-        (institutesRes.data ?? []) as InstituteRow[],
+        rawInvites,
+        institutes,
       )
       setRows(built)
     } catch (e) {
       setRows([])
+      setRemainingInvites([])
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setLoading(false)
@@ -223,9 +245,6 @@ export function InstituteAdminsSection({ embedded = false }: { embedded?: boolea
     try {
       const sb = getSupabase()
       const patch: Record<string, string> = { status: nextStatus }
-      if (nextStatus === 'approved' || nextStatus === 'active') {
-        patch.approved_at = new Date().toISOString()
-      }
       const { error: updErr } = await sb.from('profiles').update(patch).eq('id', profileId)
       if (updErr) throw updErr
       setInfo(
@@ -283,7 +302,63 @@ export function InstituteAdminsSection({ embedded = false }: { embedded?: boolea
         </button>
       </div>
 
-      <PendingAdmins embedded />
+      <div className="card card-elevated" style={{ marginTop: '1rem' }}>
+        <div className="card-head" style={{ paddingBottom: '0.5rem' }}>
+          <div>
+            <span className="section-kicker">Admin invites</span>
+            <p className="muted small" style={{ marginTop: '0.35rem' }}>
+              Institutes where an admin was invited in the app but has not finished creating their password yet (
+              <code>admin_invites.claimed</code> is false). When they complete sign-up, they move to the table below.
+            </p>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Institute</th>
+                <th>Invited admin</th>
+                <th>Contact</th>
+                <th>Invited</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!remainingInvites.length && !loading ? (
+                <tr>
+                  <td colSpan={4} className="muted">
+                    No outstanding admin invites — every invite has been claimed in the app, or no invites exist yet.
+                  </td>
+                </tr>
+              ) : (
+                remainingInvites.map((inv) => (
+                  <tr key={inv.id}>
+                    <td>
+                      <div><strong>{inv.instituteLabel}</strong></div>
+                      <div className="muted small">
+                        ID <code>{inv.institute_id}</code>
+                        {inv.instituteCode ? (
+                          <>
+                            {' '}
+                            · Code <code>{inv.instituteCode}</code>
+                          </>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td>
+                      <strong>{inv.full_name?.trim() || '—'}</strong>
+                    </td>
+                    <td>
+                      <div>{inv.email?.trim() || '—'}</div>
+                      <div className="muted small">{inv.phone?.trim() || '—'}</div>
+                    </td>
+                    <td className="muted small">{fmtWhen(inv.created_at)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="card card-elevated" style={{ marginTop: '1rem' }}>
         <div className="row" style={{ gap: '0.75rem', alignItems: 'end', flexWrap: 'wrap' }}>
@@ -361,7 +436,6 @@ export function InstituteAdminsSection({ embedded = false }: { embedded?: boolea
                       </td>
                       <td>
                         <div className="small">Profile: {fmtWhen(row.profileCreatedAt)}</div>
-                        <div className="small">Approved: {fmtWhen(row.approvedAt)}</div>
                         <div className="small">Invite: {fmtWhen(row.inviteCreatedAt)}</div>
                         <div className="small">Claimed: {fmtWhen(row.inviteClaimedAt)}</div>
                       </td>

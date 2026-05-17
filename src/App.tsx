@@ -1,82 +1,41 @@
-import { useState } from 'react'
-import { AuthProvider } from './context/auth-context'
-import { useAuth } from './hooks/useAuth'
-import { DashboardLayout, type DashboardTab } from './layouts/DashboardLayout'
-import { LoginPage } from './pages/LoginPage'
-import { AddInstituteForm } from './components/AddInstituteForm'
-import { InstituteAdminsSection } from './components/InstituteAdminsSection'
-import { InstituteList } from './components/InstituteList'
-import { StorageSection } from './components/StorageSection'
-import { OverviewPanel } from './components/OverviewPanel'
-import { StudentsSection } from './components/StudentsSection'
-import { ReportsSection } from './components/ReportsSection'
-import './App.css'
+import { lazy, Suspense } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import PromoPage from './promo/PromoPage'
 
-// MSCE Admin Portal — Maharashtra State Council of Examinations
+const AdminApp = lazy(() => import('./admin/AdminApp'))
 
-function ConfigErrorScreen({ message }: { message: string }) {
+function AdminLoading() {
   return (
-    <div className="state-screen">
-      <div className="state-card card-elevated">
-        <h1>⚙️ Configuration Required</h1>
-        <p className="state-text">
-          Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to your{' '}
-          <code>.env.local</code> file (same values as the mobile app).
-        </p>
-        <p className="state-detail">{message}</p>
-      </div>
-    </div>
-  )
-}
-
-function LoadingScreen() {
-  return (
-    <div className="state-screen">
-      <div className="loading-spinner" aria-label="Loading" />
-      <p className="state-muted">Verifying session…</p>
-    </div>
-  )
-}
-
-function AuthenticatedApp() {
-  const { user, loading, configError, signOut } = useAuth()
-  const [tab, setTab] = useState<DashboardTab>('overview')
-  const [instituteReload, setInstituteReload] = useState(0)
-
-  if (configError) {
-    return <ConfigErrorScreen message={configError} />
-  }
-
-  if (loading) {
-    return <LoadingScreen />
-  }
-
-  if (!user) {
-    return <LoginPage />
-  }
-
-  return (
-    <DashboardLayout
-      userEmail={user.email ?? null}
-      activeTab={tab}
-      onTab={setTab}
-      onSignOut={signOut}
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        background: '#0c1222',
+        color: '#94a3b8',
+        fontFamily: 'DM Sans, system-ui, sans-serif',
+      }}
     >
-      {tab === 'overview' && <OverviewPanel />}
-      {tab === 'admins'   && <InstituteAdminsSection embedded />}
-      {tab === 'institutes' && <InstituteList reloadToken={instituteReload} embedded />}
-      {tab === 'add'      && <AddInstituteForm onCreated={() => setInstituteReload((n) => n + 1)} embedded />}
-      {tab === 'students' && <StudentsSection embedded />}
-      {tab === 'reports' && <ReportsSection embedded />}
-      {tab === 'storage'  && <StorageSection embedded />}
-    </DashboardLayout>
+      Loading admin portal…
+    </div>
   )
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AuthenticatedApp />
-    </AuthProvider>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<PromoPage />} />
+        <Route
+          path="/admin/*"
+          element={
+            <Suspense fallback={<AdminLoading />}>
+              <AdminApp />
+            </Suspense>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   )
 }

@@ -33,42 +33,15 @@ export function LoginPage() {
         </div>
       </header>
 
-      <div className="login-body">
-        {/* ── Left Brand Panel ── */}
-        <div className="login-brand">
-          <div className="login-brand-inner">
-            <div className="login-logo" aria-hidden>🏛️</div>
-            <div className="login-brand-authority">Government of Maharashtra</div>
-            <h1 className="login-brand-title">MSCE<br />Admin Portal</h1>
-            <p className="login-brand-sub">Maharashtra State Council of Examinations</p>
-
-            <ul className="login-feature-list">
-              <li>
-                <span className="login-feature-icon" aria-hidden>✔</span>
-                Create institute and admin setup details for the mobile app
-              </li>
-              <li>
-                <span className="login-feature-icon" aria-hidden>🏫</span>
-                Manage institute directory and website onboarding data
-              </li>
-              <li>
-                <span className="login-feature-icon" aria-hidden>🔒</span>
-                Row-level security enforced via Supabase Auth session
-              </li>
-              <li>
-                <span className="login-feature-icon" aria-hidden>👤</span>
-                Single super admin account for website access
-              </li>
-              <li>
-                <span className="login-feature-icon" aria-hidden>📦</span>
-                Storage management for uploaded assets
-              </li>
-            </ul>
+      <div className="login-body login-body--centered">
+        <div className="login-panel login-panel--centered">
+          <div className="login-hero-compact">
+            <div className="login-logo login-logo--center" aria-hidden>🏛️</div>
+            <div className="login-brand-authority login-brand-authority--on-dark">Government of Maharashtra</div>
+            <h1 className="login-brand-title login-brand-title--center">MSCE Admin Portal</h1>
+            <p className="login-brand-sub login-brand-sub--center">Maharashtra State Council of Examinations</p>
           </div>
-        </div>
 
-        {/* ── Right Login Panel ── */}
-        <div className="login-panel">
           <div className="login-card">
             <div className="login-card-header">
               <div className="login-card-emblem" aria-hidden>🔐</div>
@@ -125,6 +98,13 @@ export function LoginPage() {
               </button>
             </form>
           </div>
+
+          <ul className="login-feature-list login-feature-list--below">
+            <li>
+              <span className="login-feature-icon" aria-hidden>✔</span>
+              Institute &amp; admin setup for the mobile app · Directory · Reports · Storage (Supabase RLS)
+            </li>
+          </ul>
 
           <p className="login-foot">
             🔒&nbsp;This is a restricted government portal. Unauthorised access is

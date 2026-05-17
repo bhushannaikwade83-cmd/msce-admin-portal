@@ -30,9 +30,9 @@ export function OverviewPanel() {
         </div>
         <p className="overview-text">
           Welcome to the MSCE Administration Portal. Use the left navigation to manage
-          institutes, approve pending admin registrations, add new institution records, and
-          review storage assets — all connected to the same Supabase project as the mobile
-          application.
+          institutes, track outstanding admin invites from the mobile app, add new institution
+          records, and review storage assets — all connected to the same Supabase project as the
+          mobile application.
         </p>
         <p style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.45)', marginTop: '0.75rem' }}>
           📅 {today}
@@ -45,17 +45,18 @@ export function OverviewPanel() {
           <div className="overview-tile-icon" aria-hidden>🏫</div>
           <h3>Institute Directory</h3>
           <p>
-            Browse all registered institutes. Approve inactive institutions and view their
+            Browse all registered institutes, activate or review institution records, and view
             district, city, and pincode details.
           </p>
         </div>
 
         <div className="overview-tile card-elevated">
-          <div className="overview-tile-icon" aria-hidden>✅</div>
-          <h3>Pending Approvals</h3>
+          <div className="overview-tile-icon" aria-hidden>✉️</div>
+          <h3>Outstanding admin invites</h3>
           <p>
-            Activate institute admin accounts that have registered through the mobile app
-            with <code>pending</code> status.
+            Under <strong>Admins & Access</strong>, see which institutes still have an{' '}
+            <code>admin_invites</code> row not yet claimed in the app — invited name, email,
+            and phone — until the institute admin finishes password setup.
           </p>
         </div>
 
@@ -63,8 +64,8 @@ export function OverviewPanel() {
           <div className="overview-tile-icon" aria-hidden>🔐</div>
           <h3>Admins & Access</h3>
           <p>
-            Review each institute admin, confirm onboarding state, approve access, or
-            disable sign-in without ever exposing passwords in the portal.
+            Review each institute admin and onboarding state (invite claimed or waiting),
+            adjust access status, or disable sign-in without exposing passwords.
           </p>
         </div>
 

@@ -599,6 +599,101 @@ body::before {
   min-width: 0;
 }
 
+/* Centered login (single column): full-area gradient + card in the middle */
+.login-body.login-body--centered {
+  flex-wrap: nowrap;
+  position: relative;
+  overflow: hidden;
+  justify-content: center;
+  align-items: center;
+  padding: clamp(1.25rem, 4vh, 2.5rem) var(--content-pad-inline);
+  background: linear-gradient(155deg, var(--gov-navy-dark) 0%, var(--gov-navy) 50%, #1a5ccc 100%);
+}
+
+.login-body.login-body--centered::before {
+  content: '';
+  position: absolute;
+  width: min(78vw, 36rem);
+  aspect-ratio: 1;
+  height: auto;
+  border-radius: 50%;
+  border: clamp(2rem, 12vw, 5.5rem) solid rgba(255,255,255,0.025);
+  top: -15%;
+  right: -10%;
+  pointer-events: none;
+}
+
+.login-body.login-body--centered::after {
+  content: '';
+  position: absolute;
+  width: min(48vw, 22rem);
+  aspect-ratio: 1;
+  height: auto;
+  border-radius: 50%;
+  border: clamp(1.25rem, 7vw, 3.5rem) solid rgba(255,102,0,0.06);
+  bottom: -12%;
+  left: -8%;
+  pointer-events: none;
+}
+
+.login-panel.login-panel--centered {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 26rem;
+  min-width: 0;
+  background: transparent;
+}
+
+.login-panel.login-panel--centered .login-foot,
+.login-panel.login-panel--centered .login-foot-secondary {
+  color: rgba(255,255,255,0.7);
+}
+
+.login-hero-compact {
+  text-align: center;
+  margin-bottom: 1.35rem;
+  width: 100%;
+}
+
+.login-logo--center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-brand-authority--on-dark {
+  color: rgba(255,255,255,0.45);
+}
+
+.login-brand-title--center {
+  font-size: clamp(1.35rem, 4vw, 1.65rem);
+  margin-bottom: 0.35rem;
+}
+
+.login-brand-sub--center {
+  margin-bottom: 0;
+  font-size: 0.82rem;
+}
+
+.login-feature-list--below {
+  width: 100%;
+  max-width: 24rem;
+  margin: 0 0 0.25rem;
+}
+
+.login-feature-list--below li {
+  font-size: 0.76rem;
+  color: rgba(255,255,255,0.62);
+  justify-content: center;
+  text-align: left;
+}
+
+.login-feature-list--below .login-feature-icon {
+  background: rgba(255,102,0,0.22);
+  border-color: rgba(255,102,0,0.4);
+}
+
 .login-brand {
   flex: 1 1 auto;
   min-width: min(100%, 18rem);
@@ -723,6 +818,8 @@ body::before {
   justify-content: center;
   padding: clamp(1.5rem, 4vh, 2.5rem) var(--content-pad-inline);
 }
+
+/* Legacy split layout: left brand column (unused when login-body--centered) */
 
 .login-card {
   background: var(--surface);
@@ -1195,12 +1292,6 @@ tbody tr:hover { background: var(--surface-hover); }
   :root { --sidebar-width: 0px; }
   .dash-sidebar { display: none; }
   .gov-footer { margin-left: 0; }
-  .login-brand { display: none; }
-  .login-panel {
-    width: 100%;
-    max-width: none;
-    flex: 1 1 100%;
-  }
 }
 
 /* ============================================================

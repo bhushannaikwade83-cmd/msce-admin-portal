@@ -5,6 +5,7 @@
 import { getSupabase, storageBucketName } from './supabase'
 
 declare const __EDUSETU_B2_SIGN_API__: string
+declare const __EDUSETU_B2_SIGN_ENABLED__: boolean
 
 function str(v: unknown): string | null {
   if (v == null) return null
@@ -56,6 +57,7 @@ async function supabaseSignedUrl(path: string): Promise<string | null> {
 
 async function requestB2SignedUrl(objectPath: string): Promise<string | null> {
   const api = typeof __EDUSETU_B2_SIGN_API__ === 'string' ? __EDUSETU_B2_SIGN_API__.trim() : ''
+  if (!api && !__EDUSETU_B2_SIGN_ENABLED__) return null
   const endpoint = api || '/api/b2-sign-photo'
   try {
     const r = await fetch(endpoint, {

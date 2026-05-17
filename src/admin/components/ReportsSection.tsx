@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 import { getSupabase } from '../lib/supabase'
-import { csvEscape } from '../lib/reportCsv'
 import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
 import { discoverSchema, type SchemaConfig } from '../lib/schemaDiscovery'
 import type { InstituteRow } from './InstituteList'
@@ -135,7 +134,15 @@ function getPhotoOut(r: AttendanceRecord): string {
   return String(r.out_photo_url ?? r['exit_photo'] ?? r['photo_out'] ?? '')
 }
 
-export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
+export function ReportsSection({
+  embedded = false,
+  jumpToInstituteId = null,
+  onJumpToInstituteHandled,
+}: {
+  embedded?: boolean
+  jumpToInstituteId?: string | null
+  onJumpToInstituteHandled?: () => void
+}) {
   const [schema, setSchema] = useState<SchemaConfig>({
     subjectTable: null,
     attendanceTable: null,
@@ -191,6 +198,29 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
     void loadInst()
     setTimeout(() => searchRef.current?.focus(), 120)
   }, [])
+
+  useEffect(() => {
+    if (!jumpToInstituteId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const sb = getSupabase()
+        const { data, error } = await sb.from('institutes').select('*').eq('id', jumpToInstituteId).maybeSingle()
+        if (cancelled) return
+        if (!error && data) {
+          setInstitute(data as InstituteRow)
+          setMode('institute')
+          setSelectedStudent(null)
+          setSearch('')
+        }
+      } finally {
+        if (!cancelled) onJumpToInstituteHandled?.()
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [jumpToInstituteId, onJumpToInstituteHandled])
 
   const loadStudents = useCallback(async (inst: InstituteRow) => {
     setStudentsLoading(true)
@@ -348,20 +378,6 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
 
       const rollMap = rollToNameMap(students)
       const instName = institute.name ?? institute.id
-      const detailHeader = [
-        'institute_id',
-        'institute_name',
-        'date',
-        'student_key',
-        'student_name',
-        'status',
-        'in_time',
-        'out_time',
-        'subject_id',
-        'record_id',
-        'in_photo_url',
-        'out_photo_url',
-      ]
       const detailRows: string[][] = []
       const summary = new Map<
         string,
@@ -410,17 +426,6 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
         else agg.other += 1
       }
 
-      const summaryHeader = [
-        'institute_id',
-        'institute_name',
-        'month',
-        'student_name',
-        'attendance_student_key',
-        'present_days',
-        'absent_days',
-        'other_marked',
-        'total_records',
-      ]
       const summaryRows = [...summary.values()].map((a) => [
         institute.id,
         instName,
@@ -433,18 +438,6 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
         String(a.present + a.absent + a.other),
       ])
 
-      const meta = [
-        `report_type,institute_attendance`,
-        `institute,${csvEscape(instName)}`,
-        `institute_id,${csvEscape(institute.id)}`,
-        `month,${csvEscape(month)}`,
-        `table,${csvEscape(attTable)}`,
-        `generated,${csvEscape(new Date().toISOString())}`,
-        `detail_row_count,${String(detailRows.length)}`,
-        '',
-        '=== SUMMARY (per student) ===',
-      ].join('\n')
-      // \ud83d\udcc4 Generate PDF Report
       const doc = new jsPDF()
       const pageWidth = doc.internal.pageSize.getWidth()
       const pageHeight = doc.internal.pageSize.getHeight()
@@ -543,7 +536,7 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
         didDrawPage: () => {
           // Footer
           const pageCount = (doc as any).internal.pages.length - 1
-          const currentPage = doc.internal.getCurrentPageInfo().pageNumber
+          const currentPage = doc.getCurrentPageInfo().pageNumber
           doc.setFontSize(8)
           doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin - 20, pageHeight - 8)
         },
@@ -617,7 +610,6 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
             ? (flattenAttendanceInOutRow(row) as AttendanceRecord)
             : (row as AttendanceRecord),
       )
-      const header = ['date', 'status', 'in_time', 'out_time', 'subject_id', 'record_id', 'in_photo_url', 'out_photo_url']
       const rows = flat.map((rec) => [
         rec.date ? String(rec.date).slice(0, 10) : '',
         String(rec.status ?? ''),
@@ -685,7 +677,7 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
         didDrawPage: () => {
           // Footer
           const pageCount = (doc as any).internal.pages.length - 1
-          const currentPage = doc.internal.getCurrentPageInfo().pageNumber
+          const currentPage = doc.getCurrentPageInfo().pageNumber
           doc.setFontSize(8)
           doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin - 20, pageHeight - 8)
         },
@@ -732,9 +724,10 @@ export function ReportsSection({ embedded = false }: { embedded?: boolean }) {
 
         {!schemaLoading && schema.attendanceTable && (
           <p className="muted small" style={{ marginBottom: '1rem' }}>
-            Using table <code>{schema.attendanceTable}</code>. Choose an institute, then download an{' '}
-            <strong>institute-wide</strong> report (all students + summary) or pick one <strong>student</strong> (search
-            or list) for their monthly attendance CSV.
+            All institutes use the <strong>same report flow</strong>; data is read live from Supabase (
+            <code>{schema.attendanceTable}</code>). Choose an institute, then download an <strong>institute-wide</strong>{' '}
+            PDF (summary + detail) or pick one <strong>student</strong> for their monthly PDF. You can also open this tab
+            from <strong>Institutes → Reports</strong> with an institute pre-selected.
           </p>
         )}
 
