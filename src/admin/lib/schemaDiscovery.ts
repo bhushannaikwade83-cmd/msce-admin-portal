@@ -1,8 +1,5 @@
 /**
- * Probe Supabase for subject / attendance table names (same logic as Students section).
- *
- * Note: the browser Network tab may show HTTP 404 for candidate tables that are not in your
- * database. That is expected; probes stop at “table missing” and do not break the app.
+ * Probe Supabase for subject / attendance table names used by this admin portal.
  */
 import { getSupabase } from './supabase'
 
@@ -17,17 +14,8 @@ export const SUBJECT_CANDIDATES = [
   'timetable',
   'modules',
 ]
-export const ATTENDANCE_CANDIDATES = [
-  'teacher_attendance',
-  'attendance_in_out',
-  'attendance_records',
-  'attendance',
-  'attendances',
-  'student_attendance',
-  'daily_attendance',
-  'attendance_logs',
-  'attendance_data',
-]
+/** Tables this app reads — do not probe legacy names that are not in MSCE Supabase. */
+export const ATTENDANCE_CANDIDATES = ['teacher_attendance', 'attendance_in_out']
 
 export type SchemaConfig = {
   subjectTable: string | null

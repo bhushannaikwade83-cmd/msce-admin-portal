@@ -3,7 +3,7 @@
  * Auto-discovers actual table names by probing Supabase.
  * Works regardless of whether your schema uses:
  *   institute_subjects (alternate schema) / subjects / courses / …
- *   teacher_attendance (alternate schema) / attendance_in_out / attendance_records / …
+ *   teacher_attendance / attendance_in_out
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
