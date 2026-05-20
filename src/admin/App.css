@@ -576,7 +576,8 @@ label.inline input[type='checkbox'] {
   border-radius: var(--radius-lg);
   overflow-x: auto;
   overflow-y: auto;
-  max-height: min(70vh, 48rem);
+  max-height: min(70dvh, 48rem);
+  -webkit-overflow-scrolling: touch;
   box-shadow: var(--shadow-card);
 }
 

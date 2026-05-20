@@ -53,8 +53,10 @@
   --sidebar-width:       clamp(13.5rem, 24vw, 18rem);
   --topbar-h:            clamp(3rem, 7.5vh, 3.625rem);
   --header-h:            clamp(3.25rem, 9.5vh, 4.75rem);
-  /* Fixed chrome in full-width dash-shell (tricolor + gov header + top nav) */
-  --dash-chrome-top:     calc(var(--gov-tricolor-h) + var(--header-h) + var(--topnav-h));
+  /* Measured at runtime from header + nav (ResizeObserver); fall back to estimates */
+  --dash-header-h:       var(--header-h);
+  --dash-topnav-h:       var(--topnav-h);
+  --dash-chrome-top:     calc(var(--gov-tricolor-h) + var(--dash-header-h) + var(--dash-topnav-h));
   --radius:              6px;
   --radius-lg:       10px;
   --shadow-card:     0 1px 4px rgba(0,48,135,0.08), 0 4px 16px rgba(0,48,135,0.05);
@@ -72,13 +74,22 @@
 *::before,
 *::after { box-sizing: border-box; }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: clip;
   background: var(--bg);
 }
 
-#root { min-height: 100vh; }
+#root {
+  min-height: 100dvh;
+  min-width: 0;
+}
 
 h1, h2, h3, h4 { margin: 0; font-weight: 600; color: var(--text); }
 p { margin: 0; }
@@ -125,7 +136,11 @@ body::before {
   display: flex;
   align-items: center;
   gap: clamp(0.5rem, 2vw, 1.25rem);
-  padding: 0.35rem var(--content-pad-inline);
+  padding:
+    max(0.35rem, env(safe-area-inset-top, 0px))
+    max(var(--content-pad-inline), env(safe-area-inset-right, 0px))
+    0.35rem
+    max(var(--content-pad-inline), env(safe-area-inset-left, 0px));
   z-index: 200;
   box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
@@ -406,8 +421,9 @@ body::before {
 .dash-shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  padding-top: calc(var(--gov-tricolor-h) + var(--header-h) + var(--topnav-h));
+  min-height: 100dvh;
+  min-width: 0;
+  padding-top: var(--dash-chrome-top);
 }
 
 .dash-shell-header {
@@ -439,16 +455,17 @@ body::before {
 
 .dash-topnav {
   position: fixed;
-  top: calc(var(--gov-tricolor-h) + var(--header-h));
+  top: calc(var(--gov-tricolor-h) + var(--dash-header-h));
   left: 0;
   right: 0;
   z-index: 190;
-  min-height: var(--topnav-h);
+  min-height: var(--dash-topnav-h, var(--topnav-h));
   display: flex;
   align-items: stretch;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   box-shadow: 0 1px 4px rgba(0, 48, 135, 0.06);
+  padding-inline: max(0px, env(safe-area-inset-left, 0px)) max(0px, env(safe-area-inset-right, 0px));
 }
 
 .dash-topnav-scroll {
@@ -456,9 +473,12 @@ body::before {
   align-items: stretch;
   gap: 0;
   overflow-x: auto;
+  overflow-y: hidden;
   flex: 1 1 auto;
   min-width: 0;
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 
 .dash-topnav-item {
@@ -729,7 +749,7 @@ body::before {
    LOGIN PAGE
    ============================================================ */
 .login-page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   padding-top: var(--gov-tricolor-h);
@@ -2374,6 +2394,9 @@ tbody tr:hover { background: var(--surface-hover); }
 }
 
 .admins-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
   padding: 0.75rem 0.625rem;
   border-bottom: 1px solid var(--border);
   background: #fafbfd;
@@ -2448,13 +2471,47 @@ tbody tr:hover { background: var(--surface-hover); }
   padding: 0.75rem 0.625rem;
 }
 
+@media (max-width: 900px) {
+  .gov-header-authority,
+  .gov-header-subtitle {
+    display: none;
+  }
+
+  .dash-topnav-user {
+    display: none;
+  }
+
+  .gov-badge-portal {
+    display: none;
+  }
+
+  .dash-topnav-item {
+    min-height: var(--topnav-h);
+    padding-inline: 0.85rem;
+    font-size: 0.8rem;
+  }
+
+  .dash-nav-item-icon {
+    font-size: 1rem;
+  }
+}
+
 @media (max-width: 720px) {
   .admins-stat-grid {
     grid-template-columns: 1fr;
   }
 
   .dash-topnav-page {
-    display: flex;
+    display: none;
+  }
+
+  .dash-topnav-scroll {
+    scroll-snap-type: x proximity;
+  }
+
+  .dash-topnav-item {
+    scroll-snap-align: start;
+    flex-shrink: 0;
   }
 }
 
@@ -2675,4 +2732,134 @@ tbody tr:hover { background: var(--surface-hover); }
   .att-photos > .att-photo-slot:last-child { border-bottom: none; }
   .att-stats { gap: 0.35rem; }
   .att-stat-box { min-width: min(100%, 3rem); padding: 0.4rem 0.6rem; }
+}
+
+/* ── Fluid auto-adjust: phones, tablets, rotation, dynamic browser chrome ── */
+@media (max-width: 1024px) {
+  :root {
+    --content-pad-inline: clamp(0.5rem, 2.5vw, 0.875rem);
+    --content-pad-block: clamp(0.65rem, 2vh, 1.25rem);
+  }
+
+  .card,
+  .dash-section,
+  .card-elevated {
+    padding: clamp(0.85rem, 2.5vw, 1.35rem);
+  }
+
+  .card-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .card-head-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .institutes-table-wrap,
+  .students-table-wrap,
+  .reports-table-wrap {
+    max-height: min(62dvh, 48rem);
+  }
+
+  .reports-student-scroll {
+    max-height: min(45dvh, 22rem);
+  }
+
+  .inst-report-table-scroll {
+    max-height: min(50dvh, 28rem);
+  }
+}
+
+@media (max-width: 900px) {
+  .gov-header-title {
+    font-size: clamp(0.92rem, 3.8vw, 1.05rem);
+  }
+
+  .gov-header-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .dash-header-actions {
+    width: auto;
+    max-width: 100%;
+  }
+
+  .gov-footer,
+  .gov-footer-full {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.45rem;
+  }
+
+  .gov-footer-support {
+    overflow-wrap: anywhere;
+  }
+
+  .overview-hero-top {
+    flex-wrap: wrap;
+  }
+
+  .overview-title {
+    font-size: clamp(1.05rem, 4.5vw, 1.25rem);
+  }
+
+  .admins-panel-head {
+    align-items: stretch;
+  }
+
+  .students-tab-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-bar-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions-cell {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .gov-emblem {
+    width: 2.35rem;
+    font-size: 1.15rem;
+  }
+
+  .overview-hero::after {
+    display: none;
+  }
+
+  .card-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .modal-overlay {
+    padding-inline: max(0.5rem, env(safe-area-inset-left, 0px))
+      max(0.5rem, env(safe-area-inset-right, 0px));
+  }
+
+  .modal-panel,
+  .modal-panel-institute-edit,
+  .modal-panel-wide {
+    width: 100%;
+    max-height: calc(100dvh - var(--dash-chrome-top) - 1rem);
+    margin-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    padding: clamp(0.85rem, 3vw, 1.25rem);
+  }
+
+  .institutes-stat-value,
+  .admins-stat-count {
+    font-size: clamp(1.65rem, 8vw, 2.25rem);
+  }
+
+  .folder-grid {
+    grid-template-columns: 1fr;
+  }
 }

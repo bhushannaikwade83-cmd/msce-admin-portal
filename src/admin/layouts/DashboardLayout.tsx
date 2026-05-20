@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
+import { useDashChromeSync } from '../lib/syncDashChrome'
 import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_TEL } from '../../siteSupport'
 
 export type DashboardTab =
@@ -33,8 +34,12 @@ const tabs: TabDef[] = [
 ]
 
 export function DashboardLayout({ userEmail, activeTab, onTab, onSignOut, children }: Props) {
+  const headerRef = useRef<HTMLElement>(null)
+  const navRef = useRef<HTMLElement>(null)
   const [signingOut, setSigningOut] = useState(false)
   const currentTab = tabs.find((x) => x.id === activeTab)
+
+  useDashChromeSync(headerRef, navRef)
 
   async function handleSignOut() {
     if (signingOut) return
@@ -48,7 +53,7 @@ export function DashboardLayout({ userEmail, activeTab, onTab, onSignOut, childr
 
   return (
     <div className="dash-shell">
-      <header className="gov-portal-header dash-shell-header" role="banner">
+      <header ref={headerRef} className="gov-portal-header dash-shell-header" role="banner">
         <div className="gov-emblem" aria-hidden>
           🏛️
         </div>
@@ -74,7 +79,7 @@ export function DashboardLayout({ userEmail, activeTab, onTab, onSignOut, childr
         </div>
       </header>
 
-      <nav className="dash-topnav" aria-label="Main navigation">
+      <nav ref={navRef} className="dash-topnav" aria-label="Main navigation">
         <div className="dash-topnav-scroll">
           {tabs.map((t) => (
             <button
