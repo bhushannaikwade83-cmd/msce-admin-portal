@@ -27,4 +27,4 @@ npm run preview
 ## Assets
 
 - `public/images/` — promo screenshots
-- `public/downloads/msce-attendance.apk` — add locally after build (not in git; file is large). For production, upload APK to hosting or GitHub Releases and link from the site.
+- `public/downloads/msce-attendance.apk` — tracked in git; promo site links to `/downloads/msce-attendance.apk` and it ships with static hosting (e.g. Vercel).
