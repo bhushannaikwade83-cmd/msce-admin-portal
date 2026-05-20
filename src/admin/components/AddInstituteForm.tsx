@@ -35,7 +35,6 @@ type Props = { onCreated: () => void; embedded?: boolean }
 export function AddInstituteForm({ onCreated, embedded = false }: Props) {
   const { user } = useAuth()
   const [form, setForm] = useState(empty)
-  const [startInactive, setStartInactive] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -132,28 +131,32 @@ export function AddInstituteForm({ onCreated, embedded = false }: Props) {
         throw new Error(data?.message ?? 'Could not save institute admin setup.')
       }
 
+      const { error: activeErr } = await sb
+        .from('institutes')
+        .update({
+          is_active: true,
+          state: MH_STATE,
+          country: form.country.trim() || 'India',
+          ...(pincode.length === 6
+            ? {
+                pincode,
+                district: form.district.trim() || null,
+                taluka: form.taluka.trim() || null,
+              }
+            : {}),
+        })
+        .eq('id', id)
+
       let pincodeNote = ''
-      if (pincode.length === 6) {
-        const { error: pinErr } = await sb
-          .from('institutes')
-          .update({
-            pincode,
-            district: form.district.trim(),
-            taluka: form.taluka.trim(),
-            state: MH_STATE,
-            country: form.country.trim() || 'India',
-            is_active: !startInactive,
-          })
-          .eq('id', id)
-        if (pinErr) {
-          pincodeNote = ` Pincode not stored — run migration 011_institutes_pincode.sql. (${pinErr.message})`
-        }
+      if (activeErr) {
+        pincodeNote = ` (${activeErr.message})`
+      } else if (pincode.length === 6) {
+        pincodeNote = ' Institute is active and ready in the app.'
       }
 
-      setMsg('Institute and admin setup saved for the app.' + pincodeNote)
+      setMsg('Institute and admin invite saved.' + pincodeNote)
 
       setForm(empty)
-      setStartInactive(true)
       setPinHint(null)
       onCreated()
     } catch (e) {
@@ -163,84 +166,198 @@ export function AddInstituteForm({ onCreated, embedded = false }: Props) {
     }
   }
 
-  const shell = embedded ? 'dash-section card-elevated' : 'card'
+  const shell = embedded ? 'dash-section institutes-page' : 'card institutes-page'
+  const inputDisabled = busy
 
   return (
     <div className={shell}>
-      {!embedded ? <h2>Add institute</h2> : <p className="section-kicker">New tenant</p>}
-      <p className="muted small">
-        Saves institute details plus admin full name, mobile number, and email for the app onboarding flow. Enter a 6-digit pincode to load district and taluka.
-      </p>
-      <form className="form-grid" onSubmit={onSubmit}>
-        <label>
-          Institute ID <span className="req">*</span>
-          <input value={form.id} onChange={(e) => set('id', e.target.value.replace(/\D/g, ''))} placeholder="e.g. 3333" required />
-        </label>
-        <label className="span-2">
-          Name <span className="req">*</span>
-          <input value={form.name} onChange={(e) => set('name', e.target.value)} required />
-        </label>
-        <label>
-          City
-          <input value={form.city} onChange={(e) => set('city', e.target.value)} />
-        </label>
-        <label>
-          Pincode
+      <div className="institutes-page-head">
+        {!embedded ? <h2>Add institute</h2> : <span className="section-kicker">Register institute</span>}
+        <p className="muted small institutes-page-lead">
+          New institutes are saved as <strong>active</strong> in the database automatically. The admin completes
+          password setup in the mobile app.
+        </p>
+      </div>
+      <form className="modal-form modal-form-grid institutes-add-form" onSubmit={onSubmit} autoComplete="off">
+        <p className="form-section-label">Institute details</p>
+        <div className="field">
+          <label htmlFor="add-inst-id">
+            Institute ID <span className="req">*</span>
+          </label>
           <input
+            id="add-inst-id"
+            type="text"
+            inputMode="numeric"
+            value={form.id}
+            onChange={(e) => set('id', e.target.value.replace(/\D/g, ''))}
+            placeholder="e.g. 3333"
+            required
+            disabled={inputDisabled}
+            autoComplete="off"
+          />
+        </div>
+        <div className="field span-2">
+          <label htmlFor="add-inst-name">
+            Name <span className="req">*</span>
+          </label>
+          <input
+            id="add-inst-name"
+            type="text"
+            value={form.name}
+            onChange={(e) => set('name', e.target.value)}
+            required
+            disabled={inputDisabled}
+            autoComplete="organization"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="add-inst-city">City</label>
+          <input
+            id="add-inst-city"
+            type="text"
+            value={form.city}
+            onChange={(e) => set('city', e.target.value)}
+            disabled={inputDisabled}
+            autoComplete="address-level2"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="add-inst-pincode">Pincode</label>
+          <input
+            id="add-inst-pincode"
+            type="text"
             inputMode="numeric"
             maxLength={6}
             autoComplete="postal-code"
             value={form.pincode}
             onChange={(e) => set('pincode', e.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="6 digits"
+            disabled={inputDisabled}
           />
           {pinBusy ? <span className="field-hint">Looking up pincode…</span> : null}
           {!pinBusy && pinHint ? <span className="field-hint">{pinHint}</span> : null}
-        </label>
-        <label>
-          District
-          <input value={form.district} onChange={(e) => set('district', e.target.value)} placeholder="Auto-filled from pincode" />
-        </label>
-        <label>
-          Taluka
-          <input value={form.taluka} onChange={(e) => set('taluka', e.target.value)} placeholder="Auto-filled from pincode" />
-        </label>
-        <label>
-          State
-          <input className="readonly-locked" readOnly tabIndex={-1} value={MH_STATE} aria-readonly="true" />
+        </div>
+        <div className="field">
+          <label htmlFor="add-inst-district">District</label>
+          <input
+            id="add-inst-district"
+            type="text"
+            value={form.district}
+            onChange={(e) => set('district', e.target.value)}
+            placeholder="Auto-filled from pincode"
+            disabled={inputDisabled}
+            autoComplete="off"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="add-inst-taluka">Taluka</label>
+          <input
+            id="add-inst-taluka"
+            type="text"
+            value={form.taluka}
+            onChange={(e) => set('taluka', e.target.value)}
+            placeholder="Auto-filled from pincode"
+            disabled={inputDisabled}
+            autoComplete="off"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="add-inst-state">State</label>
+          <input
+            id="add-inst-state"
+            type="text"
+            className="readonly-locked"
+            readOnly
+            tabIndex={-1}
+            value={MH_STATE}
+            aria-readonly="true"
+            disabled={inputDisabled}
+          />
           <span className="field-hint">Fixed for this product region</span>
-        </label>
-        <label>
-          Country
-          <input value={form.country} onChange={(e) => set('country', e.target.value)} />
-        </label>
-        <label className="span-2">
-          Address
-          <input value={form.address} onChange={(e) => set('address', e.target.value)} />
-        </label>
-        <label>
-          Mobile
-          <input value={form.mobile_no} onChange={(e) => set('mobile_no', e.target.value)} />
-        </label>
-        <label className="span-2">
-          Admin full name <span className="req">*</span>
-          <input value={form.admin_full_name} onChange={(e) => set('admin_full_name', e.target.value)} required />
-        </label>
-        <label>
-          Admin mobile number <span className="req">*</span>
-          <input value={form.admin_mobile} onChange={(e) => set('admin_mobile', e.target.value)} required />
-        </label>
-        <label>
-          Admin email <span className="req">*</span>
-          <input value={form.admin_email} onChange={(e) => set('admin_email', e.target.value)} type="email" required />
-        </label>
-        <label className="checkbox span-2">
-          <input type="checkbox" checked={startInactive} onChange={(e) => setStartInactive(e.target.checked)} />
-          Start as <strong>inactive</strong> in institute list
-        </label>
-        <div className="span-2 row">
-          <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? 'Saving…' : 'Save institute + admin'}
+        </div>
+        <div className="field">
+          <label htmlFor="add-inst-country">Country</label>
+          <input
+            id="add-inst-country"
+            type="text"
+            value={form.country}
+            onChange={(e) => set('country', e.target.value)}
+            disabled={inputDisabled}
+            autoComplete="country-name"
+          />
+        </div>
+        <div className="field span-2">
+          <label htmlFor="add-inst-address">Address</label>
+          <input
+            id="add-inst-address"
+            type="text"
+            value={form.address}
+            onChange={(e) => set('address', e.target.value)}
+            disabled={inputDisabled}
+            autoComplete="street-address"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="add-inst-mobile">Mobile</label>
+          <input
+            id="add-inst-mobile"
+            type="tel"
+            inputMode="tel"
+            value={form.mobile_no}
+            onChange={(e) => set('mobile_no', e.target.value)}
+            disabled={inputDisabled}
+            autoComplete="tel"
+          />
+        </div>
+
+        <p className="form-section-label">Institute admin (invite)</p>
+        <div className="field span-2">
+          <label htmlFor="add-admin-name">
+            Admin full name <span className="req">*</span>
+          </label>
+          <input
+            id="add-admin-name"
+            type="text"
+            value={form.admin_full_name}
+            onChange={(e) => set('admin_full_name', e.target.value)}
+            required
+            disabled={inputDisabled}
+            autoComplete="name"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="add-admin-mobile">
+            Admin mobile number <span className="req">*</span>
+          </label>
+          <input
+            id="add-admin-mobile"
+            type="tel"
+            inputMode="tel"
+            value={form.admin_mobile}
+            onChange={(e) => set('admin_mobile', e.target.value)}
+            required
+            disabled={inputDisabled}
+            autoComplete="tel"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="add-admin-email">
+            Admin email <span className="req">*</span>
+          </label>
+          <input
+            id="add-admin-email"
+            type="email"
+            value={form.admin_email}
+            onChange={(e) => set('admin_email', e.target.value)}
+            required
+            disabled={inputDisabled}
+            autoComplete="email"
+          />
+        </div>
+
+        <div className="modal-form-actions span-2 institutes-form-actions">
+          <button type="submit" className="btn btn-primary" disabled={inputDisabled}>
+            {busy ? 'Saving…' : 'Save institute & admin invite'}
           </button>
         </div>
       </form>

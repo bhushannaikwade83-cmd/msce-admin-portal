@@ -1,10 +1,11 @@
 /**
  * Reports — pick institute, then institute-wide or per-student attendance PDF.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 import { getSupabase } from '../lib/supabase'
+import { fetchAllPaged } from '../lib/supabasePaged'
 import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
 import { discoverSchema, type SchemaConfig } from '../lib/schemaDiscovery'
 import type { InstituteRow } from './InstituteList'
@@ -28,6 +29,73 @@ type AttendanceRecord = Record<string, unknown> & {
 }
 
 type ReportMode = 'institute' | 'student'
+
+const TABLE_PAGE_SIZE_DEFAULT = 50
+const TABLE_PAGE_SIZE_OPTIONS = [25, 50, 100] as const
+
+function todayStatusBadge(status: string | undefined) {
+  const s = (status ?? 'absent').toLowerCase()
+  if (s === 'present') return <span className="badge badge-present">✓ Present</span>
+  return <span className="badge badge-absent">✗ Absent</span>
+}
+
+function ReportsPager({
+  page,
+  pageCount,
+  pageSize,
+  totalRows,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number
+  pageCount: number
+  pageSize: number
+  totalRows: number
+  onPageChange: (next: number) => void
+  onPageSizeChange: (size: number) => void
+}) {
+  if (totalRows <= 0) return null
+  return (
+    <div className="reports-panel-pager">
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        disabled={page <= 0}
+        onClick={() => onPageChange(Math.max(0, page - 1))}
+      >
+        Previous
+      </button>
+      <span className="muted small reports-pager-meta">
+        Page {page + 1} of {pageCount} ({totalRows.toLocaleString('en-IN')} rows)
+      </span>
+      <label className="reports-page-size">
+        <span className="muted small">Per page</span>
+        <select
+          value={pageSize}
+          onChange={(e) => {
+            onPageSizeChange(Number(e.target.value))
+            onPageChange(0)
+          }}
+          aria-label="Rows per page"
+        >
+          {TABLE_PAGE_SIZE_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        disabled={page >= pageCount - 1}
+        onClick={() => onPageChange(Math.min(pageCount - 1, page + 1))}
+      >
+        Next
+      </button>
+    </div>
+  )
+}
 
 function pick(row: Record<string, unknown>, ...keys: string[]): string | null {
   for (const k of keys) {
@@ -105,27 +173,6 @@ function rollToNameMap(students: Student[]): Map<string, string> {
   return m
 }
 
-async function fetchAllPaged(
-  run: (rangeFrom: number, rangeTo: number) => PromiseLike<{
-    data: Record<string, unknown>[] | null
-    error: { message: string } | null
-  }>,
-): Promise<Record<string, unknown>[]> {
-  const out: Record<string, unknown>[] = []
-  const page = 1000
-  let rangeFrom = 0
-  for (;;) {
-    const rangeTo = rangeFrom + page - 1
-    const { data, error } = await Promise.resolve(run(rangeFrom, rangeTo))
-    if (error) throw new Error(error.message)
-    const chunk = data ?? []
-    out.push(...chunk)
-    if (chunk.length < page) break
-    rangeFrom += page
-  }
-  return out
-}
-
 function getPhotoIn(r: AttendanceRecord): string {
   return String(r.in_photo_url ?? r['entry_photo'] ?? r['photo_in'] ?? '')
 }
@@ -168,6 +215,10 @@ export function ReportsSection({
   const [institutes, setInstitutes] = useState<InstituteRow[]>([])
   const [instLoading, setInstLoading] = useState(true)
   const [instSearch, setInstSearch] = useState('')
+  const [instTablePage, setInstTablePage] = useState(0)
+  const [instTablePageSize, setInstTablePageSize] = useState(TABLE_PAGE_SIZE_DEFAULT)
+  const [studentTablePage, setStudentTablePage] = useState(0)
+  const [studentTablePageSize, setStudentTablePageSize] = useState(TABLE_PAGE_SIZE_DEFAULT)
   const searchRef = useRef<HTMLInputElement>(null)
   const studentSearchRef = useRef<HTMLInputElement>(null)
 
@@ -181,23 +232,25 @@ export function ReportsSection({
     void runDiscovery()
   }, [runDiscovery])
 
-  useEffect(() => {
-    async function loadInst() {
-      setInstLoading(true)
-      try {
-        const sb = getSupabase()
-        const { data, error: qErr } = await sb.from('institutes').select('*').order('name').limit(5000)
-        if (qErr) throw qErr
-        setInstitutes((data ?? []) as InstituteRow[])
-      } catch (e) {
-        setInstitutes([])
-      } finally {
-        setInstLoading(false)
-      }
+  const loadInstitutes = useCallback(async () => {
+    setInstLoading(true)
+    try {
+      const sb = getSupabase()
+      const raw = await fetchAllPaged<InstituteRow>((rangeFrom, rangeTo) =>
+        sb.from('institutes').select('*').order('name').range(rangeFrom, rangeTo),
+      )
+      setInstitutes(raw as InstituteRow[])
+    } catch {
+      setInstitutes([])
+    } finally {
+      setInstLoading(false)
     }
-    void loadInst()
-    setTimeout(() => searchRef.current?.focus(), 120)
   }, [])
+
+  useEffect(() => {
+    void loadInstitutes()
+    setTimeout(() => searchRef.current?.focus(), 120)
+  }, [loadInstitutes])
 
   useEffect(() => {
     if (!jumpToInstituteId) return
@@ -289,27 +342,88 @@ export function ReportsSection({
     }
   }, [institute, loadStudents])
 
-  const filteredInst = institutes.filter((i) => {
-    const q = instSearch.toLowerCase()
-    return (
-      !q ||
-      (i.name ?? '').toLowerCase().includes(q) ||
-      (i.institute_code ?? '').toLowerCase().includes(q) ||
-      (i.city ?? '').toLowerCase().includes(q)
+  const handleRefresh = useCallback(() => {
+    void runDiscovery()
+    if (institute) void loadStudents(institute)
+    else void loadInstitutes()
+  }, [institute, loadInstitutes, loadStudents, runDiscovery])
+
+  const filteredInst = useMemo(() => {
+    const q = instSearch.trim().toLowerCase()
+    if (!q) return institutes
+    return institutes.filter((i) =>
+      [i.name, i.institute_code, i.city, i.state, i.id]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
     )
-  })
+  }, [institutes, instSearch])
 
-  const filteredStudents = students.filter((s) => {
-    // ✅ SAFETY: Only show students from current institute (double-check)
-    if (institute && s.institute_id && s.institute_id !== institute.id) return false
+  const instTablePageCount = Math.max(1, Math.ceil(filteredInst.length / instTablePageSize))
+  const safeInstTablePage = Math.min(instTablePage, instTablePageCount - 1)
+  const paginatedInst = useMemo(() => {
+    const start = safeInstTablePage * instTablePageSize
+    return filteredInst.slice(start, start + instTablePageSize)
+  }, [filteredInst, safeInstTablePage, instTablePageSize])
 
-    const q = search.toLowerCase()
-    if (!q) return true
-    const name = pick(s, 'name', 'student_name', 'full_name') ?? ''
-    const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno') ?? ''
-    const cls = pick(s, 'class_name', 'class', 'grade') ?? ''
-    return [name, roll, cls].some((v) => v.toLowerCase().includes(q))
-  })
+  useEffect(() => {
+    setInstTablePage(0)
+  }, [instSearch, instTablePageSize])
+
+  useEffect(() => {
+    if (instTablePage > instTablePageCount - 1) {
+      setInstTablePage(Math.max(0, instTablePageCount - 1))
+    }
+  }, [instTablePage, instTablePageCount])
+
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      if (institute && s.institute_id && s.institute_id !== institute.id) return false
+      const q = search.trim().toLowerCase()
+      if (!q) return true
+      const name = pick(s, 'name', 'student_name', 'full_name') ?? ''
+      const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno') ?? ''
+      const cls = pick(s, 'class_name', 'class', 'grade') ?? ''
+      return [name, roll, cls].some((v) => v.toLowerCase().includes(q))
+    })
+  }, [students, institute, search])
+
+  const studentTablePageCount = Math.max(1, Math.ceil(filteredStudents.length / studentTablePageSize))
+  const safeStudentTablePage = Math.min(studentTablePage, studentTablePageCount - 1)
+  const paginatedStudents = useMemo(() => {
+    const start = safeStudentTablePage * studentTablePageSize
+    return filteredStudents.slice(start, start + studentTablePageSize)
+  }, [filteredStudents, safeStudentTablePage, studentTablePageSize])
+
+  useEffect(() => {
+    setStudentTablePage(0)
+  }, [search, studentTablePageSize, institute?.id])
+
+  useEffect(() => {
+    if (studentTablePage > studentTablePageCount - 1) {
+      setStudentTablePage(Math.max(0, studentTablePageCount - 1))
+    }
+  }, [studentTablePage, studentTablePageCount])
+
+  const stats = useMemo(() => {
+    let activeInst = 0
+    for (const i of institutes) {
+      if (i.is_active !== false) activeInst += 1
+    }
+    let presentToday = 0
+    let absentToday = 0
+    for (const v of studentAttendance.values()) {
+      if (v.status === 'present') presentToday += 1
+      else absentToday += 1
+    }
+    return {
+      institutesTotal: institutes.length,
+      institutesActive: activeInst,
+      institutesShown: filteredInst.length,
+      studentsTotal: students.length,
+      presentToday,
+      absentToday,
+    }
+  }, [institutes, filteredInst.length, students.length, studentAttendance])
 
   async function downloadInstituteReport() {
     if (!institute || !schema.attendanceTable) return
@@ -693,328 +807,412 @@ export function ReportsSection({
     }
   }
 
-  const shell = embedded ? 'dash-section card-elevated' : 'card'
-  const active = filteredInst.filter((i) => i.is_active !== false)
-  const inactive = filteredInst.filter((i) => i.is_active === false)
+  const shell = embedded ? 'dash-section reports-page' : 'card reports-page'
+  const selectedStudentName = selectedStudent
+    ? pick(selectedStudent, 'name', 'student_name', 'full_name') ?? selectedStudent.id
+    : null
 
   return (
-    <div className={`${shell} students-shell-flush`}>
-      <div className="students-tab-header">
-        <div className="students-tab-title">
-          <span className="section-kicker">Reports</span>
-          <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Attendance reports</h2>
+    <div className={shell}>
+      <div className="card-head reports-page-head">
+        <div>
+          {!embedded ? <h2>Reports</h2> : <span className="section-kicker">Attendance reports</span>}
+          <p className="muted small reports-page-lead">
+            Choose an institute, set the report month, then download an institute-wide PDF (summary + detail) or a
+            single-student monthly PDF. Data is read live from Supabase
+            {schema.attendanceTable ? (
+              <>
+                {' '}
+                (<code>{schema.attendanceTable}</code>)
+              </>
+            ) : null}
+            . Open from <strong>Institutes → Report</strong> to pre-select an institute.
+          </p>
+        </div>
+        <div className="card-head-actions">
+          {institute && mode === 'institute' ? (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={busy || studentsLoading || !schema.attendanceTable}
+              onClick={() => void downloadInstituteReport()}
+            >
+              {busy ? 'Working…' : '📄 Institute PDF'}
+            </button>
+          ) : null}
+          {institute && mode === 'student' && selectedStudent ? (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={busy || !schema.attendanceTable}
+              onClick={() => void downloadStudentReport()}
+            >
+              {busy ? 'Working…' : '📄 Student PDF'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => void handleRefresh()}
+            disabled={instLoading || schemaLoading || studentsLoading}
+          >
+            {instLoading || schemaLoading || studentsLoading ? 'Loading…' : 'Refresh'}
+          </button>
         </div>
       </div>
 
-      <div className="students-body">
-        {schemaLoading ? (
-          <div className="loading-row">
-            <div className="loading-spinner" />
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Detecting attendance table…</span>
-          </div>
-        ) : !schema.attendanceTable ? (
-          <div className="error">
-            No attendance table found. Open <strong>Students &amp; Attendance</strong> to verify schema, or check
-            Supabase.
-            <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: '0.5rem' }} onClick={() => void runDiscovery()}>
-              ↻ Retry
-            </button>
-          </div>
-        ) : null}
+      {schemaLoading ? (
+        <div className="loading-row" style={{ marginBottom: '0.75rem' }}>
+          <div className="loading-spinner" />
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Detecting attendance table…</span>
+        </div>
+      ) : !schema.attendanceTable ? (
+        <div className="error" style={{ marginBottom: '0.75rem' }}>
+          No attendance table found. Open <strong>Students &amp; Attendance</strong> to verify schema, or check Supabase.
+          <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: '0.5rem' }} onClick={() => void runDiscovery()}>
+            ↻ Retry
+          </button>
+        </div>
+      ) : null}
 
-        {!schemaLoading && schema.attendanceTable && (
-          <p className="muted small" style={{ marginBottom: '1rem' }}>
-            All institutes use the <strong>same report flow</strong>; data is read live from Supabase (
-            <code>{schema.attendanceTable}</code>). Choose an institute, then download an <strong>institute-wide</strong>{' '}
-            PDF (summary + detail) or pick one <strong>student</strong> for their monthly PDF. You can also open this tab
-            from <strong>Institutes → Reports</strong> with an institute pre-selected.
-          </p>
-        )}
+      <div className="reports-stat-grid">
+        <div className="reports-stat-card">
+          <span className="reports-stat-value">
+            {instLoading ? '…' : stats.institutesTotal.toLocaleString('en-IN')}
+          </span>
+          <span className="reports-stat-label">Institutes</span>
+        </div>
+        <div className="reports-stat-card reports-stat-card--active">
+          <span className="reports-stat-value">
+            {instLoading ? '…' : stats.institutesActive.toLocaleString('en-IN')}
+          </span>
+          <span className="reports-stat-label">Active</span>
+        </div>
+        <div className="reports-stat-card reports-stat-card--info">
+          <span className="reports-stat-value">
+            {institute
+              ? studentsLoading
+                ? '…'
+                : stats.studentsTotal.toLocaleString('en-IN')
+              : instLoading
+                ? '…'
+                : stats.institutesShown.toLocaleString('en-IN')}
+          </span>
+          <span className="reports-stat-label">{institute ? 'Students' : 'Matching search'}</span>
+        </div>
+        <div className="reports-stat-card reports-stat-card--muted">
+          <span className="reports-stat-value">
+            {institute && !studentsLoading
+              ? `${stats.presentToday.toLocaleString('en-IN')} / ${stats.absentToday.toLocaleString('en-IN')}`
+              : '—'}
+          </span>
+          <span className="reports-stat-label">Present / absent today</span>
+        </div>
+      </div>
 
-        {!institute ? (
-          <>
-            <div className="overview-notice" style={{ marginBottom: '1rem' }}>
-              <span>🏫</span>
-              <span>
-                <strong>Step 1 —</strong> Select an institute to generate reports.
-              </span>
+      {error ? <p className="error">{error}</p> : null}
+      {info ? <p className="success">{info}</p> : null}
+
+      {!institute ? (
+        <>
+          <div className="search-bar-row reports-search-row">
+            <div className="search-bar">
+              <span className="search-icon">🔍</span>
+              <input
+                ref={searchRef}
+                type="search"
+                placeholder="Search institutes — name, code, city, state, id…"
+                value={instSearch}
+                onChange={(e) => {
+                  setInstSearch(e.target.value)
+                  setInstTablePage(0)
+                }}
+                className="search-input"
+                aria-label="Filter institutes"
+              />
+              {instSearch ? (
+                <button type="button" className="search-clear" onClick={() => setInstSearch('')} aria-label="Clear search">
+                  ✕
+                </button>
+              ) : null}
             </div>
-            <div className="search-bar-row">
-              <div className="search-bar">
-                <span className="search-icon">🔍</span>
-                <input
-                  ref={searchRef}
-                  type="text"
-                  placeholder="Search institute by name, code or city…"
-                  value={instSearch}
-                  onChange={(e) => setInstSearch(e.target.value)}
-                  className="search-input"
-                />
-                {instSearch && (
-                  <button type="button" className="search-clear" onClick={() => setInstSearch('')} aria-label="Clear">
-                    ✕
-                  </button>
+            <span className="search-count">
+              {instLoading ? '…' : `${filteredInst.length} of ${institutes.length} shown`}
+            </span>
+          </div>
+
+          {instLoading ? (
+            <div className="loading-row">
+              <div className="loading-spinner" />
+              <span>Loading institutes…</span>
+            </div>
+          ) : null}
+
+          <div className="table-wrap reports-table-wrap">
+            <table className="table-dash-compact reports-directory-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Code</th>
+                  <th>City</th>
+                  <th>State</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {institutes.length === 0 && !instLoading ? (
+                  <tr>
+                    <td colSpan={5} className="muted">
+                      No institutes found (or configure Supabase env first).
+                    </td>
+                  </tr>
+                ) : filteredInst.length === 0 && !instLoading ? (
+                  <tr>
+                    <td colSpan={5} className="muted">
+                      No institutes match “{instSearch}”. Clear the search to see all {institutes.length} row(s).
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedInst.map((i) => (
+                    <tr
+                      key={i.id}
+                      className={i.is_active === false ? 'reports-row-inactive' : undefined}
+                      onClick={() => setInstitute(i)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setInstitute(i)
+                        }
+                      }}
+                      tabIndex={0}
+                      role="button"
+                    >
+                      <td className="reports-name-cell">
+                        <strong>{i.name ?? '—'}</strong>
+                      </td>
+                      <td>{i.institute_code ?? '—'}</td>
+                      <td>{i.city ?? '—'}</td>
+                      <td>{i.state ?? '—'}</td>
+                      <td>
+                        {i.is_active === false ? (
+                          <span className="badge badge-muted">Inactive</span>
+                        ) : (
+                          <span className="badge badge-present">Active</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <ReportsPager
+            page={safeInstTablePage}
+            pageCount={instTablePageCount}
+            pageSize={instTablePageSize}
+            totalRows={filteredInst.length}
+            onPageChange={setInstTablePage}
+            onPageSizeChange={setInstTablePageSize}
+          />
+        </>
+      ) : (
+        <>
+          <div className="reports-drill-bar">
+            <button
+              type="button"
+              className="drill-back"
+              onClick={() => {
+                setInstitute(null)
+                setSelectedStudent(null)
+                setMode('institute')
+                setError(null)
+                setInfo(null)
+              }}
+            >
+              ← All institutes
+            </button>
+            <span className="drill-sep">›</span>
+            <span className="drill-crumb active">{institute.name ?? institute.id}</span>
+          </div>
+
+          <div className="reports-institute-banner">
+            <span className="reports-institute-banner-icon">📊</span>
+            <div>
+              <div className="reports-institute-banner-title">{institute.name ?? institute.id}</div>
+              <div className="reports-institute-banner-meta">
+                {institute.institute_code ? <span>Code {institute.institute_code}</span> : null}
+                {institute.city ? <span> · {institute.city}</span> : null}
+                {studentsLoading ? (
+                  <span> · Loading students…</span>
+                ) : (
+                  <span> · {students.length.toLocaleString('en-IN')} student(s)</span>
                 )}
               </div>
-              <span className="search-count">{instLoading ? 'Loading…' : `${filteredInst.length} match(es)`}</span>
             </div>
-            {instLoading && (
-              <div className="loading-row">
-                <div className="loading-spinner" />
-                <span>Loading institutes…</span>
-              </div>
-            )}
-            {!instLoading && active.length > 0 && (
-              <>
-                <div className="section-title-row">
-                  <h3 className="section-heading">Active institutes</h3>
-                  <span className="section-count">{active.length}</span>
-                </div>
-                <div className="institute-grid">
-                  {active.map((i) => (
-                    <button
-                      key={i.id}
-                      type="button"
-                      className="inst-card"
-                      onClick={() => setInstitute(i)}
-                    >
-                      <div className="inst-card-icon">🏛️</div>
-                      <div className="inst-card-body">
-                        <div className="inst-card-name">{i.name ?? i.id}</div>
-                        <div className="inst-card-meta">
-                          {i.institute_code && <span className="inst-chip">{i.institute_code}</span>}
-                          {i.city && <span className="inst-chip">📍 {i.city}</span>}
-                        </div>
-                      </div>
-                      <div className="inst-card-arrow">›</div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-            {inactive.length > 0 && (
-              <>
-                <div className="section-title-row" style={{ marginTop: '1.25rem' }}>
-                  <h3 className="section-heading">Inactive institutes</h3>
-                  <span className="section-count">{inactive.length}</span>
-                </div>
-                <div className="institute-grid">
-                  {inactive.map((i) => (
-                    <button
-                      key={i.id}
-                      type="button"
-                      className={`inst-card${i.is_active === false ? ' inst-card-inactive' : ''}`}
-                      onClick={() => setInstitute(i)}
-                    >
-                      <div className="inst-card-icon">🏛️</div>
-                      <div className="inst-card-body">
-                        <div className="inst-card-name">{i.name ?? i.id}</div>
-                        <div className="inst-card-meta">
-                          {i.institute_code && <span className="inst-chip">{i.institute_code}</span>}
-                          <span className="inst-chip inst-chip-inactive">Inactive</span>
-                        </div>
-                      </div>
-                      <div className="inst-card-arrow">›</div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="drill-breadcrumb" style={{ marginBottom: '1rem' }}>
-              <button type="button" className="drill-back" onClick={() => { setInstitute(null); setSelectedStudent(null); setMode('institute') }}>
-                ← All institutes
-              </button>
-              <span className="drill-sep">›</span>
-              <span className="drill-crumb active">{institute.name ?? institute.id}</span>
-            </div>
+          </div>
 
-            <div className="inst-info-bar card-elevated" style={{ marginBottom: '1rem' }}>
-              <div className="inst-info-icon">📊</div>
-              <div>
-                <div className="inst-info-name">Reports for {institute.name}</div>
-                <div className="inst-info-meta">
-                  {institute.institute_code && <span>Code: {institute.institute_code}</span>}
-                  {studentsLoading ? (
-                    <span> · Loading students…</span>
-                  ) : (
-                    <>
-                      <span> · {students.length} student(s)</span>
-                      {studentAttendance.size > 0 && (
-                        <>
-                          <span> · ✓ {Array.from(studentAttendance.values()).filter((a) => a.status === 'present').length} present</span>
-                          <span> · ✕ {Array.from(studentAttendance.values()).filter((a) => a.status !== 'present').length} absent</span>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="reports-mode-toggle" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+          <div className="reports-toolbar">
+            <div className="reports-mode-toggle">
               <button
                 type="button"
-                className={`btn ${mode === 'institute' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm ${mode === 'institute' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => {
                   setMode('institute')
                   setSelectedStudent(null)
                 }}
               >
-                Full institute report
+                Full institute
               </button>
               <button
                 type="button"
-                className={`btn ${mode === 'student' ? 'btn-primary' : 'btn-ghost'}`}
+                className={`btn btn-sm ${mode === 'student' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setMode('student')}
               >
-                One student report
+                One student
               </button>
             </div>
+            <label className="reports-month-field">
+              <span>Month</span>
+              <input
+                type="month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                className="att-month-input"
+                aria-label="Report month"
+              />
+            </label>
+          </div>
 
-            <div className="card-elevated" style={{ padding: '1rem', marginBottom: '1rem' }}>
-              <label className="att-month-label" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span>📅 Month</span>
-                <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="att-month-input" />
-              </label>
-            </div>
+          {mode === 'institute' ? (
+            <p className="reports-institute-hint muted small">
+              Institute PDF includes a <strong>per-student summary</strong> (present / absent / other) and a{' '}
+              <strong>detail</strong> section with every attendance row for <strong>{month}</strong>. Use{' '}
+              <strong>Institute PDF</strong> in the header to download.
+            </p>
+          ) : null}
 
-            {error && <div className="error" style={{ marginBottom: '0.75rem' }}>{error}</div>}
-            {info && <div className="success" style={{ marginBottom: '0.75rem' }}>{info}</div>}
-
-            {mode === 'institute' && (
-              <div className="card-elevated" style={{ padding: '1.25rem' }}>
-                <h3 className="section-heading" style={{ marginTop: 0 }}>
-                  Institute attendance (all students)
-                </h3>
-                <p className="muted small">
-                  Beautiful PDF report with <strong>summary</strong> (present / absent / other counts per student) and{' '}
-                  <strong>detail</strong> (every attendance row in the month).
-                </p>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={busy || studentsLoading || !schema.attendanceTable}
-                  onClick={() => void downloadInstituteReport()}
-                >
-                  {busy ? 'Working…' : '📄 Download institute PDF'}
-                </button>
-              </div>
-            )}
-
-            {mode === 'student' && (
-              <div className="card-elevated" style={{ padding: '1rem' }}>
-                <h3 className="section-heading" style={{ marginTop: 0 }}>
-                  Select student
-                </h3>
-                <p className="muted small">Search by name, roll number, or class — then choose a student.</p>
-                <div className="search-bar-row" style={{ marginBottom: '0.75rem' }}>
-                  <div className="search-bar">
-                    <span className="search-icon">🔍</span>
-                    <input
-                      ref={studentSearchRef}
-                      type="text"
-                      placeholder="Search students…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="search-input"
-                    />
-                    {search && (
-                      <button type="button" className="search-clear" onClick={() => setSearch('')} aria-label="Clear">
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <span className="search-count">
-                    {filteredStudents.length} of {students.length}
-                  </span>
+          {mode === 'student' ? (
+            <>
+              <div className="search-bar-row reports-search-row">
+                <div className="search-bar">
+                  <span className="search-icon">🔍</span>
+                  <input
+                    ref={studentSearchRef}
+                    type="search"
+                    placeholder="Search students — name, roll, class…"
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value)
+                      setStudentTablePage(0)
+                    }}
+                    className="search-input"
+                    aria-label="Filter students"
+                  />
+                  {search ? (
+                    <button type="button" className="search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+                      ✕
+                    </button>
+                  ) : null}
                 </div>
-                {studentsError && <div className="error">{studentsError}</div>}
-                {studentsLoading && (
-                  <div className="loading-row">
-                    <div className="loading-spinner" />
-                    <span>Loading students…</span>
-                  </div>
-                )}
-                {!studentsLoading && students.length === 0 && (
-                  <div className="error" style={{ padding: '1rem', textAlign: 'center' }}>
-                    <p style={{ margin: 0, fontSize: '1rem', fontWeight: 500 }}>❌ No students added to this institute</p>
-                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      Add students first, then their attendance will appear here.
-                    </p>
-                  </div>
-                )}
-                {!studentsLoading && students.length > 0 && (
-                  <div className="students-grid reports-student-scroll">
-                    {filteredStudents.map((s) => {
-                      const name = pick(s, 'name', 'student_name', 'full_name') ?? '—'
-                      const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno')
-                      const sel = selectedStudent?.id === s.id
-                      const attData = studentAttendance.get(s.id)
-                      const attStatus = attData?.status ?? 'absent'
-                      const attBgColor = attStatus === 'present' ? '#d4edda' : '#f8d7da'
-                      const attTextColor = attStatus === 'present' ? '#155724' : '#721c24'
-                      const attIcon = attStatus === 'present' ? '✓' : '✕'
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          className="student-card"
-                          style={{
-                            outline: sel ? '2px solid var(--gov-navy, #003087)' : undefined,
-                          }}
-                          onClick={() => setSelectedStudent(s)}
-                        >
-                          <div className="student-avatar">
-                            <StudentDisplayPhoto student={s} displayName={name} size="sm" />
-                          </div>
-                          <div className="student-info">
-                            <div className="student-name">{name}</div>
-                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
-                              {roll && <div className="student-meta">Roll: {roll}</div>}
-                              <div
-                                style={{
-                                  backgroundColor: attBgColor,
-                                  color: attTextColor,
-                                  padding: '2px 8px',
-                                  borderRadius: '4px',
-                                  fontSize: '11px',
-                                  fontWeight: 'bold',
+                <span className="search-count">
+                  {studentsLoading ? '…' : `${filteredStudents.length} of ${students.length} shown`}
+                </span>
+              </div>
+              {studentsError ? <p className="error">{studentsError}</p> : null}
+              {studentsLoading ? (
+                <div className="loading-row">
+                  <div className="loading-spinner" />
+                  <span>Loading students…</span>
+                </div>
+              ) : null}
+              {!studentsLoading && students.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">👤</div>
+                  <div className="empty-title">No students in this institute</div>
+                  <div className="empty-sub">Add students first, then generate per-student reports.</div>
+                </div>
+              ) : null}
+              {!studentsLoading && students.length > 0 ? (
+                <>
+                  <div className="table-wrap reports-table-wrap">
+                    <table className="table-dash-compact reports-students-table">
+                      <thead>
+                        <tr>
+                          <th aria-label="Photo" />
+                          <th>Name</th>
+                          <th>Roll</th>
+                          <th>Class</th>
+                          <th>Today</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredStudents.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="muted">
+                              No students match “{search}”.
+                            </td>
+                          </tr>
+                        ) : (
+                          paginatedStudents.map((s) => {
+                            const name = pick(s, 'name', 'student_name', 'full_name') ?? '—'
+                            const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno') ?? '—'
+                            const cls = pick(s, 'class_name', 'class', 'grade') ?? '—'
+                            const sel = selectedStudent?.id === s.id
+                            const attData = studentAttendance.get(s.id)
+                            return (
+                              <tr
+                                key={s.id}
+                                className={sel ? 'reports-row-selected' : undefined}
+                                onClick={() => setSelectedStudent(s)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault()
+                                    setSelectedStudent(s)
+                                  }
                                 }}
+                                tabIndex={0}
+                                role="button"
                               >
-                                {attIcon} {attStatus.toUpperCase()}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="student-arrow">{sel ? '✓' : '›'}</div>
-                        </button>
-                      )
-                    })}
+                                <td className="reports-photo-cell">
+                                  <StudentDisplayPhoto student={s} displayName={name} size="sm" />
+                                </td>
+                                <td className="reports-name-cell">
+                                  <strong>{name}</strong>
+                                </td>
+                                <td>{roll}</td>
+                                <td>{cls}</td>
+                                <td>{todayStatusBadge(attData?.status)}</td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
-                )}
-                <div style={{ marginTop: '1rem' }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={busy || !selectedStudent || !schema.attendanceTable}
-                    onClick={() => void downloadStudentReport()}
-                  >
-                    {busy ? 'Working…' : '📄 Download student attendance PDF'}
-                  </button>
-                  {selectedStudent && (
-                    <span className="muted small" style={{ marginLeft: '0.75rem' }}>
-                      Selected:{' '}
-                      <strong>{pick(selectedStudent, 'name', 'student_name', 'full_name') ?? selectedStudent.id}</strong>
-                    </span>
+                  <ReportsPager
+                    page={safeStudentTablePage}
+                    pageCount={studentTablePageCount}
+                    pageSize={studentTablePageSize}
+                    totalRows={filteredStudents.length}
+                    onPageChange={setStudentTablePage}
+                    onPageSizeChange={setStudentTablePageSize}
+                  />
+                  {selectedStudent ? (
+                    <p className="muted small" style={{ marginTop: '0.75rem' }}>
+                      Selected: <strong>{selectedStudentName}</strong> — use <strong>Student PDF</strong> in the header
+                      to download the {month} report.
+                    </p>
+                  ) : (
+                    <p className="muted small" style={{ marginTop: '0.75rem' }}>
+                      Click a row to select a student, then download their monthly PDF from the header.
+                    </p>
                   )}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+                </>
+              ) : null}
+            </>
+          ) : null}
+        </>
+      )}
     </div>
   )
 }

@@ -8,6 +8,7 @@ import {
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { getSupabase } from '../lib/supabase'
+import { syncAllowlistedPortalSuperAdmin } from '../lib/adminOnboardingPortal'
 
 export type AuthState = {
   session: Session | null
@@ -40,15 +41,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    client.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s)
-      setLoading(false)
-    })
+    // Never block the UI on profile sync — a slow/hanging RPC used to freeze "Verifying session…"
+    const finishLoading = () => setLoading(false)
+    const bootTimeout = window.setTimeout(finishLoading, 12_000)
+
+    void client.auth
+      .getSession()
+      .then(({ data: { session: s } }) => {
+        setSession(s)
+        if (s?.user) {
+          void syncAllowlistedPortalSuperAdmin().catch(() => {
+            /* migration 059 may not be deployed yet */
+          })
+        }
+      })
+      .catch(() => {
+        setSession(null)
+      })
+      .finally(() => {
+        window.clearTimeout(bootTimeout)
+        finishLoading()
+      })
 
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, s) => {
       setSession(s)
+      // Sync only on sign-in / initial session — not on every TOKEN_REFRESHED (avoids extra load)
+      if (s?.user && (_event === 'SIGNED_IN' || _event === 'INITIAL_SESSION')) {
+        void syncAllowlistedPortalSuperAdmin().catch(() => {})
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -97,6 +119,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const client = getSupabase()
       const { error } = await client.auth.signInWithPassword({ email, password })
+      if (!error) {
+        void syncAllowlistedPortalSuperAdmin().catch(() => {})
+      }
       return { error: error ? new Error(error.message) : null }
     } catch (e) {
       const raw = e instanceof Error ? e : new Error(String(e))

@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { sortByInstituteId } from '../lib/instituteSort'
+import { downloadCsv, instituteDirectoryCsvRows } from '../lib/reportCsv'
+import { fetchAllPaged } from '../lib/supabasePaged'
 import { getSupabase } from '../lib/supabase'
-import {
-  downloadCsv,
-  instituteDirectoryCsvRows,
-  instituteStudentRosterRows,
-} from '../lib/reportCsv'
+import { InstituteReportModal } from './InstituteReportModal'
+import { ModalPortal } from './ModalPortal'
 
-function safeFilePart(s: string | null | undefined): string {
-  const t = (s ?? '').trim().replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 64)
-  return t || 'export'
-}
+const TABLE_PAGE_SIZE_DEFAULT = 50
+const TABLE_PAGE_SIZE_OPTIONS = [25, 50, 100] as const
 
 export type InstituteRow = {
   id: string
@@ -101,8 +99,6 @@ function buildAdminGpsLines(
 type Props = {
   reloadToken?: number
   embedded?: boolean
-  onOpenStudents?: (inst: InstituteRow) => void
-  onOpenReports?: (inst: InstituteRow) => void
   onAddInstitute?: () => void
 }
 
@@ -121,6 +117,25 @@ type InstituteEditForm = {
   is_active: boolean
 }
 
+function formFromInstituteRow(row: Record<string, unknown>): InstituteEditForm {
+  const pickR = (...keys: string[]): string =>
+    keys.map((k) => row[k]).find((v) => v !== null && v !== undefined && String(v) !== '')?.toString() ?? ''
+  return {
+    name: String(row.name ?? ''),
+    institute_code: String(row.institute_code ?? ''),
+    location: pickR('location'),
+    address: pickR('address'),
+    city: String(row.city ?? ''),
+    district: pickR('district'),
+    taluka: pickR('taluka'),
+    pincode: String(row.pincode ?? ''),
+    state: String(row.state ?? ''),
+    country: pickR('country') || 'India',
+    mobile_no: pickR('mobile_no'),
+    is_active: row.is_active !== false,
+  }
+}
+
 function InstituteEditDialog({
   institute,
   onClose,
@@ -130,43 +145,46 @@ function InstituteEditDialog({
   onClose: () => void
   onSaved: () => void
 }) {
-  const row = institute as Record<string, unknown>
-  const pickR = (...keys: string[]): string =>
-    keys.map((k) => row[k]).find((v) => v !== null && v !== undefined && String(v) !== '')?.toString() ?? ''
-
-  const [form, setForm] = useState<InstituteEditForm>(() => ({
-    name: institute.name ?? '',
-    institute_code: institute.institute_code ?? '',
-    location: pickR('location'),
-    address: pickR('address'),
-    city: institute.city ?? '',
-    district: pickR('district'),
-    taluka: pickR('taluka'),
-    pincode: (institute.pincode ?? '').toString(),
-    state: institute.state ?? '',
-    country: pickR('country') || 'India',
-    mobile_no: pickR('mobile_no'),
-    is_active: institute.is_active !== false,
-  }))
+  const [form, setForm] = useState<InstituteEditForm>(() =>
+    formFromInstituteRow(institute as Record<string, unknown>),
+  )
   const [busy, setBusy] = useState(false)
+  const [loadingRow, setLoadingRow] = useState(true)
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
-    setForm({
-      name: institute.name ?? '',
-      institute_code: institute.institute_code ?? '',
-      location: pickR('location'),
-      address: pickR('address'),
-      city: institute.city ?? '',
-      district: pickR('district'),
-      taluka: pickR('taluka'),
-      pincode: (institute.pincode ?? '').toString(),
-      state: institute.state ?? '',
-      country: pickR('country') || 'India',
-      mobile_no: pickR('mobile_no'),
-      is_active: institute.is_active !== false,
-    })
-  }, [institute])
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadingRow(true)
+    setErr(null)
+    void (async () => {
+      try {
+        const sb = getSupabase()
+        const { data, error: qErr } = await sb.from('institutes').select('*').eq('id', institute.id).single()
+        if (qErr) throw qErr
+        if (!cancelled && data) {
+          setForm(formFromInstituteRow(data as Record<string, unknown>))
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setErr(e instanceof Error ? e.message : String(e))
+          setForm(formFromInstituteRow(institute as Record<string, unknown>))
+        }
+      } finally {
+        if (!cancelled) setLoadingRow(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [institute.id])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -208,96 +226,203 @@ function InstituteEditDialog({
     }
   }
 
+  const inputDisabled = busy || loadingRow
+
   return (
-    <div className="modal-overlay" role="dialog" aria-modal aria-labelledby="inst-edit-title">
-      <div className="modal-panel card-elevated">
+    <ModalPortal>
+      <div
+        className="modal-overlay"
+        role="dialog"
+        aria-modal
+        aria-labelledby="inst-edit-title"
+        onClick={onClose}
+      >
+        <div
+          className="modal-panel modal-panel-institute-edit card-elevated"
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="modal-head">
           <h2 id="inst-edit-title" style={{ margin: 0, fontSize: '1.05rem' }}>
             Edit institute
           </h2>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={busy}>
             ✕
           </button>
         </div>
-        <p className="muted small" style={{ margin: '0.5rem 0 1rem' }}>
-          Institute ID <code>{institute.id}</code> — updates are saved to the database immediately.
+        <p className="modal-subtitle">
+          Update institute details in the database. Changes apply immediately after you save.
         </p>
-        {err ? <p className="error">{err}</p> : null}
-        <form className="form-grid" onSubmit={(e) => void onSubmit(e)}>
-          <label className="span-2">
-            Name <span className="req">*</span>
-            <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
-          </label>
-          <label>
-            Institute code
+        <span className="modal-institute-id-badge">
+          Institute ID <code>{institute.id}</code>
+        </span>
+        {err ? <p className="error" style={{ marginTop: '0.75rem' }}>{err}</p> : null}
+        {loadingRow ? <p className="muted small" style={{ marginTop: '0.75rem' }}>Loading institute…</p> : null}
+        <form className="modal-form modal-form-grid" onSubmit={(e) => void onSubmit(e)} autoComplete="off">
+          <p className="form-section-label">Identity</p>
+          <div className="field span-2">
+            <label htmlFor="inst-edit-name">
+              Name <span className="req">*</span>
+            </label>
             <input
+              id="inst-edit-name"
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              required
+              disabled={inputDisabled}
+              autoComplete="organization"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="inst-edit-code">Institute code</label>
+            <input
+              id="inst-edit-code"
+              type="text"
               value={form.institute_code}
               onChange={(e) => setForm((f) => ({ ...f, institute_code: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="off"
             />
-          </label>
-          <label>
-            Mobile
+          </div>
+          <div className="field">
+            <label htmlFor="inst-edit-mobile">Mobile</label>
             <input
+              id="inst-edit-mobile"
+              type="tel"
+              inputMode="tel"
               value={form.mobile_no}
               onChange={(e) => setForm((f) => ({ ...f, mobile_no: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="tel"
             />
-          </label>
-          <label className="span-2">
-            Address
-            <input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
-          </label>
-          <label>
-            City
-            <input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
-          </label>
-          <label>
-            Pincode
+          </div>
+
+          <p className="form-section-label">Location</p>
+          <div className="field span-2">
+            <label htmlFor="inst-edit-address">Address</label>
             <input
+              id="inst-edit-address"
+              type="text"
+              value={form.address}
+              onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="street-address"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="inst-edit-city">City</label>
+            <input
+              id="inst-edit-city"
+              type="text"
+              value={form.city}
+              onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="address-level2"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="inst-edit-pincode">Pincode</label>
+            <input
+              id="inst-edit-pincode"
+              type="text"
               inputMode="numeric"
               maxLength={6}
               value={form.pincode}
-              onChange={(e) => setForm((f) => ({ ...f, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))
+              }
+              disabled={inputDisabled}
+              autoComplete="postal-code"
+              placeholder="6 digits"
             />
-          </label>
-          <label>
-            District
-            <input value={form.district} onChange={(e) => setForm((f) => ({ ...f, district: e.target.value }))} />
-          </label>
-          <label>
-            Taluka
-            <input value={form.taluka} onChange={(e) => setForm((f) => ({ ...f, taluka: e.target.value }))} />
-          </label>
-          <label>
-            State
-            <input value={form.state} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} />
-          </label>
-          <label>
-            Country
-            <input value={form.country} onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))} />
-          </label>
-          <label className="span-2">
-            Location (short)
-            <input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
-          </label>
-          <label className="inline span-2">
+          </div>
+          <div className="field">
+            <label htmlFor="inst-edit-district">District</label>
             <input
+              id="inst-edit-district"
+              type="text"
+              value={form.district}
+              onChange={(e) => setForm((f) => ({ ...f, district: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="off"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="inst-edit-taluka">Taluka</label>
+            <input
+              id="inst-edit-taluka"
+              type="text"
+              value={form.taluka}
+              onChange={(e) => setForm((f) => ({ ...f, taluka: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="off"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="inst-edit-state">State</label>
+            <input
+              id="inst-edit-state"
+              type="text"
+              value={form.state}
+              onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="address-level1"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="inst-edit-country">Country</label>
+            <input
+              id="inst-edit-country"
+              type="text"
+              value={form.country}
+              onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="country-name"
+            />
+          </div>
+          <div className="field span-2">
+            <label htmlFor="inst-edit-location">Location (short label)</label>
+            <input
+              id="inst-edit-location"
+              type="text"
+              value={form.location}
+              onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="off"
+            />
+          </div>
+
+          <p className="form-section-label">Status</p>
+          <div className="field span-2 field-checkbox">
+            <input
+              id="inst-edit-active"
               type="checkbox"
               checked={form.is_active}
               onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
+              disabled={inputDisabled}
             />
-            Institute is active (visible in app listings when your RLS allows)
-          </label>
-          <div className="span-2" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-            <button type="submit" className="btn btn-primary" disabled={busy}>
-              {busy ? 'Saving…' : 'Save to database'}
-            </button>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
+            <label htmlFor="inst-edit-active">
+              Institute is active (visible in app listings when your RLS allows)
+            </label>
+          </div>
+          <p className="form-section-label span-2">GPS</p>
+          <p className="muted small span-2" style={{ margin: 0, lineHeight: 1.45 }}>
+            Per-admin GPS lock/unlock is managed in the MSCE Attendance app. Use the institutes table GPS column to
+            review current lock status.
+          </p>
+
+          <div className="modal-form-actions span-2">
+            <button type="button" className="btn btn-ghost" disabled={inputDisabled} onClick={onClose}>
               Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={inputDisabled}>
+              {busy ? 'Saving…' : 'Save'}
             </button>
           </div>
         </form>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }
 
@@ -312,8 +437,6 @@ type AdminInviteRow = {
 export function InstituteList({
   reloadToken = 0,
   embedded = false,
-  onOpenStudents,
-  onOpenReports,
   onAddInstitute,
 }: Props) {
   const { user } = useAuth()
@@ -321,14 +444,15 @@ export function InstituteList({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
-  const [busyId, setBusyId] = useState<string | null>(null)
   const [gpsColExists, setGpsColExists] = useState<boolean | null>(null) // null = unknown yet
   /** institute_id → each admin’s GPS row (profiles + gps_settings, RLS-scoped) */
   const [gpsAdminsByInstitute, setGpsAdminsByInstitute] = useState<Record<string, AdminGpsLine[]>>({})
   const [adminInvitesByInstitute, setAdminInvitesByInstitute] = useState<Record<string, AdminInviteRow | null>>({})
-  const [reportBusyId, setReportBusyId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [tablePage, setTablePage] = useState(0)
+  const [tablePageSize, setTablePageSize] = useState(TABLE_PAGE_SIZE_DEFAULT)
   const [editing, setEditing] = useState<InstituteRow | null>(null)
+  const [reportInstitute, setReportInstitute] = useState<InstituteRow | null>(null)
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -340,35 +464,44 @@ export function InstituteList({
     )
   }, [rows, search])
 
+  const tablePageCount = Math.max(1, Math.ceil(filteredRows.length / tablePageSize))
+  const safeTablePage = Math.min(tablePage, tablePageCount - 1)
+
+  const paginatedRows = useMemo(() => {
+    const start = safeTablePage * tablePageSize
+    return filteredRows.slice(start, start + tablePageSize)
+  }, [filteredRows, safeTablePage, tablePageSize])
+
+  useEffect(() => {
+    setTablePage(0)
+  }, [search, tablePageSize])
+
+  useEffect(() => {
+    if (tablePage > tablePageCount - 1) {
+      setTablePage(Math.max(0, tablePageCount - 1))
+    }
+  }, [tablePage, tablePageCount])
+
+  const stats = useMemo(() => {
+    let active = 0
+    let pendingAdmin = 0
+    for (const r of rows) {
+      if (r.is_active !== false) active += 1
+      const inv = adminInvitesByInstitute[r.id]
+      if (inv && !inv.claimed) pendingAdmin += 1
+    }
+    return {
+      total: rows.length,
+      active,
+      inactive: rows.length - active,
+      pendingAdmin,
+    }
+  }, [rows, adminInvitesByInstitute])
+
   function exportDirectoryCsv() {
     const { header, data } = instituteDirectoryCsvRows(rows)
     const stamp = new Date().toISOString().slice(0, 10)
     downloadCsv(`institutes_directory_${stamp}.csv`, header, data)
-  }
-
-  async function exportInstituteRosterCsv(inst: InstituteRow) {
-    setError(null)
-    setInfo(null)
-    setReportBusyId(inst.id)
-    try {
-      const sb = getSupabase()
-      const { data, error: qErr } = await sb
-        .from('students')
-        .select('*')
-        .eq('institute_id', inst.id)
-        .order('name')
-      if (qErr) throw qErr
-      const list = (data ?? []) as Record<string, unknown>[]
-      const { header, data: csvRows } = instituteStudentRosterRows(inst, list)
-      const code = safeFilePart(inst.institute_code ?? inst.id.slice(0, 8))
-      const stamp = new Date().toISOString().slice(0, 10)
-      downloadCsv(`institute_${code}_students_${stamp}.csv`, header, csvRows)
-      setInfo(`Downloaded roster for ${list.length} student(s): ${inst.name ?? inst.id}`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setReportBusyId(null)
-    }
   }
 
   const load = useCallback(async () => {
@@ -378,15 +511,24 @@ export function InstituteList({
     try {
       const sb = getSupabase()
       // select('*') avoids 400 when `pincode` column is missing (migration 011 not applied yet).
-      const { data, error: qErr } = await sb.from('institutes').select('*').order('name').limit(5000)
-      if (qErr) throw qErr
-      const fetched = (data ?? []) as InstituteRow[]
+      const raw = await fetchAllPaged<InstituteRow>((rangeFrom, rangeTo) =>
+        sb
+          .from('institutes')
+          .select('*')
+          .order('id', { ascending: true })
+          .range(rangeFrom, rangeTo),
+      )
+      const fetched = sortByInstituteId(raw)
       setRows(fetched)
-      const { data: inviteData } = await sb
-        .from('admin_invites')
-        .select('institute_id, full_name, phone, email, claimed')
+      const inviteData = await fetchAllPaged<AdminInviteRow>((rangeFrom, rangeTo) =>
+        sb
+          .from('admin_invites')
+          .select('institute_id, full_name, phone, email, claimed')
+          .order('institute_id', { ascending: true })
+          .range(rangeFrom, rangeTo),
+      )
       const inviteMap: Record<string, AdminInviteRow | null> = {}
-      for (const row of (inviteData ?? []) as AdminInviteRow[]) {
+      for (const row of inviteData) {
         inviteMap[row.institute_id] = row
       }
       setAdminInvitesByInstitute(inviteMap)
@@ -468,55 +610,17 @@ export function InstituteList({
     void load()
   }, [load, user, reloadToken])
 
-  /** `gps_settings` row for (institute_id, admin_id); audit fields use the signed-in user. */
-  async function toggleGpsForAdmin(instituteId: string, adminId: string, currentLocked: boolean) {
-    if (!user?.id) return
-    setError(null)
-    setInfo(null)
-    setBusyId(`gps_${instituteId}_${adminId}`)
-    try {
-      const sb = getSupabase()
-      const now = new Date().toISOString()
-      if (currentLocked) {
-        const { error: uErr } = await sb
-          .from('gps_settings')
-          .update({
-            is_locked: false,
-            unlocked_at: now,
-            unlocked_by: user.id,
-            unlocked_by_email: user.email ?? null,
-          })
-          .eq('institute_id', instituteId)
-          .eq('admin_id', adminId)
-        if (uErr) throw uErr
-        setInfo(`GPS unlocked 🔓 for admin at this institute.`)
-      } else {
-        const { error: uErr } = await sb
-          .from('gps_settings')
-          .update({
-            is_locked: true,
-            locked_at: now,
-            locked_by: user.id,
-          })
-          .eq('institute_id', instituteId)
-          .eq('admin_id', adminId)
-        if (uErr) throw uErr
-        setInfo(`GPS locked 🔒 for admin at this institute.`)
-      }
-      await load()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  const shell = embedded ? 'dash-section card-elevated' : 'card'
+  const shell = embedded ? 'dash-section institutes-page' : 'card institutes-page'
 
   return (
     <div className={shell}>
-      <div className="card-head">
-        {!embedded ? <h2>Institutes</h2> : <span className="section-kicker">Directory</span>}
+      <div className="card-head institutes-page-head">
+        <div>
+          {!embedded ? <h2>Institutes</h2> : <span className="section-kicker">Institute directory</span>}
+          <p className="muted small institutes-page-lead">
+            Manage institutes in the database. New institutes are registered as active automatically.
+          </p>
+        </div>
         <div className="card-head-actions">
           {onAddInstitute ? (
             <button type="button" className="btn btn-primary btn-sm" onClick={onAddInstitute} title="Open add institute form">
@@ -537,13 +641,36 @@ export function InstituteList({
           </button>
         </div>
       </div>
-      <div className="search-bar-row" style={{ marginBottom: '0.75rem' }}>
+
+      <div className="institutes-stat-grid">
+        <div className="institutes-stat-card">
+          <span className="institutes-stat-value">{loading ? '…' : stats.total.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Total institutes</span>
+        </div>
+        <div className="institutes-stat-card institutes-stat-card--active">
+          <span className="institutes-stat-value">{loading ? '…' : stats.active.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Active</span>
+        </div>
+        <div className="institutes-stat-card institutes-stat-card--muted">
+          <span className="institutes-stat-value">{loading ? '…' : stats.inactive.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Inactive</span>
+        </div>
+        <div className="institutes-stat-card institutes-stat-card--warn">
+          <span className="institutes-stat-value">{loading ? '…' : stats.pendingAdmin.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Admin pending setup</span>
+        </div>
+      </div>
+
+      <div className="search-bar-row institutes-search-row">
         <div className="search-bar">
           <span className="search-icon">🔍</span>
           <input
             type="search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setTablePage(0)
+            }}
             placeholder="Search institutes — name, code, city, state, id…"
             className="search-input"
             aria-label="Filter institutes"
@@ -558,27 +685,11 @@ export function InstituteList({
           {loading ? '…' : `${filteredRows.length} of ${rows.length} shown`}
         </span>
       </div>
-      <p className="muted small">
-        Listing is live from Supabase <code>institutes</code>. Use <strong>Edit</strong> to update a row; use{' '}
-        <strong>Students</strong> / <strong>Reports</strong> for the same tools as those tabs, pre-selected for that
-        institute.
-        <strong> {rows.length}</strong> institute{rows.length === 1 ? '' : 's'} loaded from the database.
-        {user ? (
-          <>
-            {' '}
-            While signed in, <strong>GPS</strong> lists each institute admin (from <code>profiles</code>) with their
-            row in <code>gps_settings</code> (lock state), matching the Flutter app — not{' '}
-            <code>institutes.gps_locked</code>. Rows you see follow RLS (e.g. peers in your institute, or all if you
-            have elevated access).
-          </>
-        ) : null}
-      </p>
       {error ? <p className="error">{error}</p> : null}
       {info ? <p className="success">{info}</p> : null}
 
-      {!embedded ? <h3 className="h3">Directory</h3> : null}
-      <div className="table-wrap">
-        <table>
+      <div className="table-wrap institutes-table-wrap">
+        <table className="table-dash-compact institutes-directory-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -589,7 +700,7 @@ export function InstituteList({
               <th>State</th>
               <th>Admin setup</th>
               <th>Active</th>
-              <th>GPS{user ? ' (per admin)' : ''}</th>
+              <th title={user ? 'GPS lock status per admin' : 'GPS lock status'}>GPS</th>
               {user ? <th>Actions</th> : null}
             </tr>
           </thead>
@@ -607,20 +718,22 @@ export function InstituteList({
                 </td>
               </tr>
             ) : (
-              filteredRows.map((r) => {
+              paginatedRows.map((r) => {
                 const lines = user ? (gpsAdminsByInstitute[r.id] ?? []) : []
                 const isGpsLockedLegacy = r.gps_locked === true
                 const invite = adminInvitesByInstitute[r.id]
                 return (
-                  <tr key={r.id}>
-                    <td>{r.name ?? '—'}</td>
-                    <td>{r.institute_code ?? '—'}</td>
-                    <td>
+                  <tr key={r.id} className={r.is_active === false ? 'inst-row-inactive' : undefined}>
+                    <td className="inst-name-cell" title={r.name ?? undefined}>
+                      <strong>{r.name ?? '—'}</strong>
+                    </td>
+                    <td title={r.institute_code ?? undefined}>{r.institute_code ?? '—'}</td>
+                    <td title={r.id}>
                       <code className="tiny">{r.id}</code>
                     </td>
-                    <td>{r.city ?? '—'}</td>
-                    <td>{r.pincode ?? '—'}</td>
-                    <td>{r.state ?? '—'}</td>
+                    <td title={r.city ?? undefined}>{r.city ?? '—'}</td>
+                    <td title={r.pincode ?? undefined}>{r.pincode ?? '—'}</td>
+                    <td title={r.state ?? undefined}>{r.state ?? '—'}</td>
                     <td>
                       {invite ? (
                         <div className="small">
@@ -633,7 +746,13 @@ export function InstituteList({
                         <span className="badge badge-muted">Not added</span>
                       )}
                     </td>
-                    <td>{r.is_active !== false ? <span className="badge ok">Yes</span> : <span className="badge">No</span>}</td>
+                    <td>
+                      {r.is_active !== false ? (
+                        <span className="badge badge-present">Active</span>
+                      ) : (
+                        <span className="badge badge-absent">Inactive</span>
+                      )}
+                    </td>
                     <td>
                       {user ? (
                         lines.length === 0 ? (
@@ -646,7 +765,6 @@ export function InstituteList({
                         ) : (
                           <ul className="gps-admin-stack">
                             {lines.map((line) => {
-                              const gpsBusy = busyId === `gps_${r.id}_${line.adminId}`
                               const locked = line.is_locked === true
                               return (
                                 <li key={line.adminId}>
@@ -655,8 +773,11 @@ export function InstituteList({
                                       {line.label}
                                     </span>
                                     {line.hasRow ? (
-                                      <span className={`gps-badge ${locked ? 'gps-locked' : 'gps-unlocked'}`}>
-                                        {locked ? '🔒 Locked' : '🔓 Open'}
+                                      <span
+                                        className={`gps-badge ${locked ? 'gps-locked' : 'gps-unlocked'}`}
+                                        title={locked ? 'GPS locked' : 'GPS open'}
+                                      >
+                                        {locked ? '🔒' : '🔓'}
                                       </span>
                                     ) : (
                                       <span
@@ -666,21 +787,6 @@ export function InstituteList({
                                         Not set
                                       </span>
                                     )}
-                                    {line.hasRow ? (
-                                      <button
-                                        type="button"
-                                        className={`btn btn-sm ${locked ? 'btn-gps-unlock' : 'btn-gps-lock'}`}
-                                        disabled={busyId !== null}
-                                        title={
-                                          locked
-                                            ? 'Unlock GPS for this admin (same row as the mobile app)'
-                                            : 'Lock GPS for this admin'
-                                        }
-                                        onClick={() => void toggleGpsForAdmin(r.id, line.adminId, locked)}
-                                      >
-                                        {gpsBusy ? '…' : locked ? 'Unlock' : 'Lock'}
-                                      </button>
-                                    ) : null}
                                   </div>
                                 </li>
                               )
@@ -692,8 +798,11 @@ export function InstituteList({
                           —
                         </span>
                       ) : (
-                        <span className={`gps-badge ${isGpsLockedLegacy ? 'gps-locked' : 'gps-unlocked'}`}>
-                          {isGpsLockedLegacy ? '🔒 Locked' : '🔓 Open'}
+                        <span
+                          className={`gps-badge ${isGpsLockedLegacy ? 'gps-locked' : 'gps-unlocked'}`}
+                          title={isGpsLockedLegacy ? 'GPS locked' : 'GPS open'}
+                        >
+                          {isGpsLockedLegacy ? '🔒' : '🔓'}
                         </span>
                       )}
                     </td>
@@ -702,41 +811,20 @@ export function InstituteList({
                         <div className="inst-actions-row">
                           <button
                             type="button"
-                            className="btn btn-ghost btn-sm"
-                            disabled={reportBusyId !== null}
-                            title="Download student roster CSV"
-                            onClick={() => void exportInstituteRosterCsv(r)}
-                          >
-                            {reportBusyId === r.id ? '…' : '📄 Roster'}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
+                            className="btn btn-ghost btn-sm institutes-action-btn"
                             title="Edit institute in database"
                             onClick={() => setEditing(r)}
                           >
-                            ✏️ Edit
+                            Edit
                           </button>
-                          {onOpenStudents ? (
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-sm"
-                              title="Open Students tab with this institute"
-                              onClick={() => onOpenStudents(r)}
-                            >
-                              👨‍🎓 Students
-                            </button>
-                          ) : null}
-                          {onOpenReports ? (
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-sm"
-                              title="Open Reports tab with this institute"
-                              onClick={() => onOpenReports(r)}
-                            >
-                              📑 Reports
-                            </button>
-                          ) : null}
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm institutes-action-btn"
+                            title="Institute tabular attendance report"
+                            onClick={() => setReportInstitute(r)}
+                          >
+                            Report
+                          </button>
                         </div>
                       </td>
                     ) : null}
@@ -747,12 +835,55 @@ export function InstituteList({
           </tbody>
         </table>
       </div>
+      {filteredRows.length > 0 ? (
+        <div className="institutes-panel-pager">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={safeTablePage <= 0}
+            onClick={() => setTablePage((p) => Math.max(0, p - 1))}
+          >
+            Previous
+          </button>
+          <span className="muted small institutes-pager-meta">
+            Page {safeTablePage + 1} of {tablePageCount} ({filteredRows.length.toLocaleString('en-IN')} rows)
+          </span>
+          <label className="institutes-page-size">
+            <span className="muted small">Per page</span>
+            <select
+              value={tablePageSize}
+              onChange={(e) => {
+                setTablePageSize(Number(e.target.value))
+                setTablePage(0)
+              }}
+              aria-label="Rows per page"
+            >
+              {TABLE_PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={safeTablePage >= tablePageCount - 1}
+            onClick={() => setTablePage((p) => Math.min(tablePageCount - 1, p + 1))}
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
       {editing ? (
         <InstituteEditDialog
           institute={editing}
           onClose={() => setEditing(null)}
           onSaved={() => void load()}
         />
+      ) : null}
+      {reportInstitute ? (
+        <InstituteReportModal institute={reportInstitute} onClose={() => setReportInstitute(null)} />
       ) : null}
     </div>
   )

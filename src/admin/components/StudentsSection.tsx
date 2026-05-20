@@ -7,6 +7,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { sortByInstituteId } from '../lib/instituteSort'
+import { fetchAllPaged } from '../lib/supabasePaged'
 import { getSupabase } from '../lib/supabase'
 import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
 import { immediateImgSrc, resolvePhotoUrlString } from '../lib/photoUrl'
@@ -40,6 +42,7 @@ type Student = Record<string, unknown> & {
   photo_url?: string | null
   face_photo_url?: string | null
   registration_photo_path?: string | null
+  face_embedding?: unknown
   is_active?: boolean | null
   email?: string | null
   phone?: string | null
@@ -65,6 +68,87 @@ type AttendanceRecord = Record<string, unknown> & {
 }
 
 type DrillLevel = 'institutes' | 'students' | 'subjects' | 'attendance'
+
+const TABLE_PAGE_SIZE_DEFAULT = 50
+const TABLE_PAGE_SIZE_OPTIONS = [25, 50, 100] as const
+
+function studentRollSortKey(s: Student): number {
+  const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno')
+  if (roll) {
+    const n = parseInt(roll.replace(/\D/g, ''), 10)
+    if (Number.isFinite(n)) return n
+  }
+  const idN = parseInt(String(s.id).replace(/\D/g, ''), 10)
+  return Number.isFinite(idN) ? idN : Number.MAX_SAFE_INTEGER
+}
+
+function sortStudents(rows: Student[]): Student[] {
+  return [...rows].sort((a, b) => {
+    const ka = studentRollSortKey(a)
+    const kb = studentRollSortKey(b)
+    if (ka !== kb) return ka - kb
+    return String(a.id).localeCompare(String(b.id), undefined, { numeric: true })
+  })
+}
+
+function hasFacePhoto(s: Student): boolean {
+  if (pick(s, 'face_photo_url', 'photo_url', 'registration_photo_path', 'photo_path')) return true
+  const emb = s.face_embedding
+  if (Array.isArray(emb) && emb.length > 0) return true
+  if (typeof emb === 'string' && emb.trim() !== '' && emb !== '[]') return true
+  return false
+}
+
+function DirectoryPager({
+  safePage,
+  pageCount,
+  totalRows,
+  pageSize,
+  onPrev,
+  onNext,
+  onPageSize,
+}: {
+  safePage: number
+  pageCount: number
+  totalRows: number
+  pageSize: number
+  onPrev: () => void
+  onNext: () => void
+  onPageSize: (n: number) => void
+}) {
+  return (
+    <div className="institutes-panel-pager">
+      <button type="button" className="btn btn-ghost btn-sm" disabled={safePage <= 0} onClick={onPrev}>
+        Previous
+      </button>
+      <span className="muted small institutes-pager-meta">
+        Page {safePage + 1} of {pageCount} ({totalRows.toLocaleString('en-IN')} rows)
+      </span>
+      <label className="institutes-page-size">
+        <span className="muted small">Per page</span>
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSize(Number(e.target.value))}
+          aria-label="Rows per page"
+        >
+          {TABLE_PAGE_SIZE_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        disabled={safePage >= pageCount - 1}
+        onClick={onNext}
+      >
+        Next
+      </button>
+    </div>
+  )
+}
 
 /* ══════════════════════════════════════════════════════════════
    HELPERS
@@ -255,7 +339,7 @@ function AddStudentPanel({ institute, onAdded }: { institute: InstituteRow; onAd
   }
 
   return (
-    <div className="card-elevated" style={{ padding: '1rem', marginBottom: '1rem' }}>
+    <div className="students-add-panel">
       <div
         style={{
           display: 'flex',
@@ -297,26 +381,28 @@ function AddStudentPanel({ institute, onAdded }: { institute: InstituteRow; onAd
           ) : null}
           <label>
             First name <span className="req">*</span>
-            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+            <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required autoComplete="off" />
           </label>
           <label>
             Middle name
-            <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} />
+            <input type="text" value={middleName} onChange={(e) => setMiddleName(e.target.value)} autoComplete="off" />
           </label>
           <label>
             Last name <span className="req">*</span>
-            <input value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+            <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required autoComplete="off" />
           </label>
           <label>
             Year / batch label
-            <input value={year} onChange={(e) => setYear(e.target.value)} />
+            <input type="text" value={year} onChange={(e) => setYear(e.target.value)} autoComplete="off" />
           </label>
           <label className="span-2">
             Subjects (comma-separated, optional)
             <input
+              type="text"
               value={subjectsCsv}
               onChange={(e) => setSubjectsCsv(e.target.value)}
               placeholder="e.g. English, Maths"
+              autoComplete="off"
             />
           </label>
           <div className="span-2" style={{ display: 'flex', gap: '0.5rem' }}>
@@ -922,70 +1008,101 @@ function SubjectFolders({
 ══════════════════════════════════════════════════════════════ */
 
 function StudentsList({
-  institute, onBack, onSelectStudent,
+  institute,
+  reloadToken = 0,
+  onBack,
+  onSelectStudent,
 }: {
   institute: InstituteRow
+  reloadToken?: number
   onBack: () => void
   onSelectStudent: (s: Student) => void
 }) {
   const [students, setStudents] = useState<Student[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState<string | null>(null)
-  const [search, setSearch]     = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const [reloadTick, setReloadTick] = useState(0)
+  const [tablePage, setTablePage] = useState(0)
+  const [tablePageSize, setTablePageSize] = useState(TABLE_PAGE_SIZE_DEFAULT)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true); setError(null)
-      try {
-        const sb = getSupabase()
-        const { data, error: qErr } = await sb
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const sb = getSupabase()
+      const raw = await fetchAllPaged<Student>((rangeFrom, rangeTo) =>
+        sb
           .from('students')
           .select('*')
           .eq('institute_id', institute.id)
-          .order('name')
-        if (qErr) throw new Error([qErr.message, qErr.details, (qErr as {hint?:string}).hint].filter(Boolean).join(' — '))
-        setStudents((data ?? []) as Student[])
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
-      } finally {
-        setLoading(false)
-      }
+          .order('id', { ascending: true })
+          .range(rangeFrom, rangeTo),
+      )
+      setStudents(sortStudents(raw))
+    } catch (e) {
+      setStudents([])
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
     }
+  }, [institute.id])
+
+  useEffect(() => {
     void load()
     setTimeout(() => searchRef.current?.focus(), 100)
-  }, [institute.id, reloadTick])
+  }, [load, reloadTick, reloadToken])
 
-  const filtered = students.filter((s) => {
-    const q = search.toLowerCase()
-    if (!q) return true
-    const name = pick(s, 'name', 'student_name', 'full_name') ?? ''
-    const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno') ?? ''
-    const cls = pick(s, 'class_name', 'class', 'grade') ?? ''
-    const email = pick(s, 'email', 'email_id') ?? ''
-    return [name, roll, cls, email].some((v) => v.toLowerCase().includes(q))
-  })
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return students
+    return students.filter((s) => {
+      const name = pick(s, 'name', 'student_name', 'full_name') ?? ''
+      const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno') ?? ''
+      const cls = pick(s, 'class_name', 'class', 'grade') ?? ''
+      const email = pick(s, 'email', 'email_id') ?? ''
+      return [name, roll, cls, email, s.id].some((v) => v.toLowerCase().includes(q))
+    })
+  }, [students, search])
 
-  const grouped = useMemo(() => {
-    const m = new Map<string, Student[]>()
-    const order: string[] = []
-    for (const s of filtered) {
-      const k = studentFolderLabel(s)
-      if (!m.has(k)) {
-        m.set(k, [])
-        order.push(k)
-      }
-      m.get(k)!.push(s)
+  const stats = useMemo(() => {
+    let faceRegistered = 0
+    for (const s of students) {
+      if (hasFacePhoto(s)) faceRegistered += 1
     }
-    order.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-    return order.map((folder) => ({ folder, list: m.get(folder)! }))
-  }, [filtered])
+    return {
+      total: students.length,
+      faceRegistered,
+      facePending: students.length - faceRegistered,
+      inactive: students.filter((s) => s.is_active === false).length,
+    }
+  }, [students])
+
+  const tablePageCount = Math.max(1, Math.ceil(filtered.length / tablePageSize))
+  const safeTablePage = Math.min(tablePage, tablePageCount - 1)
+
+  const paginatedRows = useMemo(() => {
+    const start = safeTablePage * tablePageSize
+    return filtered.slice(start, start + tablePageSize)
+  }, [filtered, safeTablePage, tablePageSize])
+
+  useEffect(() => {
+    setTablePage(0)
+  }, [search, tablePageSize, institute.id])
+
+  useEffect(() => {
+    if (tablePage > tablePageCount - 1) {
+      setTablePage(Math.max(0, tablePageCount - 1))
+    }
+  }, [tablePage, tablePageCount])
 
   return (
     <div className="students-panel">
       <div className="drill-breadcrumb">
-        <button className="drill-back" onClick={onBack}>← Back to Institutes</button>
+        <button type="button" className="drill-back" onClick={onBack}>
+          ← Back to Institutes
+        </button>
         <span className="drill-sep">›</span>
         <span className="drill-crumb active">{institute.name ?? institute.id}</span>
       </div>
@@ -996,37 +1113,66 @@ function StudentsList({
           <div className="inst-info-name">{institute.name}</div>
           <div className="inst-info-meta">
             {institute.institute_code && <span>Code: {institute.institute_code}</span>}
-            {institute.city          && <span>· {institute.city}</span>}
-            {institute.state         && <span>· {institute.state}</span>}
+            {institute.city && <span>· {institute.city}</span>}
+            {institute.state && <span>· {institute.state}</span>}
           </div>
         </div>
         <div className="inst-info-count">
-          <span className="big-num">{students.length}</span>
+          <span className="big-num">{loading ? '…' : stats.total.toLocaleString('en-IN')}</span>
           <span className="big-lbl">Students</span>
+        </div>
+      </div>
+
+      <div className="institutes-stat-grid">
+        <div className="institutes-stat-card">
+          <span className="institutes-stat-value">{loading ? '…' : stats.total.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Total students</span>
+        </div>
+        <div className="institutes-stat-card institutes-stat-card--active">
+          <span className="institutes-stat-value">{loading ? '…' : stats.faceRegistered.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Face registered</span>
+        </div>
+        <div className="institutes-stat-card institutes-stat-card--warn">
+          <span className="institutes-stat-value">{loading ? '…' : stats.facePending.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Face pending</span>
+        </div>
+        <div className="institutes-stat-card institutes-stat-card--muted">
+          <span className="institutes-stat-value">{loading ? '…' : stats.inactive.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Inactive</span>
         </div>
       </div>
 
       <AddStudentPanel institute={institute} onAdded={() => setReloadTick((t) => t + 1)} />
 
-      <div className="search-bar-row">
+      <div className="search-bar-row institutes-search-row">
         <div className="search-bar">
           <span className="search-icon">🔍</span>
           <input
             ref={searchRef}
-            type="text"
-            placeholder="Search by name, roll no, class or email…"
+            type="search"
+            placeholder="Search students — name, roll, class, email, id…"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setTablePage(0)
+            }}
             className="search-input"
+            aria-label="Filter students"
           />
-          {search && <button className="search-clear" onClick={() => setSearch('')} aria-label="Clear">✕</button>}
+          {search ? (
+            <button type="button" className="search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+              ✕
+            </button>
+          ) : null}
         </div>
-        <span className="search-count">{filtered.length} of {students.length}</span>
+        <span className="search-count">
+          {loading ? '…' : `${filtered.length} of ${students.length} shown`}
+        </span>
         <button
           type="button"
           className="btn btn-ghost btn-sm"
           disabled={loading || students.length === 0}
-          title="Download full institute roster as CSV (all students, not only search filter)"
+          title="Download full institute roster as CSV"
           onClick={() => {
             const { header, data } = instituteStudentRosterRows(institute, students as Record<string, unknown>[])
             const code = safeFilePart(institute.institute_code ?? institute.id.slice(0, 8))
@@ -1036,66 +1182,117 @@ function StudentsList({
         >
           📥 Roster CSV
         </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void load()} disabled={loading}>
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
       </div>
 
-      {error && <div className="error">{error}</div>}
-      {loading && <div className="loading-row"><div className="loading-spinner" /><span>Loading students…</span></div>}
-
-      {!loading && filtered.length === 0 && !error && (
-        <div className="empty-state">
-          <div className="empty-icon">👤</div>
-          <div className="empty-title">{search ? 'No matching students' : 'No students enrolled'}</div>
-          <div className="empty-sub">{search ? `No results for "${search}"` : 'No students registered for this institute yet.'}</div>
+      {error ? <p className="error">{error}</p> : null}
+      {loading ? (
+        <div className="loading-row">
+          <div className="loading-spinner" />
+          <span>Loading students…</span>
         </div>
-      )}
+      ) : null}
 
-      {!loading && filtered.length > 0 && (
-        <p className="muted small" style={{ margin: '0 0 0.75rem' }}>
-          Students are grouped by class / grade field when present. Click a student to open <strong>subject folders</strong>{' '}
-          and attendance (live from the database).
-        </p>
-      )}
+      <div className="table-wrap institutes-table-wrap students-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Photo</th>
+              <th>Name</th>
+              <th>Roll</th>
+              <th>Class</th>
+              <th>Face</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.length === 0 && !loading ? (
+              <tr>
+                <td colSpan={7} className="muted">
+                  No students registered for this institute yet.
+                </td>
+              </tr>
+            ) : filtered.length === 0 && !loading ? (
+              <tr>
+                <td colSpan={7} className="muted">
+                  No students match “{search}”. Clear the search to see all {students.length} row(s).
+                </td>
+              </tr>
+            ) : (
+              paginatedRows.map((s) => {
+                const name = pick(s, 'name', 'student_name', 'full_name') ?? '—'
+                const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no') ?? '—'
+                const cls = pick(s, 'class_name', 'class', 'grade', 'standard', 'std')
+                const sec = pick(s, 'section', 'div', 'division')
+                const active = s.is_active !== false
+                const faceOk = hasFacePhoto(s)
+                const classLabel = cls ? `${cls}${sec ? ` — ${sec}` : ''}` : studentFolderLabel(s)
 
-      {grouped.map(({ folder, list: groupList }) => (
-        <div key={folder} style={{ marginBottom: '1.25rem' }}>
-          <div className="section-title-row">
-            <h3 className="section-heading" style={{ margin: 0 }}>
-              📁 {folder}
-            </h3>
-            <span className="section-count">{groupList.length}</span>
-          </div>
-          <div className="students-grid">
-            {groupList.map((s) => {
-              const name = pick(s, 'name', 'student_name', 'full_name') ?? '—'
-              const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no')
-              const cls = pick(s, 'class_name', 'class', 'grade', 'standard', 'std')
-              const sec = pick(s, 'section', 'div', 'division')
-              const active = s.is_active !== false
-
-              return (
-                <button key={s.id} className="student-card" onClick={() => onSelectStudent(s)}>
-                  <div className="student-avatar">
-                    <StudentDisplayPhoto student={s} displayName={name} size="sm" />
-                    <span className="student-avatar-initials">{initials(name)}</span>
-                  </div>
-                  <div className="student-info">
-                    <div className="student-name">{name}</div>
-                    {roll && <div className="student-meta">Roll: {roll}</div>}
-                    {cls && (
-                      <div className="student-meta">
-                        {cls}
-                        {sec ? ` — ${sec}` : ''}
+                return (
+                  <tr key={s.id} className={!active ? 'student-row-inactive' : undefined}>
+                    <td className="students-photo-cell">
+                      <div className="student-table-avatar">
+                        <StudentDisplayPhoto student={s} displayName={name} size="sm" />
+                        <span>{initials(name)}</span>
                       </div>
-                    )}
-                  </div>
-                  <div className={`student-status-dot ${active ? 'dot-active' : 'dot-inactive'}`} title={active ? 'Active' : 'Inactive'} />
-                  <div className="student-arrow">›</div>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ))}
+                    </td>
+                    <td className="student-name-cell">
+                      <strong>{name}</strong>
+                      <div className="muted small">
+                        <code className="tiny">{s.id}</code>
+                      </div>
+                    </td>
+                    <td>{roll}</td>
+                    <td>{classLabel}</td>
+                    <td>
+                      {faceOk ? (
+                        <span className="badge badge-present">Registered</span>
+                      ) : (
+                        <span className="badge badge-muted">Pending</span>
+                      )}
+                    </td>
+                    <td>
+                      {active ? (
+                        <span className="badge badge-present">Active</span>
+                      ) : (
+                        <span className="badge badge-absent">Inactive</span>
+                      )}
+                    </td>
+                    <td className="actions-cell">
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm institutes-action-btn"
+                        onClick={() => onSelectStudent(s)}
+                      >
+                        Open
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {filtered.length > 0 ? (
+        <DirectoryPager
+          safePage={safeTablePage}
+          pageCount={tablePageCount}
+          totalRows={filtered.length}
+          pageSize={tablePageSize}
+          onPrev={() => setTablePage((p) => Math.max(0, p - 1))}
+          onNext={() => setTablePage((p) => Math.min(tablePageCount - 1, p + 1))}
+          onPageSize={(n) => {
+            setTablePageSize(n)
+            setTablePage(0)
+          }}
+        />
+      ) : null}
+
     </div>
   )
 }
@@ -1104,57 +1301,132 @@ function StudentsList({
    LEVEL 0 — INSTITUTE PICKER
 ══════════════════════════════════════════════════════════════ */
 
-function InstitutePicker({ onSelectInstitute }: { onSelectInstitute: (i: InstituteRow) => void }) {
+function InstitutePicker({
+  reloadToken = 0,
+  onSelectInstitute,
+}: {
+  reloadToken?: number
+  onSelectInstitute: (i: InstituteRow) => void
+}) {
   const [institutes, setInstitutes] = useState<InstituteRow[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState<string | null>(null)
-  const [search, setSearch]         = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [tablePage, setTablePage] = useState(0)
+  const [tablePageSize, setTablePageSize] = useState(TABLE_PAGE_SIZE_DEFAULT)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true); setError(null)
-      try {
-        const sb = getSupabase()
-        const { data, error: qErr } = await sb
-          .from('institutes').select('*').order('name').limit(500)
-        if (qErr) throw qErr
-        setInstitutes((data ?? []) as InstituteRow[])
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
-      } finally {
-        setLoading(false)
-      }
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const sb = getSupabase()
+      const raw = await fetchAllPaged<InstituteRow>((rangeFrom, rangeTo) =>
+        sb
+          .from('institutes')
+          .select('*')
+          .order('id', { ascending: true })
+          .range(rangeFrom, rangeTo),
+      )
+      setInstitutes(sortByInstituteId(raw))
+    } catch (e) {
+      setInstitutes([])
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
     }
-    void load()
-    setTimeout(() => searchRef.current?.focus(), 100)
   }, [])
 
-  const filtered = institutes.filter(i => {
-    const q = search.toLowerCase()
-    return !q
-      || (i.name ?? '').toLowerCase().includes(q)
-      || (i.institute_code ?? '').toLowerCase().includes(q)
-      || (i.city ?? '').toLowerCase().includes(q)
-  })
+  useEffect(() => {
+    void load()
+    setTimeout(() => searchRef.current?.focus(), 100)
+  }, [load, reloadToken])
 
-  const active   = filtered.filter(i => i.is_active !== false)
-  const inactive = filtered.filter(i => i.is_active === false)
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return institutes
+    return institutes.filter((i) =>
+      [i.name, i.institute_code, i.id, i.city, i.state, i.pincode]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    )
+  }, [institutes, search])
+
+  const stats = useMemo(() => {
+    let active = 0
+    for (const r of institutes) {
+      if (r.is_active !== false) active += 1
+    }
+    return {
+      total: institutes.length,
+      active,
+      inactive: institutes.length - active,
+    }
+  }, [institutes])
+
+  const tablePageCount = Math.max(1, Math.ceil(filtered.length / tablePageSize))
+  const safeTablePage = Math.min(tablePage, tablePageCount - 1)
+
+  const paginatedRows = useMemo(() => {
+    const start = safeTablePage * tablePageSize
+    return filtered.slice(start, start + tablePageSize)
+  }, [filtered, safeTablePage, tablePageSize])
+
+  useEffect(() => {
+    setTablePage(0)
+  }, [search, tablePageSize])
+
+  useEffect(() => {
+    if (tablePage > tablePageCount - 1) {
+      setTablePage(Math.max(0, tablePageCount - 1))
+    }
+  }, [tablePage, tablePageCount])
 
   return (
     <div className="students-panel">
-      <div className="overview-notice" style={{ marginBottom: '1.25rem' }}>
-        <span>📋</span>
-        <span>Select an institute to view all students (grouped by class), add new students to the database, and open each student’s subject folders with live attendance.</span>
+      <div className="institutes-stat-grid">
+        <div className="institutes-stat-card">
+          <span className="institutes-stat-value">{loading ? '…' : stats.total.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Total institutes</span>
+        </div>
+        <div className="institutes-stat-card institutes-stat-card--active">
+          <span className="institutes-stat-value">{loading ? '…' : stats.active.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Active</span>
+        </div>
+        <div className="institutes-stat-card institutes-stat-card--muted">
+          <span className="institutes-stat-value">{loading ? '…' : stats.inactive.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Inactive</span>
+        </div>
+        <div className="institutes-stat-card institutes-stat-card--warn">
+          <span className="institutes-stat-value">{loading ? '…' : filtered.length.toLocaleString('en-IN')}</span>
+          <span className="institutes-stat-label">Matching search</span>
+        </div>
       </div>
-      <div className="search-bar-row">
+
+      <div className="search-bar-row institutes-search-row">
         <div className="search-bar">
           <span className="search-icon">🔍</span>
-          <input ref={searchRef} type="text" placeholder="Search institute by name, code or city…"
-            value={search} onChange={e => setSearch(e.target.value)} className="search-input" />
-          {search && <button className="search-clear" onClick={() => setSearch('')} aria-label="Clear">✕</button>}
+          <input
+            ref={searchRef}
+            type="search"
+            placeholder="Search institutes — name, code, city, state, id…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setTablePage(0)
+            }}
+            className="search-input"
+            aria-label="Filter institutes"
+          />
+          {search ? (
+            <button type="button" className="search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+              ✕
+            </button>
+          ) : null}
         </div>
-        <span className="search-count">{loading ? 'Loading…' : `${filtered.length} institute${filtered.length !== 1 ? 's' : ''}`}</span>
+        <span className="search-count">
+          {loading ? '…' : `${filtered.length} of ${institutes.length} shown`}
+        </span>
         <button
           type="button"
           className="btn btn-ghost btn-sm"
@@ -1168,59 +1440,95 @@ function InstitutePicker({ onSelectInstitute }: { onSelectInstitute: (i: Institu
         >
           📥 Directory CSV
         </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void load()} disabled={loading}>
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
       </div>
 
-      {error  && <div className="error">{error}</div>}
-      {loading && <div className="loading-row"><div className="loading-spinner" /><span>Loading institutes…</span></div>}
-
-      {!loading && filtered.length === 0 && !error && (
-        <div className="empty-state">
-          <div className="empty-icon">🏫</div>
-          <div className="empty-title">{search ? 'No matching institutes' : 'No institutes found'}</div>
-          <div className="empty-sub">{search ? `No results for "${search}"` : 'Add institutes from the Institutes tab.'}</div>
+      {error ? <p className="error">{error}</p> : null}
+      {loading ? (
+        <div className="loading-row">
+          <div className="loading-spinner" />
+          <span>Loading institutes…</span>
         </div>
-      )}
+      ) : null}
 
-      {active.length > 0 && (
-        <>
-          <div className="section-title-row">
-            <h3 className="section-heading">✅ Active Institutes</h3>
-            <span className="section-count">{active.length}</span>
-          </div>
-          <div className="institute-grid">
-            {active.map(i => <InstCard key={i.id} inst={i} onClick={() => onSelectInstitute(i)} />)}
-          </div>
-        </>
-      )}
-      {inactive.length > 0 && (
-        <>
-          <div className="section-title-row" style={{ marginTop: '1.5rem' }}>
-            <h3 className="section-heading">⏸ Inactive Institutes</h3>
-            <span className="section-count">{inactive.length}</span>
-          </div>
-          <div className="institute-grid">
-            {inactive.map(i => <InstCard key={i.id} inst={i} onClick={() => onSelectInstitute(i)} />)}
-          </div>
-        </>
-      )}
+      <div className="table-wrap institutes-table-wrap students-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Code</th>
+              <th>ID</th>
+              <th>City</th>
+              <th>State</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {institutes.length === 0 && !loading ? (
+              <tr>
+                <td colSpan={7} className="muted">
+                  No institutes found. Add institutes from the Institutes tab.
+                </td>
+              </tr>
+            ) : filtered.length === 0 && !loading ? (
+              <tr>
+                <td colSpan={7} className="muted">
+                  No institutes match “{search}”. Clear the search to see all {institutes.length} row(s).
+                </td>
+              </tr>
+            ) : (
+              paginatedRows.map((i) => (
+                <tr key={i.id} className={i.is_active === false ? 'inst-row-inactive' : undefined}>
+                  <td className="inst-name-cell">
+                    <strong>{i.name ?? '—'}</strong>
+                  </td>
+                  <td>{i.institute_code ?? '—'}</td>
+                  <td>
+                    <code className="tiny">{i.id}</code>
+                  </td>
+                  <td>{i.city ?? '—'}</td>
+                  <td>{i.state ?? '—'}</td>
+                  <td>
+                    {i.is_active !== false ? (
+                      <span className="badge badge-present">Active</span>
+                    ) : (
+                      <span className="badge badge-absent">Inactive</span>
+                    )}
+                  </td>
+                  <td className="actions-cell">
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm institutes-action-btn"
+                      onClick={() => onSelectInstitute(i)}
+                    >
+                      Open
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {filtered.length > 0 ? (
+        <DirectoryPager
+          safePage={safeTablePage}
+          pageCount={tablePageCount}
+          totalRows={filtered.length}
+          pageSize={tablePageSize}
+          onPrev={() => setTablePage((p) => Math.max(0, p - 1))}
+          onNext={() => setTablePage((p) => Math.min(tablePageCount - 1, p + 1))}
+          onPageSize={(n) => {
+            setTablePageSize(n)
+            setTablePage(0)
+          }}
+        />
+      ) : null}
     </div>
-  )
-}
-
-function InstCard({ inst, onClick }: { inst: InstituteRow; onClick: () => void }) {
-  return (
-    <button className={`inst-card${inst.is_active === false ? ' inst-card-inactive' : ''}`} onClick={onClick}>
-      <div className="inst-card-icon">🏛️</div>
-      <div className="inst-card-body">
-        <div className="inst-card-name">{inst.name ?? inst.id}</div>
-        <div className="inst-card-meta">
-          {inst.institute_code && <span className="inst-chip">{inst.institute_code}</span>}
-          {inst.city           && <span className="inst-chip">📍 {inst.city}</span>}
-          {inst.is_active === false && <span className="inst-chip inst-chip-inactive">Inactive</span>}
-        </div>
-      </div>
-      <div className="inst-card-arrow">›</div>
-    </button>
   )
 }
 
@@ -1243,6 +1551,7 @@ export function StudentsSection({
   const [subject, setSubject]     = useState<Subject | null>(null)
   const [schema, setSchema]       = useState<SchemaConfig>({ subjectTable: null, attendanceTable: null, discovered: false })
   const [schemaLoading, setSchemaLoading] = useState(true)
+  const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
     if (!jumpToInstituteId) return
@@ -1276,46 +1585,82 @@ export function StudentsSection({
 
   useEffect(() => { void runDiscovery() }, [])
 
-  const shell = embedded ? 'dash-section card-elevated' : 'card'
+  const shell = embedded ? 'dash-section students-page' : 'card students-page'
 
   return (
-    <div className={`${shell} students-shell-flush`}>
-      {/* Header */}
-      <div className="students-tab-header">
-        <div className="students-tab-title">
-          <span className="section-kicker">Students</span>
-          <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Student Attendance Viewer</h2>
+    <div className={shell}>
+      <div className="card-head institutes-page-head">
+        <div>
+          {embedded ? <span className="section-kicker">Students</span> : <h2>Students</h2>}
+          <p className="muted small students-page-lead">
+            Browse institutes, manage rosters, and open each student&apos;s subject folders with live attendance from
+            the database.
+          </p>
+          <div className="students-breadcrumb-trail tab-breadcrumb-trail">
+            <span
+              className={`trail-item${level === 'institutes' ? ' trail-active' : ' trail-clickable'}`}
+              onClick={() => {
+                setLevel('institutes')
+                setInstitute(null)
+                setStudent(null)
+                setSubject(null)
+              }}
+            >
+              Institutes
+            </span>
+            {institute ? (
+              <>
+                <span className="trail-sep">›</span>
+                <span
+                  className={`trail-item${level === 'students' ? ' trail-active' : ' trail-clickable'}`}
+                  onClick={() => {
+                    setLevel('students')
+                    setStudent(null)
+                    setSubject(null)
+                  }}
+                >
+                  {institute.name}
+                </span>
+              </>
+            ) : null}
+            {student ? (
+              <>
+                <span className="trail-sep">›</span>
+                <span
+                  className={`trail-item${level === 'subjects' ? ' trail-active' : ' trail-clickable'}`}
+                  onClick={() => {
+                    setLevel('subjects')
+                    setSubject(null)
+                  }}
+                >
+                  {pick(student, 'name', 'student_name', 'full_name') ?? student.id}
+                </span>
+              </>
+            ) : null}
+            {subject ? (
+              <>
+                <span className="trail-sep">›</span>
+                <span className="trail-item trail-active">
+                  {pick(subject, 'name', 'subject_name', 'course_name', 'title') ?? subject.id}
+                </span>
+              </>
+            ) : null}
+          </div>
         </div>
-        <div className="tab-breadcrumb-trail">
-          <span className={`trail-item${level === 'institutes' ? ' trail-active' : ' trail-clickable'}`}
-            onClick={() => { setLevel('institutes'); setInstitute(null); setStudent(null); setSubject(null) }}>
-            🏛 Institutes
-          </span>
-          {institute && <>
-            <span className="trail-sep">›</span>
-            <span className={`trail-item${level === 'students' ? ' trail-active' : ' trail-clickable'}`}
-              onClick={() => { setLevel('students'); setStudent(null); setSubject(null) }}>
-              {institute.name}
-            </span>
-          </>}
-          {student && <>
-            <span className="trail-sep">›</span>
-            <span className={`trail-item${level === 'subjects' ? ' trail-active' : ' trail-clickable'}`}
-              onClick={() => { setLevel('subjects'); setSubject(null) }}>
-              {pick(student, 'name', 'student_name', 'full_name') ?? student.id}
-            </span>
-          </>}
-          {subject && <>
-            <span className="trail-sep">›</span>
-            <span className="trail-item trail-active">
-              {pick(subject, 'name', 'subject_name', 'course_name', 'title') ?? subject.id}
-            </span>
-          </>}
+        <div className="card-head-actions">
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setReloadToken((t) => t + 1)}
+            disabled={schemaLoading}
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
       <div className="students-body">
-        {/* Schema discovery status */}
+  {/* Schema discovery status */}
         {schemaLoading ? (
           <div className="loading-row" style={{ marginBottom: '0.5rem' }}>
             <div className="loading-spinner" />
@@ -1328,13 +1673,14 @@ export function StudentsSection({
         )}
 
         {level === 'institutes' && (
-          <InstitutePicker onSelectInstitute={i => { setInstitute(i); setStudent(null); setSubject(null); setLevel('students') }} />
+          <InstitutePicker reloadToken={reloadToken} onSelectInstitute={(i) => { setInstitute(i); setStudent(null); setSubject(null); setLevel('students') }} />
         )}
         {level === 'students' && institute && (
           <StudentsList
             institute={institute}
+            reloadToken={reloadToken}
             onBack={() => { setLevel('institutes'); setInstitute(null) }}
-            onSelectStudent={s => { setStudent(s); setSubject(null); setLevel('subjects') }}
+            onSelectStudent={(s) => { setStudent(s); setSubject(null); setLevel('subjects') }}
           />
         )}
         {level === 'subjects' && student && institute && (

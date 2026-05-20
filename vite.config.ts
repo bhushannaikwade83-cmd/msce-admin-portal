@@ -59,6 +59,34 @@ function resolveSupabase(merged: Record<string, string>): {
   return { url, anonKey, storageBucket }
 }
 
+/** Vite dev client + HMR use eval(); strict CSP without unsafe-eval breaks local admin portal. */
+const DEV_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:*",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'self'",
+].join('; ')
+
+/** Production: no unsafe-eval if possible; jsPDF may still need it for PDF export. */
+const PROD_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.postalpincode.in",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+].join('; ')
+
 export default defineConfig(({ mode }) => {
   const merged = loadMergedEnv()
   const { url, anonKey, storageBucket } = resolveSupabase(merged)
@@ -95,6 +123,10 @@ export default defineConfig(({ mode }) => {
       __EDUSETU_B2_SIGN_ENABLED__: JSON.stringify(!!b2SignApi || b2DevSignEnabled),
     },
     server: {
+      headers:
+        mode === 'development'
+          ? { 'Content-Security-Policy': DEV_CSP }
+          : undefined,
       proxy: {
         ...(devProxyEnabled
           ? {
@@ -118,6 +150,9 @@ export default defineConfig(({ mode }) => {
             }
           : {}),
       },
+    },
+    preview: {
+      headers: { 'Content-Security-Policy': PROD_CSP },
     },
   }
 })

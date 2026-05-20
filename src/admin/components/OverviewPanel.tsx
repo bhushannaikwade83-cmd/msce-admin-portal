@@ -31,8 +31,8 @@ export function OverviewPanel() {
         <p className="overview-text">
           Welcome to the MSCE Administration Portal. Use the left navigation to manage
           institutes, track outstanding admin invites from the mobile app, add new institution
-          records, and review storage assets — all connected to the same Supabase project as the
-          mobile application.
+          records, and run reports — all connected to the same Supabase project as the mobile
+          application.
         </p>
         <p style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.45)', marginTop: '0.75rem' }}>
           📅 {today}
@@ -75,15 +75,6 @@ export function OverviewPanel() {
           <p>
             Register a new institution with auto-filled district and taluka data from the
             Maharashtra pincode directory.
-          </p>
-        </div>
-
-        <div className="overview-tile card-elevated">
-          <div className="overview-tile-icon" aria-hidden>📦</div>
-          <h3>Storage</h3>
-          <p>
-            Inspect and manage files uploaded to Supabase storage buckets by institutes
-            and administrators.
           </p>
         </div>
 

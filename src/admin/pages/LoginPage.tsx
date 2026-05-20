@@ -102,7 +102,7 @@ export function LoginPage() {
           <ul className="login-feature-list login-feature-list--below">
             <li>
               <span className="login-feature-icon" aria-hidden>✔</span>
-              Institute &amp; admin setup for the mobile app · Directory · Reports · Storage (Supabase RLS)
+              Institute &amp; admin setup for the mobile app · Directory · Reports (Supabase RLS)
             </li>
           </ul>
 

@@ -6,7 +6,6 @@ import { LoginPage } from './pages/LoginPage'
 import { AddInstituteForm } from './components/AddInstituteForm'
 import { InstituteAdminsSection } from './components/InstituteAdminsSection'
 import { InstituteList } from './components/InstituteList'
-import { StorageSection } from './components/StorageSection'
 import { OverviewPanel } from './components/OverviewPanel'
 import { StudentsSection } from './components/StudentsSection'
 import { ReportsSection } from './components/ReportsSection'
@@ -71,19 +70,7 @@ function AuthenticatedApp() {
       {tab === 'overview' && <OverviewPanel />}
       {tab === 'admins'   && <InstituteAdminsSection embedded />}
       {tab === 'institutes' && (
-        <InstituteList
-          reloadToken={instituteReload}
-          embedded
-          onOpenStudents={(inst) => {
-            setStudentsJumpInstituteId(inst.id)
-            setTab('students')
-          }}
-          onOpenReports={(inst) => {
-            setReportsJumpInstituteId(inst.id)
-            setTab('reports')
-          }}
-          onAddInstitute={() => setTab('add')}
-        />
+        <InstituteList reloadToken={instituteReload} embedded onAddInstitute={() => setTab('add')} />
       )}
       {tab === 'add'      && <AddInstituteForm onCreated={() => setInstituteReload((n) => n + 1)} embedded />}
       {tab === 'students' && (
@@ -100,7 +87,6 @@ function AuthenticatedApp() {
           onJumpToInstituteHandled={handleReportsJumpHandled}
         />
       )}
-      {tab === 'storage'  && <StorageSection embedded />}
     </DashboardLayout>
   )
 }
