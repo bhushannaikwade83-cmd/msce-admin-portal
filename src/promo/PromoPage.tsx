@@ -8,6 +8,7 @@ import {
 } from './instituteGuide'
 import { ScreenshotWalkthrough } from './ScreenshotWalkthrough'
 import { PROMO_SITE_TITLE } from '../siteTitle'
+import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_TEL } from '../siteSupport'
 import './index.css'
 import './app-ui-theme.css'
 
@@ -143,12 +144,23 @@ export default function PromoPage() {
             </div>
             <span className="badge-official badge-official-3d">OFFICIAL</span>
           </div>
+          <div className="app-navbar-support" aria-label="Support contact">
+            <span className="app-navbar-support-label">Support</span>
+            <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+            <span className="app-navbar-support-sep" aria-hidden>
+              ·
+            </span>
+            <a href={`tel:${SUPPORT_PHONE_TEL}`}>{SUPPORT_PHONE}</a>
+          </div>
           <nav className="app-navbar-nav" aria-label="Site navigation">
             <a className="btn-3d btn-3d-ghost" href="#guide">
               Instructions
             </a>
             <a className="btn-3d btn-3d-ghost" href="#app-screens">
               Screenshots
+            </a>
+            <a className="btn-3d btn-3d-ghost" href="#support">
+              Support
             </a>
             <a className="btn-3d btn-3d-primary" href={apkUrl} download="MSCE-Attendance.apk">
               Download APK
@@ -176,6 +188,13 @@ export default function PromoPage() {
                 Read full instructions
               </a>
             </div>
+
+            <p className="hero-support app-info-banner">
+              <strong>Support &amp; queries:</strong>{' '}
+              <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+              {' · '}
+              <a href={`tel:${SUPPORT_PHONE_TEL}`}>{SUPPORT_PHONE}</a>
+            </p>
 
             <div className="stat-row">
               {highlights.map((h) => (
@@ -270,10 +289,39 @@ export default function PromoPage() {
             </a>
           </div>
         </section>
+
+        <section id="support" className="section">
+          <div className="support-card app-card card-3d">
+            <div>
+              <p className="section-chip">Support</p>
+              <h3>Need help?</h3>
+              <p>
+                For any support and queries regarding the MSCE Attendance app, contact us using the
+                details below.
+              </p>
+              <ul className="support-contact-list">
+                <li>
+                  <strong>Email:</strong>{' '}
+                  <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+                </li>
+                <li>
+                  <strong>Mobile:</strong>{' '}
+                  <a href={`tel:${SUPPORT_PHONE_TEL}`}>{SUPPORT_PHONE}</a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
       </main>
 
       <footer className="site-footer">
         <p>MSCE ATTENDANCE APP PORTAL — institute usage guide for registration, GPS, and attendance.</p>
+        <p className="site-footer-support">
+          Support:{' '}
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+          {' · '}
+          <a href={`tel:${SUPPORT_PHONE_TEL}`}>{SUPPORT_PHONE}</a>
+        </p>
       </footer>
       </div>
 
@@ -301,6 +349,10 @@ export default function PromoPage() {
         <a href={apkUrl} className="app-nav-item" download="MSCE-Attendance.apk">
           <span className="app-nav-icon">⬇</span>
           <span>APK</span>
+        </a>
+        <a href="#support" className="app-nav-item">
+          <span className="app-nav-icon">✉</span>
+          <span>Support</span>
         </a>
       </nav>
     </div>

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_TEL } from '../../siteSupport'
 
 export type DashboardTab =
   | 'overview'
@@ -105,7 +106,12 @@ export function DashboardLayout({ userEmail, activeTab, onTab, onSignOut, childr
             </span>
             &nbsp;© Maharashtra State Council of Examinations (MSCE)
           </span>
-          <span>Powered by Supabase</span>
+          <span className="gov-footer-support">
+            Support:{' '}
+            <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+            {' · '}
+            <a href={`tel:${SUPPORT_PHONE_TEL}`}>{SUPPORT_PHONE}</a>
+          </span>
         </footer>
       </main>
     </div>

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_TEL } from '../../siteSupport'
 import { useAuth } from '../hooks/useAuth'
 
 export function LoginPage() {
@@ -113,6 +114,12 @@ export function LoginPage() {
           <p className="login-foot login-foot-secondary">
             Your session is stored only in this browser tab. Opening the same link in another tab
             requires signing in again. After 30 minutes without activity you are signed out automatically.
+          </p>
+          <p className="login-foot login-foot-support">
+            App support &amp; queries:{' '}
+            <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+            {' · '}
+            <a href={`tel:${SUPPORT_PHONE_TEL}`}>{SUPPORT_PHONE}</a>
           </p>
         </div>
       </div>

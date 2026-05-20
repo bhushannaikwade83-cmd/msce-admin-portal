@@ -11,6 +11,11 @@ import { sortByInstituteId } from '../lib/instituteSort'
 import { fetchAllPaged } from '../lib/supabasePaged'
 import { getSupabase } from '../lib/supabase'
 import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
+import { parseDbJsonObject } from '../lib/parseDbJson'
+import {
+  collectSubjectNamesFromTeacherPayload,
+  flattenTeacherAttendanceRow,
+} from '../lib/teacherAttendancePayload'
 import { immediateImgSrc, resolvePhotoUrlString } from '../lib/photoUrl'
 import {
   attendanceReportRows,
@@ -92,7 +97,26 @@ function sortStudents(rows: Student[]): Student[] {
 }
 
 function hasFacePhoto(s: Student): boolean {
-  if (pick(s, 'face_photo_url', 'photo_url', 'registration_photo_path', 'photo_path')) return true
+  if (
+    pick(
+      s,
+      'face_photo_url',
+      'facePhotoUrl',
+      'photo_url',
+      'photoUrl',
+      'registration_photo_path',
+      'registration_photo_url',
+      'photo_path',
+      'photoPath',
+      'face_image_url',
+      'student_photo_url',
+      'profile_photo',
+      'avatar_url',
+      'image_url',
+      'thumbnail_url',
+    )
+  )
+    return true
   const emb = s.face_embedding
   if (Array.isArray(emb) && emb.length > 0) return true
   if (typeof emb === 'string' && emb.trim() !== '' && emb !== '[]') return true
@@ -194,6 +218,83 @@ function safeFilePart(s: string | null | undefined): string {
   return t || 'student'
 }
 
+function chunkIds(ids: string[], size: number): string[][] {
+  const out: string[][] = []
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size))
+  return out
+}
+
+/** Per-student merged entry/exit for one calendar day (`attendance_in_out`). */
+type DayInOutMerge = {
+  entryAt: string | null
+  exitAt: string | null
+  entryPhoto: string | null
+  exitPhoto: string | null
+}
+
+function rowTimeKeyForInOut(
+  dateYmd: string,
+  flat: AttendanceRecord,
+  raw: Record<string, unknown>,
+  kind: 'entry' | 'exit',
+): number | null {
+  const timeVal = kind === 'entry' ? flat.in_time : flat.out_time
+  if (timeVal) {
+    const s = String(timeVal).trim()
+    if (s.includes('T')) {
+      const n = Date.parse(s)
+      if (Number.isFinite(n)) return n
+    }
+    if (dateYmd && /^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
+      const pad = s.length >= 8 ? s.slice(0, 8) : s
+      const n = Date.parse(`${dateYmd}T${pad}`)
+      if (Number.isFinite(n)) return n
+    }
+  }
+  if (raw.created_at != null) {
+    const n = Date.parse(String(raw.created_at))
+    if (Number.isFinite(n)) return n
+  }
+  return null
+}
+
+/** Pick earliest entry and latest exit among rows for one student on `dateYmd`. */
+function mergeAttendanceInOutDayForStudent(dateYmd: string, rawRows: Record<string, unknown>[]): DayInOutMerge {
+  let entryBest: { k: number; at: string | null; photo: string | null } | null = null
+  let exitBest: { k: number; at: string | null; photo: string | null } | null = null
+
+  for (const raw of rawRows) {
+    const flat = flattenAttendanceInOutRow(raw) as AttendanceRecord
+    const type = String(raw.type ?? '').toLowerCase()
+
+    if (type === 'entry') {
+      const k = rowTimeKeyForInOut(dateYmd, flat, raw, 'entry')
+      if (k != null && (!entryBest || k < entryBest.k)) {
+        const at =
+          (flat.in_time != null && String(flat.in_time) !== '' ? String(flat.in_time) : null) ??
+          (raw.created_at != null ? String(raw.created_at) : null)
+        entryBest = { k, at, photo: flat.in_photo_url != null ? String(flat.in_photo_url) : null }
+      }
+    }
+    if (type === 'exit') {
+      const k = rowTimeKeyForInOut(dateYmd, flat, raw, 'exit')
+      if (k != null && (!exitBest || k > exitBest.k)) {
+        const at =
+          (flat.out_time != null && String(flat.out_time) !== '' ? String(flat.out_time) : null) ??
+          (raw.created_at != null ? String(raw.created_at) : null)
+        exitBest = { k, at, photo: flat.out_photo_url != null ? String(flat.out_photo_url) : null }
+      }
+    }
+  }
+
+  return {
+    entryAt: entryBest?.at ?? null,
+    exitAt: exitBest?.at ?? null,
+    entryPhoto: entryBest?.photo ?? null,
+    exitPhoto: exitBest?.photo ?? null,
+  }
+}
+
 /** Pick a display field from a row — tries multiple possible column names */
 function pick(row: Record<string, unknown>, ...keys: string[]): string | null {
   for (const k of keys) {
@@ -215,21 +316,38 @@ function studentRollIdentifiers(s: Student): string[] {
   return [...new Set(out)]
 }
 
-function flattenTeacherAttendanceRow(row: Record<string, unknown>): AttendanceRecord {
-  const p =
-    row.payload !== null && typeof row.payload === 'object'
-      ? (row.payload as Record<string, unknown>)
-      : {}
+/** Merge same-day teacher_attendance rows (one row often has both in/out; multiple rows = earliest in, latest out). */
+function mergeTeacherAttendanceDayForStudent(dateYmd: string, rawRows: Record<string, unknown>[]): DayInOutMerge {
+  let entryBest: { k: number; at: string | null; photo: string | null } | null = null
+  let exitBest: { k: number; at: string | null; photo: string | null } | null = null
+
+  for (const raw of rawRows) {
+    const flat = flattenTeacherAttendanceRow(raw)
+    const rowDate = flat.date != null ? String(flat.date).slice(0, 10) : null
+    if (rowDate !== dateYmd) continue
+
+    const ek = rowTimeKeyForInOut(dateYmd, flat, raw, 'entry')
+    if (ek != null && (!entryBest || ek < entryBest.k)) {
+      const at =
+        (flat.in_time != null && String(flat.in_time) !== '' ? String(flat.in_time) : null) ??
+        (raw.created_at != null ? String(raw.created_at) : null)
+      entryBest = { k: ek, at, photo: flat.in_photo_url != null ? String(flat.in_photo_url) : null }
+    }
+    const xk = rowTimeKeyForInOut(dateYmd, flat, raw, 'exit')
+    if (xk != null && (!exitBest || xk > exitBest.k)) {
+      const at =
+        (flat.out_time != null && String(flat.out_time) !== '' ? String(flat.out_time) : null) ??
+        (raw.created_at != null ? String(raw.created_at) : null)
+      exitBest = { k: xk, at, photo: flat.out_photo_url != null ? String(flat.out_photo_url) : null }
+    }
+  }
+
   return {
-    ...row,
-    id: String(row.id ?? ''),
-    date: (row.date ?? p.date ?? null) as string | null,
-    status: (row.status ?? p.status ?? null) as string | null,
-    in_time: (p.entryTime ?? p.timestamp ?? row.in_time ?? null) as string | null,
-    out_time: (p.exitTime ?? row.out_time ?? null) as string | null,
-    in_photo_url: (p.entryPhoto ?? p.photoUrl ?? row.in_photo_url ?? null) as string | null,
-    out_photo_url: (p.exitPhoto ?? row.out_photo_url ?? null) as string | null,
-  } as AttendanceRecord
+    entryAt: entryBest?.at ?? null,
+    exitAt: exitBest?.at ?? null,
+    entryPhoto: entryBest?.photo ?? null,
+    exitPhoto: exitBest?.photo ?? null,
+  }
 }
 
 function studentFolderLabel(s: Student): string {
@@ -429,7 +547,8 @@ function SchemaBanner({ cfg, onRetry }: { cfg: SchemaConfig; onRetry: () => void
       <div className="schema-banner schema-banner-ok">
         <span>✅</span>
         <span>
-          Schema detected — subjects: <code>{cfg.subjectTable}</code> · attendance: <code>{cfg.attendanceTable}</code>
+          Schema detected — subjects: <code>{cfg.subjectTable}</code> · attendance:{' '}
+          <code>{cfg.attendanceTables.join(', ')}</code>
         </span>
       </div>
     )
@@ -483,7 +602,15 @@ function PhotoLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
    PHOTO THUMBNAIL
 ══════════════════════════════════════════════════════════════ */
 
-function PhotoThumb({ url, label }: { url: string | null | undefined; label: string }) {
+function PhotoThumb({
+  url,
+  label,
+  compact = false,
+}: {
+  url: string | null | undefined
+  label: string
+  compact?: boolean
+}) {
   const [lb, setLb] = useState(false)
   const [err, setErr] = useState(false)
   const raw = url ? String(url) : null
@@ -519,6 +646,17 @@ function PhotoThumb({ url, label }: { url: string | null | undefined; label: str
   }, [url])
 
   if (!raw) {
+    if (compact) {
+      return (
+        <div
+          className="att-photo-slot att-photo-empty att-photo-slot--compact"
+          title={`No ${label} photo`}
+          aria-hidden
+        >
+          <span className="att-photo-dash">—</span>
+        </div>
+      )
+    }
     return (
       <div className="att-photo-slot att-photo-empty">
         <span className="att-photo-empty-icon">📷</span>
@@ -534,7 +672,7 @@ function PhotoThumb({ url, label }: { url: string | null | undefined; label: str
   return (
     <>
       <div
-        className={`att-photo-slot${showErr ? ' att-photo-error' : ''}`}
+        className={`att-photo-slot${showErr ? ' att-photo-error' : ''}${compact ? ' att-photo-slot--compact' : ''}`}
         onClick={() => !showErr && src && setLb(true)}
         role="button"
         tabIndex={0}
@@ -555,7 +693,7 @@ function PhotoThumb({ url, label }: { url: string | null | undefined; label: str
         ) : (
           <img src={src!} alt={`${label} photo`} className="att-photo-img" onError={() => setErr(true)} />
         )}
-        {!showErr && src && <div className="att-photo-overlay">🔍 View</div>}
+        {!showErr && src && !compact ? <div className="att-photo-overlay">🔍 View</div> : null}
       </div>
       {lb && src && <PhotoLightbox src={src} alt={`${label} photo`} onClose={() => setLb(false)} />}
     </>
@@ -605,7 +743,7 @@ function AttendanceView({
         if (instId) q = q.eq('institute_id', instId)
         const { data, error: qErr } = await q.order('date', { ascending: false })
         if (qErr) throw new Error(qErr.message + (qErr.details ? ` — ${qErr.details}` : ''))
-        setRecords((data ?? []).map((r) => flattenTeacherAttendanceRow(r as Record<string, unknown>)))
+        setRecords((data ?? []).map((r) => flattenTeacherAttendanceRow(r as Record<string, unknown>, subject)))
         return
       }
 
@@ -808,81 +946,112 @@ function SubjectFolders({
 
   useEffect(() => {
     async function load() {
-      setLoading(true); setError(null)
+      setLoading(true)
+      setError(null)
 
       const instId = pick(student, 'institute_id', 'school_id', 'org_id', 'instituteid')
+      let fromSubjectTable: Subject[] | null = null
 
       if (subjectTable) {
         try {
           const sb = getSupabase()
-          // Try filtering by institute_id; if no such column, fetch all
           let q = sb.from(subjectTable).select('*').order('name')
           if (instId) q = q.eq('institute_id', instId)
           const { data, error: qErr } = await q
 
           if (!qErr) {
-            setSubjects((data ?? []) as Subject[])
-            setLoading(false)
-            return
-          }
-          // If institute_id column doesn't exist, fetch without filter
-          if (qErr.message?.includes('does not exist') || (qErr as {code?:string}).code === '42703') {
+            fromSubjectTable = (data ?? []) as Subject[]
+          } else if (qErr.message?.includes('does not exist') || (qErr as { code?: string }).code === '42703') {
             const { data: d2 } = await sb.from(subjectTable).select('*').order('name')
-            setSubjects((d2 ?? []) as Subject[])
-            setLoading(false)
-            return
+            fromSubjectTable = (d2 ?? []) as Subject[]
+          } else {
+            throw new Error(qErr.message)
           }
-          throw new Error(qErr.message)
         } catch (e) {
           setError(e instanceof Error ? e.message : String(e))
+          setLoading(false)
+          return
         }
-      } else if (attTable) {
-        if (attTable === 'attendance_in_out') {
-          try {
-            const sb = getSupabase()
-            const { data, error: qErr } = await applyInstituteCodeFilter(
-              sb.from(attTable).select('additional').eq('student_id', student.id),
-              institute,
-            ).limit(2000)
-            if (qErr) throw new Error(qErr.message)
-            const names = new Set<string>()
-            for (const r of data ?? []) {
-              const add =
-                r.additional !== null && typeof r.additional === 'object'
-                  ? (r.additional as Record<string, unknown>)
-                  : {}
-              const sub = add.subject != null ? String(add.subject).trim() : ''
-              if (sub !== '') names.add(sub)
-            }
-            if (names.size === 0) {
-              setSubjects([{ id: '', name: 'Attendance', subject_code: null } as Subject])
-            } else {
-              setSubjects(
-                [...names].sort().map((n) => ({ id: n, name: n, subject_code: null }) as Subject),
-              )
-            }
-          } catch (e) {
-            setError(e instanceof Error ? e.message : String(e))
-          }
-        } else {
-          // No subject table found — derive subjects from distinct subject_id in attendance
-          try {
-            const sb = getSupabase()
-            const { data } = await sb
-              .from(attTable)
-              .select('subject_id')
-              .eq('student_id', student.id)
-            const unique = [...new Set((data ?? []).map((r: Record<string, unknown>) => r.subject_id).filter(Boolean))]
-            setSubjects(unique.map((id) => ({ id: String(id), name: `Subject ${id}`, subject_code: null }) as Subject))
-          } catch (e) {
-            setError(e instanceof Error ? e.message : String(e))
-          }
-        }
-      } else {
-        setError('No subjects or attendance table found in your database. Check table names in Supabase.')
       }
 
-      setLoading(false)
+      if (fromSubjectTable && fromSubjectTable.length > 0) {
+        setSubjects(fromSubjectTable)
+        setLoading(false)
+        return
+      }
+
+      if (!attTable) {
+        setSubjects([])
+        setError(
+          subjectTable
+            ? `No rows in "${subjectTable}" for this institute and no attendance table was detected.`
+            : 'No subjects or attendance table found in your database. Check table names in Supabase.',
+        )
+        setLoading(false)
+        return
+      }
+
+      try {
+        const sb = getSupabase()
+        if (attTable === 'attendance_in_out') {
+          const { data, error: qErr } = await applyInstituteCodeFilter(
+            sb.from(attTable).select('additional').eq('student_id', student.id),
+            institute,
+          ).limit(2000)
+          if (qErr) throw new Error(qErr.message)
+          const names = new Set<string>()
+          for (const r of data ?? []) {
+            const add = parseDbJsonObject((r as Record<string, unknown>).additional)
+            const sub = add.subject != null ? String(add.subject).trim() : ''
+            if (sub !== '') names.add(sub)
+          }
+          if (names.size === 0) {
+            setSubjects([{ id: '', name: 'Attendance', subject_code: null } as Subject])
+          } else {
+            setSubjects(
+              [...names].sort().map((n) => ({ id: n, name: n, subject_code: null }) as Subject),
+            )
+          }
+        } else if (attTable === 'teacher_attendance') {
+          const keys = studentRollIdentifiers(student)
+          if (keys.length === 0) throw new Error('Student has no roll / id for attendance lookup')
+          let q = sb.from(attTable).select('payload').in('student_id', keys).limit(2000)
+          if (instId) q = q.eq('institute_id', instId)
+          const { data, error: qErr } = await q
+          if (qErr) throw new Error(qErr.message)
+          const names = new Set<string>()
+          for (const r of data ?? []) {
+            const p = parseDbJsonObject((r as Record<string, unknown>).payload)
+            for (const n of collectSubjectNamesFromTeacherPayload(p)) names.add(n)
+          }
+          if (names.size === 0) {
+            setSubjects([{ id: '', name: 'Attendance', subject_code: null } as Subject])
+          } else {
+            setSubjects(
+              [...names].sort().map((n) => ({ id: n, name: n, subject_code: null }) as Subject),
+            )
+          }
+        } else {
+          const { data, error: qErr } = await sb
+            .from(attTable)
+            .select('subject_id')
+            .eq('student_id', student.id)
+          if (qErr) throw new Error(qErr.message)
+          const unique = [
+            ...new Set((data ?? []).map((r: Record<string, unknown>) => r.subject_id).filter(Boolean)),
+          ]
+          setSubjects(
+            unique.map(
+              (id) => ({ id: String(id), name: `Subject ${id}`, subject_code: null }) as Subject,
+            ),
+          )
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+        setSubjects([])
+      } finally {
+        setLoading(false)
+      }
     }
     void load()
   }, [student, subjectTable, attTable, institute])
@@ -1010,11 +1179,13 @@ function SubjectFolders({
 function StudentsList({
   institute,
   reloadToken = 0,
+  attendanceTables,
   onBack,
   onSelectStudent,
 }: {
   institute: InstituteRow
   reloadToken?: number
+  attendanceTables: string[]
   onBack: () => void
   onSelectStudent: (s: Student) => void
 }) {
@@ -1026,6 +1197,14 @@ function StudentsList({
   const [tablePage, setTablePage] = useState(0)
   const [tablePageSize, setTablePageSize] = useState(TABLE_PAGE_SIZE_DEFAULT)
   const searchRef = useRef<HTMLInputElement>(null)
+  const [attDate, setAttDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dayAtt, setDayAtt] = useState<Record<string, DayInOutMerge>>({})
+  const [attLoading, setAttLoading] = useState(false)
+  const [attError, setAttError] = useState<string | null>(null)
+
+  const showDayAttendance =
+    attendanceTables.includes('attendance_in_out') || attendanceTables.includes('teacher_attendance')
+  const primaryAttTable = attendanceTables[0] ?? null
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1097,6 +1276,95 @@ function StudentsList({
     }
   }, [tablePage, tablePageCount])
 
+  const loadDayAttendance = useCallback(async () => {
+    setAttError(null)
+    if (!showDayAttendance || students.length === 0) {
+      setDayAtt({})
+      setAttLoading(false)
+      return
+    }
+    setAttLoading(true)
+    try {
+      const sb = getSupabase()
+      const ids = students.map((s) => s.id)
+      const prefersInOut = attendanceTables.includes('attendance_in_out')
+
+      if (prefersInOut) {
+        const chunks = chunkIds(ids, 100)
+        const byStudent: Record<string, Record<string, unknown>[]> = {}
+
+        for (const ch of chunks) {
+          if (ch.length === 0) continue
+          const q = applyInstituteCodeFilter(
+            sb.from('attendance_in_out').select('*').eq('attendance_date', attDate).in('student_id', ch),
+            institute,
+          )
+          const { data, error: qErr } = await q
+          if (qErr) throw qErr
+          for (const row of data ?? []) {
+            const sid = row.student_id != null ? String(row.student_id) : ''
+            if (!sid) continue
+            if (!byStudent[sid]) byStudent[sid] = []
+            byStudent[sid].push(row as Record<string, unknown>)
+          }
+        }
+
+        const next: Record<string, DayInOutMerge> = {}
+        for (const id of ids) {
+          next[id] = mergeAttendanceInOutDayForStudent(attDate, byStudent[id] ?? [])
+        }
+        setDayAtt(next)
+      } else if (attendanceTables.includes('teacher_attendance')) {
+        const rollToStudentId = new Map<string, string>()
+        for (const s of students) {
+          for (const k of studentRollIdentifiers(s)) {
+            rollToStudentId.set(k, s.id)
+          }
+        }
+        const chunks: Student[][] = []
+        for (let i = 0; i < students.length; i += 40) chunks.push(students.slice(i, i + 40))
+        const byStudent: Record<string, Record<string, unknown>[]> = {}
+        for (const id of ids) byStudent[id] = []
+
+        for (const ch of chunks) {
+          if (ch.length === 0) continue
+          const keys = [...new Set(ch.flatMap((s) => studentRollIdentifiers(s)))]
+          let q = sb
+            .from('teacher_attendance')
+            .select('*')
+            .eq('date', attDate)
+            .in('student_id', keys)
+          q = q.eq('institute_id', institute.id)
+          const { data, error: qErr } = await q
+          if (qErr) throw qErr
+          for (const row of data ?? []) {
+            const roll = row.student_id != null ? String(row.student_id) : ''
+            const stuId = rollToStudentId.get(roll)
+            if (!stuId) continue
+            byStudent[stuId].push(row as Record<string, unknown>)
+          }
+        }
+
+        const next: Record<string, DayInOutMerge> = {}
+        for (const id of ids) {
+          next[id] = mergeTeacherAttendanceDayForStudent(attDate, byStudent[id] ?? [])
+        }
+        setDayAtt(next)
+      } else {
+        setDayAtt({})
+      }
+    } catch (e) {
+      setDayAtt({})
+      setAttError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAttLoading(false)
+    }
+  }, [showDayAttendance, institute, students, attDate, attendanceTables])
+
+  useEffect(() => {
+    void loadDayAttendance()
+  }, [loadDayAttendance])
+
   return (
     <div className="students-panel">
       <div className="drill-breadcrumb">
@@ -1144,7 +1412,7 @@ function StudentsList({
 
       <AddStudentPanel institute={institute} onAdded={() => setReloadTick((t) => t + 1)} />
 
-      <div className="search-bar-row institutes-search-row">
+      <div className="search-bar-row institutes-search-row students-att-toolbar">
         <div className="search-bar">
           <span className="search-icon">🔍</span>
           <input
@@ -1165,6 +1433,17 @@ function StudentsList({
             </button>
           ) : null}
         </div>
+        <label className="students-att-date-field">
+          <span className="muted small">Day attendance</span>
+          <input
+            type="date"
+            value={attDate}
+            onChange={(e) => setAttDate(e.target.value)}
+            disabled={loading}
+            title="Load entry / exit times and photos for this date (attendance_in_out or teacher_attendance)"
+            aria-label="Attendance date for entry and exit columns"
+          />
+        </label>
         <span className="search-count">
           {loading ? '…' : `${filtered.length} of ${students.length} shown`}
         </span>
@@ -1187,6 +1466,15 @@ function StudentsList({
         </button>
       </div>
 
+      {attError ? <p className="error">{attError}</p> : null}
+      {!showDayAttendance && !loading && students.length > 0 ? (
+        <p className="muted small" style={{ margin: '0 0 0.5rem' }}>
+          Entry / exit columns need <code>attendance_in_out</code> or <code>teacher_attendance</code> in the database.
+          Detected: {primaryAttTable ? <code>{attendanceTables.join(', ')}</code> : <span>none</span>}. Open a student
+          for subject-wise history when subjects exist.
+        </p>
+      ) : null}
+
       {error ? <p className="error">{error}</p> : null}
       {loading ? (
         <div className="loading-row">
@@ -1203,6 +1491,8 @@ function StudentsList({
               <th>Name</th>
               <th>Roll</th>
               <th>Class</th>
+              <th title="Earliest entry on selected date (attendance_in_out)">Entry</th>
+              <th title="Latest exit on selected date">Exit</th>
               <th>Face</th>
               <th>Status</th>
               <th>Actions</th>
@@ -1211,13 +1501,13 @@ function StudentsList({
           <tbody>
             {students.length === 0 && !loading ? (
               <tr>
-                <td colSpan={7} className="muted">
+                <td colSpan={9} className="muted">
                   No students registered for this institute yet.
                 </td>
               </tr>
             ) : filtered.length === 0 && !loading ? (
               <tr>
-                <td colSpan={7} className="muted">
+                <td colSpan={9} className="muted">
                   No students match “{search}”. Clear the search to see all {students.length} row(s).
                 </td>
               </tr>
@@ -1230,6 +1520,7 @@ function StudentsList({
                 const active = s.is_active !== false
                 const faceOk = hasFacePhoto(s)
                 const classLabel = cls ? `${cls}${sec ? ` — ${sec}` : ''}` : studentFolderLabel(s)
+                const rowAtt = dayAtt[s.id]
 
                 return (
                   <tr key={s.id} className={!active ? 'student-row-inactive' : undefined}>
@@ -1247,6 +1538,26 @@ function StudentsList({
                     </td>
                     <td>{roll}</td>
                     <td>{classLabel}</td>
+                    <td className="students-day-att-cell">
+                      {showDayAttendance ? (
+                        <>
+                          <div className="students-att-time">{attLoading ? '…' : fmtTime(rowAtt?.entryAt)}</div>
+                          <PhotoThumb url={rowAtt?.entryPhoto} label="In" compact />
+                        </>
+                      ) : (
+                        <span className="muted small">—</span>
+                      )}
+                    </td>
+                    <td className="students-day-att-cell">
+                      {showDayAttendance ? (
+                        <>
+                          <div className="students-att-time">{attLoading ? '…' : fmtTime(rowAtt?.exitAt)}</div>
+                          <PhotoThumb url={rowAtt?.exitPhoto} label="Out" compact />
+                        </>
+                      ) : (
+                        <span className="muted small">—</span>
+                      )}
+                    </td>
                     <td>
                       {faceOk ? (
                         <span className="badge badge-present">Registered</span>
@@ -1549,7 +1860,12 @@ export function StudentsSection({
   const [institute, setInstitute] = useState<InstituteRow | null>(null)
   const [student, setStudent]     = useState<Student | null>(null)
   const [subject, setSubject]     = useState<Subject | null>(null)
-  const [schema, setSchema]       = useState<SchemaConfig>({ subjectTable: null, attendanceTable: null, discovered: false })
+  const [schema, setSchema]       = useState<SchemaConfig>({
+    subjectTable: null,
+    attendanceTable: null,
+    attendanceTables: [],
+    discovered: false,
+  })
   const [schemaLoading, setSchemaLoading] = useState(true)
   const [reloadToken, setReloadToken] = useState(0)
 
@@ -1679,6 +1995,7 @@ export function StudentsSection({
           <StudentsList
             institute={institute}
             reloadToken={reloadToken}
+            attendanceTables={schema.attendanceTables}
             onBack={() => { setLevel('institutes'); setInstitute(null) }}
             onSelectStudent={(s) => { setStudent(s); setSubject(null); setLevel('subjects') }}
           />

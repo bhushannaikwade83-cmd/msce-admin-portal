@@ -279,6 +279,54 @@ html:has(.app-ui) #root {
     0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
+.app-navbar-support {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 0.72rem;
+  opacity: 0.95;
+  flex: 0 1 auto;
+  max-width: 340px;
+}
+
+.app-navbar-support-label {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  opacity: 0.85;
+}
+
+.app-navbar-support a {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app-navbar-support a:hover {
+  opacity: 0.9;
+}
+
+.app-navbar-support-sep {
+  opacity: 0.6;
+}
+
+.app-ui .hero-support {
+  margin: 0 0 16px;
+  font-size: 0.88rem;
+}
+
+.app-ui .hero-support a {
+  color: var(--blue);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.app-ui .hero-support a:hover {
+  text-decoration: underline;
+}
+
 .app-navbar-nav {
   display: flex;
   flex-wrap: nowrap;
@@ -452,7 +500,9 @@ html:has(.app-ui) #root {
 .app-ui .section-lead,
 .app-ui .photo-rules-note,
 .app-ui .stat-card span,
-.app-ui .phone-caption {
+.app-ui .phone-caption,
+.app-ui .download-card p,
+.app-ui .support-card p {
   color: var(--text-muted) !important;
 }
 
@@ -624,6 +674,22 @@ html:has(.app-ui) #root {
   color: var(--blue-dark);
 }
 
+.app-ui .support-card h3 {
+  color: var(--blue-dark);
+}
+
+.app-ui .support-contact-list li {
+  color: var(--text);
+}
+
+.app-ui .support-contact-list strong {
+  color: var(--blue-dark);
+}
+
+.app-ui .support-contact-list a {
+  color: var(--blue);
+}
+
 .app-ui .site-footer {
   width: 100vw;
   max-width: 100vw;
@@ -640,6 +706,19 @@ html:has(.app-ui) #root {
 .app-ui .site-footer p {
   margin: 0;
   max-width: none;
+}
+
+.app-ui .site-footer-support {
+  margin-top: 10px !important;
+}
+
+.app-ui .site-footer-support a {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+.app-ui .site-footer-support a:hover {
+  text-decoration: underline;
 }
 
 /* Bottom nav — full width, 3D icons */
@@ -730,6 +809,10 @@ html:has(.app-ui) #root {
 }
 
 @media (max-width: 1100px) {
+  .app-navbar-support {
+    display: none;
+  }
+
   .app-navbar-inner {
     flex-wrap: wrap;
     min-height: auto;

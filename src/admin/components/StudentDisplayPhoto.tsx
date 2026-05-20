@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { immediateImgSrc, resolveStudentPhotoUrl } from '../lib/photoUrl'
+import { immediateImgSrc, resolveStudentPhotoUrl, studentPhotoDepsKey } from '../lib/photoUrl'
 
 type Props = {
   student: Record<string, unknown>
@@ -7,33 +7,23 @@ type Props = {
   size: 'sm' | 'lg'
 }
 
-function depKey(student: Record<string, unknown>): string {
-  return [
-    student.id,
-    student.face_photo_url,
-    student.photo_url,
-    student.registration_photo_path,
-    student.photo_path,
-    student.profile_photo,
-    student.avatar_url,
-    student.image_url,
-  ]
-    .map((v) => (v == null ? '' : String(v)))
-    .join('|')
-}
+const IMMEDIATE_KEYS = [
+  'face_photo_url',
+  'facePhotoUrl',
+  'photo_url',
+  'photoUrl',
+  'registration_photo_url',
+  'profile_photo',
+  'avatar_url',
+  'image_url',
+  'face_image_url',
+  'student_photo_url',
+] as const
 
 export function StudentDisplayPhoto({ student, displayName, size }: Props) {
   const row = student as Record<string, unknown>
   const [src, setSrc] = useState<string | null>(() => {
-    const keys = [
-      'face_photo_url',
-      'photo_url',
-      'photoUrl',
-      'profile_photo',
-      'avatar_url',
-      'image_url',
-    ] as const
-    for (const k of keys) {
+    for (const k of IMMEDIATE_KEYS) {
       const v = row[k]
       if (typeof v === 'string') {
         const im = immediateImgSrc(v)
@@ -43,7 +33,7 @@ export function StudentDisplayPhoto({ student, displayName, size }: Props) {
     return null
   })
 
-  const photoDeps = depKey(student)
+  const photoDeps = studentPhotoDepsKey(student)
 
   useEffect(() => {
     let cancelled = false

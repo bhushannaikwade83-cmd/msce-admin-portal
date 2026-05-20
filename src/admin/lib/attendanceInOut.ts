@@ -1,6 +1,7 @@
 /**
  * Helpers for `attendance_in_out` (flat entry/exit rows: institute_code, attendance_date, additional JSON).
  */
+import { parseDbJsonObject } from './parseDbJson'
 
 export type InstituteCodeSource = {
   id: string
@@ -18,10 +19,7 @@ export function applyInstituteCodeFilter(q: any, inst: InstituteCodeSource): any
 }
 
 export function flattenAttendanceInOutRow(row: Record<string, unknown>): Record<string, unknown> {
-  const add =
-    row.additional !== null && typeof row.additional === 'object'
-      ? (row.additional as Record<string, unknown>)
-      : {}
+  const add = parseDbJsonObject(row.additional)
   const type = String(row.type ?? '')
   const dateVal = row.attendance_date ?? row.date
   const dateStr = dateVal != null ? String(dateVal).slice(0, 10) : null
@@ -38,15 +36,20 @@ export function flattenAttendanceInOutRow(row: Record<string, unknown>): Record<
   if (type === 'entry' && !inTime && row.created_at != null) inTime = String(row.created_at)
   if (type === 'exit' && !outTime && row.created_at != null) outTime = String(row.created_at)
 
-  const photo = row.photo_url != null ? String(row.photo_url) : ''
+  const photoPrimary =
+    row.photo_url != null && String(row.photo_url).trim() !== ''
+      ? String(row.photo_url).trim()
+      : row.photo_path != null && String(row.photo_path).trim() !== ''
+        ? String(row.photo_path).trim()
+        : ''
   const inPhoto =
     type === 'entry'
-      ? photo || (add.entryPhoto != null ? String(add.entryPhoto) : '') || null
-      : (add.entryPhoto != null ? String(add.entryPhoto) : null)
+      ? photoPrimary || (add.entryPhoto != null ? String(add.entryPhoto) : '') || null
+      : add.entryPhoto != null ? String(add.entryPhoto) : null
   const outPhoto =
     type === 'exit'
-      ? photo || (add.exitPhoto != null ? String(add.exitPhoto) : '') || null
-      : (add.exitPhoto != null ? String(add.exitPhoto) : null)
+      ? photoPrimary || (add.exitPhoto != null ? String(add.exitPhoto) : '') || null
+      : add.exitPhoto != null ? String(add.exitPhoto) : null
 
   const subj = add.subject != null ? String(add.subject) : ''
 

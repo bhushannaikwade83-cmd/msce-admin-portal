@@ -8,6 +8,7 @@ import { getSupabase } from '../lib/supabase'
 import { fetchAllPaged } from '../lib/supabasePaged'
 import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
 import { discoverSchema, type SchemaConfig } from '../lib/schemaDiscovery'
+import { flattenTeacherAttendanceRow } from '../lib/teacherAttendancePayload'
 import type { InstituteRow } from './InstituteList'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
 
@@ -116,23 +117,6 @@ function studentRollIdentifiers(s: Student): string[] {
   return [...new Set(out)]
 }
 
-function flattenTeacherAttendanceRow(row: Record<string, unknown>): AttendanceRecord {
-  const p =
-    row.payload !== null && typeof row.payload === 'object'
-      ? (row.payload as Record<string, unknown>)
-      : {}
-  return {
-    ...row,
-    id: String(row.id ?? ''),
-    date: (row.date ?? p.date ?? null) as string | null,
-    status: (row.status ?? p.status ?? null) as string | null,
-    in_time: (p.entryTime ?? p.timestamp ?? row.in_time ?? null) as string | null,
-    out_time: (p.exitTime ?? row.out_time ?? null) as string | null,
-    in_photo_url: (p.entryPhoto ?? p.photoUrl ?? row.in_photo_url ?? null) as string | null,
-    out_photo_url: (p.exitPhoto ?? row.out_photo_url ?? null) as string | null,
-  } as AttendanceRecord
-}
-
 function fmtTime(val: string | null | undefined) {
   if (!val) return '—'
   try {
@@ -193,6 +177,7 @@ export function ReportsSection({
   const [schema, setSchema] = useState<SchemaConfig>({
     subjectTable: null,
     attendanceTable: null,
+    attendanceTables: [],
     discovered: false,
   })
   const [schemaLoading, setSchemaLoading] = useState(true)

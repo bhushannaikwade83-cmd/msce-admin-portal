@@ -47,12 +47,33 @@ async function supabaseSignedUrl(path: string): Promise<string | null> {
   if (!bucket) return null
   try {
     const sb = getSupabase()
-    const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, 3600)
+    const clean = path.trim().replace(/^\/+/, '')
+    const { data, error } = await sb.storage.from(bucket).createSignedUrl(clean, 3600)
     if (error || !data?.signedUrl) return null
     return data.signedUrl
   } catch {
     return null
   }
+}
+
+/** When the bucket/object is public, signed URL may be unnecessary — try after sign fails. */
+function supabasePublicUrl(path: string): string | null {
+  const bucket = storageBucketName()
+  if (!bucket) return null
+  try {
+    const sb = getSupabase()
+    const clean = path.trim().replace(/^\/+/, '')
+    const { data } = sb.storage.from(bucket).getPublicUrl(clean)
+    return data?.publicUrl ?? null
+  } catch {
+    return null
+  }
+}
+
+async function supabaseSignedOrPublicUrl(path: string): Promise<string | null> {
+  const signed = await supabaseSignedUrl(path)
+  if (signed) return signed
+  return supabasePublicUrl(path)
 }
 
 async function requestB2SignedUrl(objectPath: string): Promise<string | null> {
@@ -96,24 +117,105 @@ export async function resolvePhotoUrlString(raw: string | null | undefined): Pro
     }
     return null
   }
-  const fromSupa = await supabaseSignedUrl(s)
+  const fromSupa = await supabaseSignedOrPublicUrl(s)
   if (fromSupa) return fromSupa
   return requestB2SignedUrl(s)
+}
+
+/** Any column on `students` that looks like a photo (names differ between Flutter migrations). */
+function pickPhotoLikeFromRow(row: Record<string, unknown>): string | null {
+  const orderedKeys = [
+    'face_photo_url',
+    'facePhotoUrl',
+    'photo_url',
+    'photoUrl',
+    'registration_photo_url',
+    'registrationPhotoUrl',
+    'student_photo_url',
+    'registered_photo_url',
+    'profile_photo',
+    'avatar_url',
+    'image_url',
+    'face_image_url',
+    'registration_photo_path',
+    'photo_path',
+    'photoPath',
+    'image',
+    'thumbnail_url',
+    'profile_image',
+  ] as const
+  const fromOrdered = pickStr(row, ...orderedKeys)
+  if (fromOrdered) return fromOrdered
+
+  for (const [k, v] of Object.entries(row)) {
+    if (typeof v !== 'string') continue
+    const s = v.trim()
+    if (s.length < 4) continue
+    if (!/(photo|face|image|avatar|portrait|picture|registration|thumbnail)/i.test(k)) continue
+    if (/^https?:\/\//i.test(s)) return s
+    if (/\.(jpe?g|png|webp|gif)(\?|$)/i.test(s)) return s
+    if (/^[\w.-]+(?:\/[\w.-]+)+$/i.test(s)) return s
+  }
+  return null
+}
+
+function pickNestedPhoto(row: Record<string, unknown>): string | null {
+  for (const nestKey of ['metadata', 'meta', 'extra', 'profile', 'additional']) {
+    const n = row[nestKey]
+    if (n != null && typeof n === 'object' && !Array.isArray(n)) {
+      const sub = pickPhotoLikeFromRow(n as Record<string, unknown>)
+      if (sub) return sub
+      const deep = pickStr(
+        n as Record<string, unknown>,
+        'face_photo_url',
+        'photo_url',
+        'photoUrl',
+        'registration_photo_path',
+        'image_url',
+      )
+      if (deep) return deep
+    }
+  }
+  return null
 }
 
 /**
  * Student row: prefer face_photo_url, fallback photo_url; use registration_photo_path for B2 sign
  * when the URL column is missing or is an unsigned B2 link.
+ * Also handles HTTP URLs wrongly stored in *path* columns and public Supabase buckets.
  */
 export async function resolveStudentPhotoUrl(row: Record<string, unknown>): Promise<string | null> {
-  const face = pickStr(row, 'face_photo_url', 'photo_url', 'photoUrl', 'profile_photo', 'avatar_url', 'image_url')
-  const regPath = pickStr(row, 'registration_photo_path', 'photo_path')
+  const face = pickStr(
+    row,
+    'face_photo_url',
+    'facePhotoUrl',
+    'photo_url',
+    'photoUrl',
+    'profile_photo',
+    'avatar_url',
+    'image_url',
+    'face_image_url',
+    'student_photo_url',
+    'registration_photo_url',
+  )
+  const regPath = pickStr(
+    row,
+    'registration_photo_path',
+    'registration_photo_url',
+    'photo_path',
+    'photoPath',
+  )
 
   if (regPath && !isHttpUrl(regPath)) {
     const b2 = await requestB2SignedUrl(regPath)
     if (b2) return b2
-    const su = await supabaseSignedUrl(regPath)
+    const su = await supabaseSignedOrPublicUrl(regPath)
     if (su) return su
+  }
+
+  if (regPath && isHttpUrl(regPath)) {
+    const via = await resolvePhotoUrlString(regPath)
+    if (via) return via
   }
 
   if (face && isHttpUrl(face)) {
@@ -132,8 +234,41 @@ export async function resolveStudentPhotoUrl(row: Record<string, unknown>): Prom
   }
 
   if (face && !isHttpUrl(face)) {
-    return resolvePhotoUrlString(face)
+    const r = await resolvePhotoUrlString(face)
+    if (r) return r
+  }
+
+  const nested = pickNestedPhoto(row)
+  if (nested) {
+    const r = await resolvePhotoUrlString(nested)
+    if (r) return r
+  }
+
+  const fuzzy = pickPhotoLikeFromRow(row)
+  if (fuzzy && fuzzy !== face && fuzzy !== regPath) {
+    return resolvePhotoUrlString(fuzzy)
   }
 
   return null
+}
+
+/** Stable fingerprint for React deps — any photo-like column change should reload the image. */
+export function studentPhotoDepsKey(row: Record<string, unknown>): string {
+  const parts: string[] = []
+  for (const [k, v] of Object.entries(row)) {
+    if (v == null || v === '') continue
+    if (!/(photo|face|image|avatar|portrait|picture|registration|thumbnail|metadata|meta|profile)/i.test(k))
+      continue
+    if (typeof v === 'object') {
+      try {
+        parts.push(`${k}:${JSON.stringify(v)}`)
+      } catch {
+        parts.push(`${k}:<obj>`)
+      }
+    } else {
+      parts.push(`${k}:${String(v).slice(0, 500)}`)
+    }
+  }
+  parts.sort()
+  return parts.join('|')
 }
