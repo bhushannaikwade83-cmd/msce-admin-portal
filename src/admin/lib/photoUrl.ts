@@ -1,6 +1,7 @@
 /**
  * Resolve student / attendance photo fields to a browser-usable URL.
- * Matches Flutter: B2 private files need ?Authorization=…; Supabase paths use createSignedUrl.
+ * Matches Flutter MSCE app: B2 objects get fresh temp URLs via Supabase `b2-storage-proxy` (`download_auth`);
+ * Supabase storage paths use createSignedUrl; dev may fall back to Vite `/api/b2-sign-photo`.
  */
 import { getSupabase, storageBucketName } from './supabase'
 
@@ -76,7 +77,33 @@ async function supabaseSignedOrPublicUrl(path: string): Promise<string | null> {
   return supabasePublicUrl(path)
 }
 
+/** Same as Flutter `B2BStorageService.getPhotoUrl` via `b2-storage-proxy` + `download_auth`. */
+async function requestB2SignedUrlViaEdge(objectPath: string): Promise<string | null> {
+  const clean = objectPath.trim().replace(/^\/+/, '')
+  if (!clean) return null
+  try {
+    const sb = getSupabase()
+    const { data, error } = await sb.functions.invoke('b2-storage-proxy', {
+      body: { action: 'download_auth', objectPath: clean, validSeconds: 3600 },
+    })
+    if (error) return null
+    const d = (data ?? {}) as Record<string, unknown>
+    if (d.success === false) return null
+    const authToken = str(d.authorizationToken)
+    const downloadUrl = str(d.downloadUrl)
+    const bucketName = str(d.bucketName)
+    if (!authToken || !downloadUrl || !bucketName) return null
+    const enc = encodeURIComponent(clean)
+    return `${downloadUrl}/file/${bucketName}/${enc}?Authorization=${authToken}`
+  } catch {
+    return null
+  }
+}
+
 async function requestB2SignedUrl(objectPath: string): Promise<string | null> {
+  const viaEdge = await requestB2SignedUrlViaEdge(objectPath)
+  if (viaEdge) return viaEdge
+
   const api = typeof __EDUSETU_B2_SIGN_API__ === 'string' ? __EDUSETU_B2_SIGN_API__.trim() : ''
   if (!api && !__EDUSETU_B2_SIGN_ENABLED__) return null
   const endpoint = api || '/api/b2-sign-photo'
@@ -95,6 +122,114 @@ async function requestB2SignedUrl(objectPath: string): Promise<string | null> {
   }
 }
 
+/** Flutter `StorageService.getPhotoUrl` — fresh B2 temp URL with one retry. */
+export async function getPhotoUrl(objectPath: string): Promise<string | null> {
+  const clean = objectPath.trim().replace(/^\/+/, '')
+  if (!clean) return null
+  const first = await requestB2SignedUrl(clean)
+  if (first) return first
+  await new Promise((r) => setTimeout(r, 500))
+  return requestB2SignedUrl(clean)
+}
+
+/** Flutter `StorageService.b2ObjectPathFromPhotoUrl`. */
+export function b2ObjectPathFromPhotoUrl(url: string): string | null {
+  return b2ObjectPathFromUrl(url)
+}
+
+/** Flutter `StorageService.ensureSignedUrl`. */
+export async function ensureSignedUrl(url: string): Promise<string> {
+  const u = url.trim()
+  if (!u) return u
+  const b2Path = b2ObjectPathFromUrl(u)
+  if (b2Path) {
+    const signed = await getPhotoUrl(b2Path)
+    if (signed) return signed
+  }
+  const fast = immediateImgSrc(u)
+  if (fast) return fast
+  return u
+}
+
+/**
+ * Flutter `StorageService.getTemporaryPhotoUrl` — priority: storagePath, then photoUrl
+ * (raw path, B2 URL, or other HTTP).
+ */
+export async function getTemporaryPhotoUrl(opts: {
+  photoUrl?: string | null
+  storagePath?: string | null
+}): Promise<string | null> {
+  const storagePath = str(opts.storagePath)
+  const photoUrl = str(opts.photoUrl)
+
+  if (storagePath) {
+    const fromPath = await getPhotoUrl(storagePath)
+    if (fromPath) return fromPath
+    const su = await supabaseSignedOrPublicUrl(storagePath)
+    if (su) return su
+  }
+
+  if (!photoUrl) return null
+
+  if (!isHttpUrl(photoUrl)) {
+    const fromPath = await getPhotoUrl(photoUrl)
+    if (fromPath) return fromPath
+    return supabaseSignedOrPublicUrl(photoUrl)
+  }
+
+  const fast = immediateImgSrc(photoUrl)
+  if (fast) return fast
+
+  const b2Path = b2ObjectPathFromUrl(photoUrl)
+  if (b2Path) {
+    const signed = await getPhotoUrl(b2Path)
+    if (signed) return signed
+    return null
+  }
+
+  return ensureSignedUrl(photoUrl)
+}
+
+/** Map a `students` row to Flutter SecureNetworkImage inputs. */
+export function studentPhotoSources(row: Record<string, unknown>): {
+  photoUrl: string | null
+  storagePath: string | null
+  version: string | null
+  thumbnail: string | null
+} {
+  const photoUrl = pickStr(
+    row,
+    'face_photo_url',
+    'facePhotoUrl',
+    'photo_url',
+    'photoUrl',
+    'profile_photo',
+    'avatar_url',
+    'image_url',
+    'face_image_url',
+    'student_photo_url',
+    'registration_photo_url',
+  )
+  let storagePath = pickStr(
+    row,
+    'registration_photo_path',
+    'photo_path',
+    'photoPath',
+  )
+  if (storagePath && isHttpUrl(storagePath)) {
+    const extracted = b2ObjectPathFromUrl(storagePath)
+    storagePath = extracted
+  }
+  const version = pickStr(row, 'photo_version', 'photoVersion')
+  const thumbRaw = row.photo_thumbnail ?? row.photoThumbnail
+  let thumbnail: string | null = null
+  if (thumbRaw != null) {
+    const s = String(thumbRaw).trim()
+    if (s) thumbnail = s.startsWith('data:') ? s : `data:image/jpeg;base64,${s}`
+  }
+  return { photoUrl, storagePath, version, thumbnail }
+}
+
 /** Non-B2 HTTP URLs that work as img src without signing. */
 export function immediateImgSrc(raw: string | null | undefined): string | null {
   const s = str(raw)
@@ -103,23 +238,15 @@ export function immediateImgSrc(raw: string | null | undefined): string | null {
   return s
 }
 
-/** Resolve a single URL or storage path (same as inline attendance photo strings). */
+/** Resolve a single URL or storage path (attendance in/out photos, etc.). */
 export async function resolvePhotoUrlString(raw: string | null | undefined): Promise<string | null> {
   const s = str(raw)
   if (!s) return null
-  const fast = immediateImgSrc(s)
-  if (fast) return fast
-  if (isHttpUrl(s) && /backblazeb2\.com/i.test(s)) {
-    const path = b2ObjectPathFromUrl(s)
-    if (path) {
-      const signed = await requestB2SignedUrl(path)
-      if (signed) return signed
-    }
-    return null
+  if (!isHttpUrl(s)) {
+    return getTemporaryPhotoUrl({ storagePath: s })
   }
-  const fromSupa = await supabaseSignedOrPublicUrl(s)
-  if (fromSupa) return fromSupa
-  return requestB2SignedUrl(s)
+  const path = /backblazeb2\.com/i.test(s) ? b2ObjectPathFromUrl(s) : null
+  return getTemporaryPhotoUrl({ photoUrl: s, storagePath: path })
 }
 
 /** Any column on `students` that looks like a photo (names differ between Flutter migrations). */
@@ -179,75 +306,17 @@ function pickNestedPhoto(row: Record<string, unknown>): string | null {
   return null
 }
 
-/**
- * Student row: prefer face_photo_url, fallback photo_url; use registration_photo_path for B2 sign
- * when the URL column is missing or is an unsigned B2 link.
- * Also handles HTTP URLs wrongly stored in *path* columns and public Supabase buckets.
- */
+/** Student row — same resolution order as Flutter `getTemporaryPhotoUrl` + list fallbacks. */
 export async function resolveStudentPhotoUrl(row: Record<string, unknown>): Promise<string | null> {
-  const face = pickStr(
-    row,
-    'face_photo_url',
-    'facePhotoUrl',
-    'photo_url',
-    'photoUrl',
-    'profile_photo',
-    'avatar_url',
-    'image_url',
-    'face_image_url',
-    'student_photo_url',
-    'registration_photo_url',
-  )
-  const regPath = pickStr(
-    row,
-    'registration_photo_path',
-    'registration_photo_url',
-    'photo_path',
-    'photoPath',
-  )
-
-  if (regPath && !isHttpUrl(regPath)) {
-    const b2 = await requestB2SignedUrl(regPath)
-    if (b2) return b2
-    const su = await supabaseSignedOrPublicUrl(regPath)
-    if (su) return su
-  }
-
-  if (regPath && isHttpUrl(regPath)) {
-    const via = await resolvePhotoUrlString(regPath)
-    if (via) return via
-  }
-
-  if (face && isHttpUrl(face)) {
-    const fast = immediateImgSrc(face)
-    if (fast) return fast
-    if (/backblazeb2\.com/i.test(face)) {
-      const path =
-        regPath && !isHttpUrl(regPath) ? regPath : b2ObjectPathFromUrl(face)
-      if (path) {
-        const signed = await requestB2SignedUrl(path)
-        if (signed) return signed
-      }
-      return null
-    }
-    return face
-  }
-
-  if (face && !isHttpUrl(face)) {
-    const r = await resolvePhotoUrlString(face)
-    if (r) return r
-  }
+  const { photoUrl, storagePath } = studentPhotoSources(row)
+  const main = await getTemporaryPhotoUrl({ photoUrl, storagePath })
+  if (main) return main
 
   const nested = pickNestedPhoto(row)
-  if (nested) {
-    const r = await resolvePhotoUrlString(nested)
-    if (r) return r
-  }
+  if (nested) return resolvePhotoUrlString(nested)
 
   const fuzzy = pickPhotoLikeFromRow(row)
-  if (fuzzy && fuzzy !== face && fuzzy !== regPath) {
-    return resolvePhotoUrlString(fuzzy)
-  }
+  if (fuzzy) return resolvePhotoUrlString(fuzzy)
 
   return null
 }

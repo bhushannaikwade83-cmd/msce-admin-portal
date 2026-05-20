@@ -16,7 +16,7 @@ import {
   collectSubjectNamesFromTeacherPayload,
   flattenTeacherAttendanceRow,
 } from '../lib/teacherAttendancePayload'
-import { immediateImgSrc, resolvePhotoUrlString } from '../lib/photoUrl'
+import { b2ObjectPathFromPhotoUrl } from '../lib/photoUrl'
 import {
   attendanceReportRows,
   csvEscape,
@@ -25,6 +25,7 @@ import {
   instituteStudentRosterRows,
 } from '../lib/reportCsv'
 import type { InstituteRow } from './InstituteList'
+import { SecureNetworkImage } from './SecureNetworkImage'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
 import {
   ATTENDANCE_CANDIDATES,
@@ -612,38 +613,9 @@ function PhotoThumb({
   compact?: boolean
 }) {
   const [lb, setLb] = useState(false)
-  const [err, setErr] = useState(false)
-  const raw = url ? String(url) : null
-  const [resolved, setResolved] = useState<string | null>(() => immediateImgSrc(raw))
-  const [pending, setPending] = useState(() => !!raw && !immediateImgSrc(raw))
-
-  useEffect(() => {
-    const u = url ? String(url) : null
-    const fast = immediateImgSrc(u)
-    if (fast) {
-      setResolved(fast)
-      setPending(false)
-      setErr(false)
-      return
-    }
-    if (!u) {
-      setResolved(null)
-      setPending(false)
-      setErr(false)
-      return
-    }
-    setPending(true)
-    let cancelled = false
-    void resolvePhotoUrlString(u).then((r) => {
-      if (cancelled) return
-      setPending(false)
-      setResolved(r)
-      setErr(false)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [url])
+  const [resolved, setResolved] = useState<string | null>(null)
+  const raw = url ? String(url).trim() : ''
+  const storagePath = raw ? b2ObjectPathFromPhotoUrl(raw) : null
 
   if (!raw) {
     if (compact) {
@@ -666,36 +638,39 @@ function PhotoThumb({
     )
   }
 
-  const src = resolved
-  const showErr = err || (!pending && !src)
-
   return (
     <>
       <div
-        className={`att-photo-slot${showErr ? ' att-photo-error' : ''}${compact ? ' att-photo-slot--compact' : ''}`}
-        onClick={() => !showErr && src && setLb(true)}
+        className={`att-photo-slot${!resolved && raw ? ' att-photo-loading' : ''}${compact ? ' att-photo-slot--compact' : ''}`}
+        onClick={() => resolved && setLb(true)}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && !showErr && src && setLb(true)}
+        onKeyDown={(e) => e.key === 'Enter' && resolved && setLb(true)}
         title={`View ${label} photo`}
       >
         <div className="att-photo-label">{label === 'In' ? '🟢' : '🔴'} {label}</div>
-        {pending ? (
-          <div className="att-photo-err-msg" style={{ opacity: 0.75 }}>
-            <span>⏳</span>
-            <span>Loading…</span>
-          </div>
-        ) : showErr ? (
-          <div className="att-photo-err-msg">
-            <span>⚠️</span>
-            <span>Failed to load</span>
-          </div>
-        ) : (
-          <img src={src!} alt={`${label} photo`} className="att-photo-img" onError={() => setErr(true)} />
-        )}
-        {!showErr && src && !compact ? <div className="att-photo-overlay">🔍 View</div> : null}
+        <SecureNetworkImage
+          imageUrl={raw}
+          storagePath={storagePath}
+          alt={`${label} photo`}
+          className="att-photo-img"
+          placeholder={
+            <div className="att-photo-err-msg" style={{ opacity: 0.75 }}>
+              <span>⏳</span>
+              <span>Loading…</span>
+            </div>
+          }
+          errorWidget={
+            <div className="att-photo-err-msg att-photo-error">
+              <span>⚠️</span>
+              <span>Failed to load</span>
+            </div>
+          }
+          onResolved={setResolved}
+        />
+        {resolved && !compact ? <div className="att-photo-overlay">🔍 View</div> : null}
       </div>
-      {lb && src && <PhotoLightbox src={src} alt={`${label} photo`} onClose={() => setLb(false)} />}
+      {lb && resolved && <PhotoLightbox src={resolved} alt={`${label} photo`} onClose={() => setLb(false)} />}
     </>
   )
 }

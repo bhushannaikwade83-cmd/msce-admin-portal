@@ -27,15 +27,20 @@ function parseEnvFile(filePath: string): Record<string, string> {
 }
 
 function loadMergedEnv(): Record<string, string> {
-  const flutterAppRoot = path.resolve(__dirname, '../MSCE')
+  const flutterRoots = [
+    path.resolve(__dirname, '../MSCE 2'),
+    path.resolve(__dirname, '../MSCE'),
+  ]
   const websiteDir = __dirname
-  return {
-    ...parseEnvFile(path.join(flutterAppRoot, '.env')),
-    ...parseEnvFile(path.join(flutterAppRoot, '.env.local')),
-    ...parseEnvFile(path.join(flutterAppRoot, 'app_config.env')),
-    ...parseEnvFile(path.join(websiteDir, '.env')),
-    ...parseEnvFile(path.join(websiteDir, '.env.local')),
+  const merged: Record<string, string> = {}
+  for (const root of flutterRoots) {
+    Object.assign(merged, parseEnvFile(path.join(root, '.env')))
+    Object.assign(merged, parseEnvFile(path.join(root, '.env.local')))
+    Object.assign(merged, parseEnvFile(path.join(root, 'app_config.env')))
   }
+  Object.assign(merged, parseEnvFile(path.join(websiteDir, '.env')))
+  Object.assign(merged, parseEnvFile(path.join(websiteDir, '.env.local')))
+  return merged
 }
 
 function resolveSupabase(merged: Record<string, string>): {
@@ -112,7 +117,7 @@ export default defineConfig(({ mode }) => {
       react(),
       ...(mode === 'development' ? [b2DevSignPlugin(merged)] : []),
     ],
-    envDir: path.resolve(__dirname, '../MSCE'),
+    envDir: path.resolve(__dirname, '../MSCE 2'),
     assetsInclude: ['**/*.apk'],
     define: {
       __EDUSETU_SUPABASE_URL__: JSON.stringify(url),
