@@ -2,31 +2,18 @@
  * Reports — pick institute, then institute-wide or per-student attendance PDF.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { jsPDF } from 'jspdf'
-import 'jspdf-autotable'
 import { getSupabase } from '../lib/supabase'
 import { fetchAllPaged } from '../lib/supabasePaged'
-import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
+import { applyInstituteCodeFilter } from '../lib/attendanceInOut'
+import { downloadInstituteReportPdf, fetchInstituteReport } from '../lib/instituteReport'
 import { discoverSchema, type SchemaConfig } from '../lib/schemaDiscovery'
-import { flattenTeacherAttendanceRow } from '../lib/teacherAttendancePayload'
+import { downloadStudentReportPdf, fetchStudentReport } from '../lib/studentReportPdf'
 import type { InstituteRow } from './InstituteList'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
 
 type Student = Record<string, unknown> & {
   id: string
   name?: string | null
-}
-
-type AttendanceRecord = Record<string, unknown> & {
-  id: string
-  student_id?: string | null
-  subject_id?: string | null
-  date?: string | null
-  in_time?: string | null
-  out_time?: string | null
-  in_photo_url?: string | null
-  out_photo_url?: string | null
-  status?: string | null
 }
 
 type ReportMode = 'institute' | 'student'
@@ -106,36 +93,6 @@ function pick(row: Record<string, unknown>, ...keys: string[]): string | null {
   return null
 }
 
-function studentRollIdentifiers(s: Student): string[] {
-  const out: string[] = []
-  const add = (v: unknown) => {
-    const t = v !== null && v !== undefined ? String(v).trim() : ''
-    if (t !== '') out.push(t)
-  }
-  add(pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no'))
-  add(s.id)
-  return [...new Set(out)]
-}
-
-function fmtTime(val: string | null | undefined) {
-  if (!val) return '—'
-  try {
-    if (String(val).includes('T')) {
-      return new Date(String(val)).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-    }
-    const [h, m] = String(val).split(':')
-    const hr = parseInt(h, 10)
-    return `${((hr % 12) || 12).toString().padStart(2, '0')}:${m} ${hr >= 12 ? 'PM' : 'AM'}`
-  } catch {
-    return String(val)
-  }
-}
-
-function safeFilePart(s: string | null | undefined): string {
-  const t = (s ?? '').trim().replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 48)
-  return t || 'report'
-}
-
 function monthRange(month: string): { from: string; to: string } {
   const [yr, mo] = month.split('-')
   const y = parseInt(yr ?? '0', 10)
@@ -144,25 +101,6 @@ function monthRange(month: string): { from: string; to: string } {
   const last = new Date(y, mCal, 0)
   const to = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`
   return { from, to }
-}
-
-function rollToNameMap(students: Student[]): Map<string, string> {
-  const m = new Map<string, string>()
-  for (const s of students) {
-    const name = pick(s, 'name', 'student_name', 'full_name') ?? s.id
-    for (const r of studentRollIdentifiers(s)) {
-      if (!m.has(r)) m.set(r, name)
-    }
-  }
-  return m
-}
-
-function getPhotoIn(r: AttendanceRecord): string {
-  return String(r.in_photo_url ?? r['entry_photo'] ?? r['photo_in'] ?? '')
-}
-
-function getPhotoOut(r: AttendanceRecord): string {
-  return String(r.out_photo_url ?? r['exit_photo'] ?? r['photo_out'] ?? '')
 }
 
 export function ReportsSection({
@@ -411,239 +349,33 @@ export function ReportsSection({
   }, [institutes, filteredInst.length, students.length, studentAttendance])
 
   async function downloadInstituteReport() {
-    if (!institute || !schema.attendanceTable) return
+    if (!institute) return
     setBusy(true)
     setError(null)
     setInfo(null)
     try {
-      const sb = getSupabase()
-      const attTable = schema.attendanceTable
       const { from, to } = monthRange(month)
-      let raw: Record<string, unknown>[] = []
-
-      if (attTable === 'teacher_attendance') {
-        raw = await fetchAllPaged((rangeFrom, rangeTo) =>
-          sb
-            .from(attTable)
-            .select('*')
-            .eq('institute_id', institute.id)
-            .gte('date', from)
-            .lte('date', to)
-            .order('date', { ascending: false })
-            .range(rangeFrom, rangeTo),
-        )
-      } else if (attTable === 'attendance_in_out') {
-        const ids = students.map((s) => s.id)
-        if (ids.length === 0) {
-          setError('No students in this institute — cannot load attendance by student id.')
-          return
-        }
-        for (let i = 0; i < ids.length; i += 100) {
-          const chunk = ids.slice(i, i + 100)
-          const part = await fetchAllPaged((rangeFrom, rangeTo) =>
-            applyInstituteCodeFilter(
-              sb.from(attTable).select('*').in('student_id', chunk),
-              institute,
-            )
-              .gte('attendance_date', from)
-              .lte('attendance_date', to)
-              .order('attendance_date', { ascending: false })
-              .range(rangeFrom, rangeTo),
-          )
-          raw = raw.concat(part)
-        }
-      } else {
-        const ids = students.map((s) => s.id)
-        if (ids.length === 0) {
-          setError('No students in this institute — cannot load attendance by student id.')
-          return
-        }
-        for (let i = 0; i < ids.length; i += 100) {
-          const chunk = ids.slice(i, i + 100)
-          const part = await fetchAllPaged((rangeFrom, rangeTo) =>
-            sb
-              .from(attTable)
-              .select('*')
-              .eq('institute_id', institute.id)
-              .in('student_id', chunk)
-              .gte('date', from)
-              .lte('date', to)
-              .order('date', { ascending: false })
-              .range(rangeFrom, rangeTo),
-          )
-          raw = raw.concat(part)
-        }
+      const [y, m, d] = from.split('-').map(Number)
+      const start = new Date(y, (m ?? 1) - 1, d ?? 1)
+      const [y2, m2, d2] = to.split('-').map(Number)
+      const end = new Date(y2, (m2 ?? 1) - 1, d2 ?? 1)
+      const report = await fetchInstituteReport(
+        {
+          id: institute.id,
+          institute_code: institute.institute_code,
+          name: institute.name,
+        },
+        start,
+        end,
+      )
+      if (report.studentRecords.length === 0) {
+        setError('No students with attendance data for this month.')
+        return
       }
-
-      const rollMap = rollToNameMap(students)
-      const instName = institute.name ?? institute.id
-      const detailRows: string[][] = []
-      const summary = new Map<
-        string,
-        { name: string; roll: string; present: number; absent: number; other: number }
-      >()
-
-      for (const row of raw) {
-        const rec =
-          attTable === 'teacher_attendance'
-            ? flattenTeacherAttendanceRow(row)
-            : attTable === 'attendance_in_out'
-              ? (flattenAttendanceInOutRow(row) as AttendanceRecord)
-              : (row as AttendanceRecord)
-        const sid = String(rec.student_id ?? row.student_id ?? '')
-        const st = String(rec.status ?? '').toLowerCase()
-        const displayName = rollMap.get(sid) ?? sid
-        const dateStr = rec.date ? String(rec.date).slice(0, 10) : ''
-        detailRows.push([
-          institute.id,
-          instName,
-          dateStr,
-          sid,
-          displayName,
-          String(rec.status ?? ''),
-          fmtTime(rec.in_time as string | null),
-          fmtTime(rec.out_time as string | null),
-          String(rec.subject_id ?? ''),
-          rec.id,
-          getPhotoIn(rec),
-          getPhotoOut(rec),
-        ])
-
-        const key = `${sid}\t${displayName}`
-        if (!summary.has(key)) {
-          summary.set(key, {
-            name: displayName,
-            roll: sid,
-            present: 0,
-            absent: 0,
-            other: 0,
-          })
-        }
-        const agg = summary.get(key)!
-        if (st === 'present') agg.present += 1
-        else if (st === 'absent') agg.absent += 1
-        else agg.other += 1
-      }
-
-      const summaryRows = [...summary.values()].map((a) => [
-        institute.id,
-        instName,
-        month,
-        a.name,
-        a.roll,
-        String(a.present),
-        String(a.absent),
-        String(a.other),
-        String(a.present + a.absent + a.other),
-      ])
-
-      const doc = new jsPDF()
-      const pageWidth = doc.internal.pageSize.getWidth()
-      const pageHeight = doc.internal.pageSize.getHeight()
-      const margin = 12
-
-      // Header
-      doc.setFontSize(16)
-      doc.text('Institute Attendance Report', margin, 15)
-
-      // Info section
-      doc.setFontSize(10)
-      doc.text(`Institute: ${instName}`, margin, 25)
-      doc.text(`Institute Code: ${institute.institute_code || 'N/A'}`, margin, 31)
-      doc.text(`Month: ${month}`, margin, 37)
-      doc.text(`Total Students: ${summary.size}`, margin, 43)
-      doc.text(`Total Records: ${detailRows.length}`, margin, 49)
-      doc.text(`Generated: ${new Date().toLocaleString()}`, margin, 55)
-
-      // Summary Table
-      doc.setFontSize(12)
-      doc.text('Summary (Per Student)', margin, 65)
-
-      const summaryTableData = summaryRows.map((row) => [
-        row[3], // student_name
-        row[4], // roll
-        row[5], // present
-        row[6], // absent
-        row[8], // total
-      ])
-
-      ;(doc as any).autoTable({
-        startY: 72,
-        margin: margin,
-        head: [['Student Name', 'Roll No', 'Present', 'Absent', 'Total']],
-        body: summaryTableData,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [0, 48, 135],
-          textColor: 255,
-          fontStyle: 'bold',
-          fontSize: 9,
-        },
-        bodyStyles: {
-          fontSize: 8,
-        },
-        alternateRowStyles: {
-          fillColor: [245, 245, 245],
-        },
-        columnStyles: {
-          0: { halign: 'left' },
-          1: { halign: 'center' },
-          2: { halign: 'center' },
-          3: { halign: 'center' },
-          4: { halign: 'center' },
-        },
-        pageBreak: 'always',
-      })
-
-      // Detail Table (on new page)
-      doc.setFontSize(12)
-      doc.text('Detail Records', margin, 20)
-
-      const detailTableData = detailRows.map((row) => [
-        row[2], // date
-        row[4], // student_name
-        row[5], // status
-        row[6], // in_time
-        row[7], // out_time
-      ])
-
-      ;(doc as any).autoTable({
-        startY: 28,
-        margin: margin,
-        head: [['Date', 'Student', 'Status', 'In Time', 'Out Time']],
-        body: detailTableData,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [0, 48, 135],
-          textColor: 255,
-          fontStyle: 'bold',
-          fontSize: 9,
-        },
-        bodyStyles: {
-          fontSize: 8,
-        },
-        alternateRowStyles: {
-          fillColor: [245, 245, 245],
-        },
-        columnStyles: {
-          0: { halign: 'center' },
-          1: { halign: 'left' },
-          2: { halign: 'center' },
-          3: { halign: 'center' },
-          4: { halign: 'center' },
-        },
-        didDrawPage: () => {
-          // Footer
-          const pageCount = (doc as any).internal.pages.length - 1
-          const currentPage = doc.getCurrentPageInfo().pageNumber
-          doc.setFontSize(8)
-          doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin - 20, pageHeight - 8)
-        },
-      })
-
-      // Download PDF
-      doc.save(`report_institute_${safeFilePart(institute.institute_code ?? institute.id)}_${month}.pdf`)
-      setInfo(`Downloaded ${detailRows.length} attendance record(s); ${summary.size} student(s) in summary.`)
+      downloadInstituteReportPdf(report)
+      setInfo(
+        `Downloaded institute PDF (${report.studentRecords.length} students, ${report.periodText}).`,
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -652,139 +384,30 @@ export function ReportsSection({
   }
 
   async function downloadStudentReport() {
-    if (!institute || !selectedStudent || !schema.attendanceTable) return
+    if (!institute || !selectedStudent) return
     setBusy(true)
     setError(null)
     setInfo(null)
     try {
-      const sb = getSupabase()
-      const attTable = schema.attendanceTable
+      const studentName =
+        pick(selectedStudent, 'name', 'student_name', 'full_name') ?? selectedStudent.id
       const { from, to } = monthRange(month)
-      const studentName = pick(selectedStudent, 'name', 'student_name', 'full_name') ?? selectedStudent.id
-      let raw: Record<string, unknown>[] = []
-
-      if (attTable === 'teacher_attendance') {
-        const keys = studentRollIdentifiers(selectedStudent)
-        if (keys.length === 0) throw new Error('Student has no roll / id for attendance lookup.')
-        raw = await fetchAllPaged((rangeFrom, rangeTo) =>
-          sb
-            .from(attTable)
-            .select('*')
-            .in('student_id', keys)
-            .eq('institute_id', institute.id)
-            .gte('date', from)
-            .lte('date', to)
-            .order('date', { ascending: false })
-            .range(rangeFrom, rangeTo),
-        )
-      } else if (attTable === 'attendance_in_out') {
-        raw = await fetchAllPaged((rangeFrom, rangeTo) =>
-          applyInstituteCodeFilter(
-            sb.from(attTable).select('*').eq('student_id', selectedStudent.id),
-            institute,
-          )
-            .gte('attendance_date', from)
-            .lte('attendance_date', to)
-            .order('attendance_date', { ascending: false })
-            .range(rangeFrom, rangeTo),
-        )
-      } else {
-        raw = await fetchAllPaged((rangeFrom, rangeTo) =>
-          sb
-            .from(attTable)
-            .select('*')
-            .eq('student_id', selectedStudent.id)
-            .eq('institute_id', institute.id)
-            .gte('date', from)
-            .lte('date', to)
-            .order('date', { ascending: false })
-            .range(rangeFrom, rangeTo),
-        )
-      }
-
-      const flat = raw.map((row) =>
-        attTable === 'teacher_attendance'
-          ? flattenTeacherAttendanceRow(row)
-          : attTable === 'attendance_in_out'
-            ? (flattenAttendanceInOutRow(row) as AttendanceRecord)
-            : (row as AttendanceRecord),
+      const [y, m, d] = from.split('-').map(Number)
+      const start = new Date(y, (m ?? 1) - 1, d ?? 1)
+      const [y2, m2, d2] = to.split('-').map(Number)
+      const end = new Date(y2, (m2 ?? 1) - 1, d2 ?? 1)
+      const report = await fetchStudentReport(
+        {
+          id: institute.id,
+          institute_code: institute.institute_code,
+          name: institute.name,
+        },
+        selectedStudent,
+        start,
+        end,
       )
-      const rows = flat.map((rec) => [
-        rec.date ? String(rec.date).slice(0, 10) : '',
-        String(rec.status ?? ''),
-        fmtTime(rec.in_time as string | null),
-        fmtTime(rec.out_time as string | null),
-        String(rec.subject_id ?? ''),
-        rec.id,
-        getPhotoIn(rec),
-        getPhotoOut(rec),
-      ])
-
-      // \ud83d\udcc4 Generate PDF Report
-      const doc = new jsPDF()
-      const pageWidth = doc.internal.pageSize.getWidth()
-      const pageHeight = doc.internal.pageSize.getHeight()
-      const margin = 12
-
-      // Header
-      doc.setFontSize(16)
-      doc.text('Attendance Report', margin, 15)
-
-      // Info section
-      doc.setFontSize(10)
-      doc.text(`Institute: ${institute.name ?? institute.id}`, margin, 25)
-      doc.text(`Institute ID: ${institute.id}`, margin, 31)
-      doc.text(`Student: ${studentName}`, margin, 37)
-      doc.text(`Student ID: ${selectedStudent.id}`, margin, 43)
-      doc.text(`Month: ${month}`, margin, 49)
-      doc.text(`Generated: ${new Date().toLocaleString()}`, margin, 55)
-
-      // Table
-      const tableData = rows.map((row) => [
-        row[0], // date
-        row[1], // status
-        row[2], // in_time
-        row[3], // out_time
-        row[4], // subject_id
-      ])
-
-      ;(doc as any).autoTable({
-        startY: 62,
-        margin: margin,
-        head: [['Date', 'Status', 'In Time', 'Out Time', 'Subject']],
-        body: tableData,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [0, 48, 135],
-          textColor: 255,
-          fontStyle: 'bold',
-          fontSize: 10,
-        },
-        bodyStyles: {
-          fontSize: 9,
-        },
-        alternateRowStyles: {
-          fillColor: [245, 245, 245],
-        },
-        columnStyles: {
-          0: { halign: 'left' },
-          1: { halign: 'center' },
-          2: { halign: 'center' },
-          3: { halign: 'center' },
-          4: { halign: 'left' },
-        },
-        didDrawPage: () => {
-          // Footer
-          const pageCount = (doc as any).internal.pages.length - 1
-          const currentPage = doc.getCurrentPageInfo().pageNumber
-          doc.setFontSize(8)
-          doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin - 20, pageHeight - 8)
-        },
-      })
-
-      // Download PDF
-      doc.save(`report_student_${safeFilePart(studentName)}_${month}.pdf`)
-      setInfo(`Downloaded ${rows.length} attendance record(s) for ${studentName}.`)
+      downloadStudentReportPdf(report)
+      setInfo(`Downloaded PDF for ${studentName} (${report.periodText}).`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -803,15 +426,9 @@ export function ReportsSection({
         <div>
           {!embedded ? <h2>Reports</h2> : <span className="section-kicker">Attendance reports</span>}
           <p className="muted small reports-page-lead">
-            Choose an institute, set the report month, then download an institute-wide PDF (summary + detail) or a
-            single-student monthly PDF. Data is read live from Supabase
-            {schema.attendanceTable ? (
-              <>
-                {' '}
-                (<code>{schema.attendanceTable}</code>)
-              </>
-            ) : null}
-            . Open from <strong>Institutes → Report</strong> to pre-select an institute.
+            Choose an institute, set the report month, then download PDFs using the same{' '}
+            <code>attendance_in_out</code> logic as the MSCE app (tabular institute report or per-student daily
+            detail). Open from <strong>Institutes → Report</strong> to pre-select an institute.
           </p>
         </div>
         <div className="card-head-actions">
@@ -819,7 +436,7 @@ export function ReportsSection({
             <button
               type="button"
               className="btn btn-primary btn-sm"
-              disabled={busy || studentsLoading || !schema.attendanceTable}
+              disabled={busy || studentsLoading}
               onClick={() => void downloadInstituteReport()}
             >
               {busy ? 'Working…' : '📄 Institute PDF'}
@@ -829,7 +446,7 @@ export function ReportsSection({
             <button
               type="button"
               className="btn btn-primary btn-sm"
-              disabled={busy || !schema.attendanceTable}
+              disabled={busy}
               onClick={() => void downloadStudentReport()}
             >
               {busy ? 'Working…' : '📄 Student PDF'}
@@ -1070,9 +687,8 @@ export function ReportsSection({
 
           {mode === 'institute' ? (
             <p className="reports-institute-hint muted small">
-              Institute PDF includes a <strong>per-student summary</strong> (present / absent / other) and a{' '}
-              <strong>detail</strong> section with every attendance row for <strong>{month}</strong>. Use{' '}
-              <strong>Institute PDF</strong> in the header to download.
+              Institute PDF uses the same tabular report as the MSCE app (present / absent / hours / status per
+              student) for <strong>{month}</strong>. Click <strong>Institute PDF</strong> in the header to download.
             </p>
           ) : null}
 

@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf'
-import 'jspdf-autotable'
+import { downloadJsPdf, pdfAutoTable } from './pdfDownload'
 import { applyInstituteCodeFilter, type InstituteCodeSource } from './attendanceInOut'
 import { studentDayPresentFromInOutRows } from './attendancePresence'
 import { getSupabase } from './supabase'
@@ -354,7 +354,7 @@ export function downloadInstituteReportPdf(report: InstituteReportResult): void 
     '',
   ])
 
-  ;(doc as unknown as { autoTable: (opts: Record<string, unknown>) => void }).autoTable({
+  pdfAutoTable(doc, {
     startY: 46,
     margin,
     head: [
@@ -383,5 +383,8 @@ export function downloadInstituteReportPdf(report: InstituteReportResult): void 
     styles: { overflow: 'linebreak', cellWidth: 'wrap' },
   })
 
-  doc.save(instituteReportPdfFileName(report.instituteName, report.instituteId, report.startDate, report.endDate))
+  downloadJsPdf(
+    doc,
+    instituteReportPdfFileName(report.instituteName, report.instituteId, report.startDate, report.endDate),
+  )
 }

@@ -24,6 +24,7 @@ import {
   instituteDirectoryCsvRows,
   instituteStudentRosterRows,
 } from '../lib/reportCsv'
+import { downloadStudentReportPdf, fetchStudentReport } from '../lib/studentReportPdf'
 import type { InstituteRow } from './InstituteList'
 import { SecureNetworkImage } from './SecureNetworkImage'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
@@ -690,6 +691,7 @@ function AttendanceView({
 }) {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [pdfBusy, setPdfBusy] = useState(false)
   const [error, setError]     = useState<string | null>(null)
   const [month, setMonth]     = useState(() => {
     const n = new Date()
@@ -862,6 +864,33 @@ function AttendanceView({
         >
           📥 Month CSV
         </button>
+        {attTable === 'attendance_in_out' ? (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={loading || pdfBusy}
+            title="Download monthly PDF (same format as MSCE app)"
+            onClick={() => {
+              void (async () => {
+                setPdfBusy(true)
+                setError(null)
+                try {
+                  const [yr, mo] = month.split('-')
+                  const start = new Date(+yr, +mo - 1, 1)
+                  const end = new Date(+yr, +mo, 0)
+                  const report = await fetchStudentReport(institute, student, start, end)
+                  downloadStudentReportPdf(report)
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e))
+                } finally {
+                  setPdfBusy(false)
+                }
+              })()
+            }}
+          >
+            {pdfBusy ? 'Generating…' : '📄 Month PDF'}
+          </button>
+        ) : null}
         <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Table: <code>{attTable}</code></span>
       </div>
 
