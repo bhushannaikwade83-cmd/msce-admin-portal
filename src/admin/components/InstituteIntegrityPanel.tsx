@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { StudentCaptureMismatch } from '../lib/attendanceCaptureScan'
 import { downloadCsv } from '../lib/reportCsv'
 import { isFacePhotoUpdatedForAttendance } from '../lib/attendanceIntegrity'
 import { attendanceCaptureDiffersFromRegistration, type DayInOutMerge } from '../lib/photoCompare'
@@ -121,6 +122,16 @@ export function InstituteIntegrityPanel({
   attLoading,
   attError,
   showDayAttendance,
+  historyFrom = '',
+  historyTo = '',
+  onHistoryFromChange = () => {},
+  onHistoryToChange = () => {},
+  onReloadHistory,
+  captureMismatches = [],
+  historyLoading = false,
+  historyError = null,
+  capturesScanned = 0,
+  enableFullHistoryScan = false,
   onSelectStudent,
 }: {
   institute: InstituteRow
@@ -132,10 +143,22 @@ export function InstituteIntegrityPanel({
   attLoading: boolean
   attError: string | null
   showDayAttendance: boolean
+  historyFrom?: string
+  historyTo?: string
+  onHistoryFromChange?: (ymd: string) => void
+  onHistoryToChange?: (ymd: string) => void
+  onReloadHistory?: () => void
+  captureMismatches?: StudentCaptureMismatch[]
+  historyLoading?: boolean
+  historyError?: string | null
+  capturesScanned?: number
+  /** Cheat watch tab: scan all attendance in date range. Students tab omits this. */
+  enableFullHistoryScan?: boolean
   onSelectStudent: (s: Student) => void
 }) {
   const [pageChanged, setPageChanged] = useState(0)
   const [pageDaily, setPageDaily] = useState(0)
+  const [pageHistory, setPageHistory] = useState(0)
 
   const instituteIdLabel = institute.institute_code?.trim() || institute.id
 
@@ -143,6 +166,16 @@ export function InstituteIntegrityPanel({
     () => students.filter(isFacePhotoUpdatedForAttendance),
     [students],
   )
+
+  const historyFlagRows = useMemo(() => {
+    const rows: { student: Student; flag: StudentCaptureMismatch['flags'][number] }[] = []
+    for (const block of captureMismatches) {
+      for (const flag of block.flags) {
+        rows.push({ student: block.student as Student, flag })
+      }
+    }
+    return rows
+  }, [captureMismatches])
 
   const dailyMismatchRows = useMemo(() => {
     if (!showDayAttendance) return []
@@ -169,14 +202,22 @@ export function InstituteIntegrityPanel({
 
   const changedPageCount = Math.max(1, Math.ceil(photoChangedRows.length / PAGE_SIZE))
   const dailyPageCount = Math.max(1, Math.ceil(dailyMismatchRows.length / PAGE_SIZE))
+  const historyPageCount = Math.max(1, Math.ceil(historyFlagRows.length / PAGE_SIZE))
   const safeChangedPage = Math.min(pageChanged, changedPageCount - 1)
   const safeDailyPage = Math.min(pageDaily, dailyPageCount - 1)
+  const safeHistoryPage = Math.min(pageHistory, historyPageCount - 1)
 
   const pagedChanged = photoChangedRows.slice(
     safeChangedPage * PAGE_SIZE,
     safeChangedPage * PAGE_SIZE + PAGE_SIZE,
   )
   const pagedDaily = dailyMismatchRows.slice(safeDailyPage * PAGE_SIZE, safeDailyPage * PAGE_SIZE + PAGE_SIZE)
+  const pagedHistory = historyFlagRows.slice(
+    safeHistoryPage * PAGE_SIZE,
+    safeHistoryPage * PAGE_SIZE + PAGE_SIZE,
+  )
+
+  const totalHistoryFlags = historyFlagRows.length
 
   useEffect(() => {
     setPageChanged(0)
@@ -185,6 +226,42 @@ export function InstituteIntegrityPanel({
   useEffect(() => {
     setPageDaily(0)
   }, [dailyMismatchRows.length, attDate, institute.id])
+
+  useEffect(() => {
+    setPageHistory(0)
+  }, [historyFlagRows.length, historyFrom, historyTo, institute.id])
+
+  function exportHistoryMismatchCsv() {
+    const header = [
+      'institute_id',
+      'institute_uuid',
+      'student_uuid',
+      'inst_no',
+      'student_name',
+      'attendance_date',
+      'capture_type',
+      'capture_time',
+      'capture_photo_ref',
+      'registration_photo_ref',
+    ]
+    const data = historyFlagRows.map(({ student: s, flag }) => [
+      instituteIdLabel,
+      institute.id,
+      s.id,
+      studentInstNo(s) ?? '',
+      pick(s, 'name', 'student_name', 'full_name') ?? '',
+      flag.date,
+      flag.kind,
+      flag.at ?? '',
+      flag.photoUrl ?? '',
+      pick(s, 'face_photo_url', 'registration_photo_path', 'photo_url') ?? '',
+    ])
+    downloadCsv(
+      `integrity_all_mismatch_${instituteIdLabel}_${historyFrom}_${historyTo}.csv`,
+      header,
+      data,
+    )
+  }
 
   function exportPhotoChangedCsv() {
     const header = [
@@ -384,11 +461,159 @@ export function InstituteIntegrityPanel({
         )}
       </div>
 
-      {/* ── 2. Daily capture vs registration ── */}
+      {enableFullHistoryScan ? (
+      <div className="integrity-block integrity-block--daily" aria-labelledby="integrity-history-heading">
+        <div className="integrity-block-head">
+          <h4 id="integrity-history-heading" className="integrity-subheading">
+            2 — All entry/exit photos ≠ registration (full scan)
+          </h4>
+          <label className="integrity-date-field">
+            <span className="muted small">From</span>
+            <input
+              type="date"
+              value={historyFrom}
+              onChange={(e) => onHistoryFromChange(e.target.value)}
+              disabled={!showDayAttendance || historyLoading}
+              aria-label="Scan attendance from date"
+            />
+          </label>
+          <label className="integrity-date-field">
+            <span className="muted small">To</span>
+            <input
+              type="date"
+              value={historyTo}
+              onChange={(e) => onHistoryToChange(e.target.value)}
+              disabled={!showDayAttendance || historyLoading}
+              aria-label="Scan attendance to date"
+            />
+          </label>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => onReloadHistory?.()}
+            disabled={!showDayAttendance || historyLoading}
+          >
+            {historyLoading ? 'Scanning…' : '↻ Rescan'}
+          </button>
+          <span className="section-count">
+            {historyLoading
+              ? '…'
+              : `${captureMismatches.length.toLocaleString('en-IN')} students · ${totalHistoryFlags.toLocaleString('en-IN')} captures`}
+          </span>
+          {totalHistoryFlags > 0 ? (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={exportHistoryMismatchCsv}>
+              📥 CSV
+            </button>
+          ) : null}
+        </div>
+        <p className="muted small integrity-block-desc">
+          Loads <strong>every</strong> entry and exit attendance photo for this institute in the date range,
+          compares each file path to the student&apos;s current registration face, and flags any mismatch
+          (possible proxy / wrong person). Visual review still required.
+          {!historyLoading && capturesScanned > 0 ? (
+            <>
+              {' '}
+              Scanned {capturesScanned.toLocaleString('en-IN')} capture
+              {capturesScanned === 1 ? '' : 's'} with photos.
+            </>
+          ) : null}
+        </p>
+
+        {historyError ? <p className="error">{historyError}</p> : null}
+        {attError ? <p className="error">{attError}</p> : null}
+        {!showDayAttendance ? (
+          <p className="muted small integrity-empty">
+            Needs <code>attendance_in_out</code> or <code>teacher_attendance</code> in the database.
+          </p>
+        ) : historyLoading ? (
+          <p className="muted small integrity-empty">
+            Scanning all attendance from {fmtDate(historyFrom)} to {fmtDate(historyTo)}…
+          </p>
+        ) : totalHistoryFlags === 0 ? (
+          <p className="muted small integrity-empty">
+            No entry/exit captures in this range differ from registration (or no photos stored).
+          </p>
+        ) : (
+          <>
+            <div className="table-wrap institutes-table-wrap students-integrity-table-wrap students-integrity-table-wrap--wide">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Inst. No.</th>
+                    <th>Student</th>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Registration</th>
+                    <th>Attendance capture</th>
+                    <th>Time</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedHistory.map(({ student: s, flag }) => {
+                    const name = pick(s, 'name', 'student_name', 'full_name') ?? '—'
+                    const instNo = studentInstNo(s) ?? '—'
+                    const rowKey = `${s.id}-${flag.date}-${flag.kind}-${flag.photoUrl ?? ''}`
+                    return (
+                      <tr key={rowKey} className="integrity-row-flagged">
+                        <td>
+                          <strong>{instNo}</strong>
+                        </td>
+                        <td className="student-name-cell">
+                          <strong>{name}</strong>
+                        </td>
+                        <td>{fmtDate(flag.date)}</td>
+                        <td>
+                          <span className={`badge ${flag.kind === 'entry' ? 'badge-present' : 'badge-half'}`}>
+                            {flag.kind === 'entry' ? 'Entry' : 'Exit'}
+                          </span>
+                        </td>
+                        <td className="students-photo-cell">
+                          <StudentDisplayPhoto student={s} displayName={name} size="sm" />
+                        </td>
+                        <td className="students-photo-cell">
+                          <PhotoThumb
+                            url={flag.photoUrl}
+                            label={flag.kind === 'entry' ? 'In' : 'Out'}
+                            compact
+                          />
+                          <span className="badge badge-late integrity-diff-badge">≠ reg</span>
+                        </td>
+                        <td className="integrity-ts-cell">
+                          {fmtCaptureTimestamp(flag.at, flag.date)}
+                        </td>
+                        <td className="actions-cell">
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => onSelectStudent(s)}
+                          >
+                            Open
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <IntegrityPager
+              page={safeHistoryPage}
+              pageCount={historyPageCount}
+              total={totalHistoryFlags}
+              onPrev={() => setPageHistory((p) => Math.max(0, p - 1))}
+              onNext={() => setPageHistory((p) => Math.min(historyPageCount - 1, p + 1))}
+            />
+          </>
+        )}
+      </div>
+      ) : null}
+
+      {/* ── Single-day / daily quick check ── */}
       <div className="integrity-block integrity-block--daily" aria-labelledby="integrity-daily-heading">
         <div className="integrity-block-head">
           <h4 id="integrity-daily-heading" className="integrity-subheading">
-            2 — Attendance entry/exit photo ≠ registration (selected date)
+            {enableFullHistoryScan ? '3 — Quick check for one day' : '2 — Entry/exit photo ≠ registration (selected date)'}
           </h4>
           <label className="integrity-date-field">
             <span className="muted small">Date</span>
@@ -410,35 +635,26 @@ export function InstituteIntegrityPanel({
           ) : null}
         </div>
         <p className="muted small integrity-block-desc">
-          Compares stored registration face path with entry/exit capture paths for{' '}
-          <strong>{fmtDate(attDate)}</strong>. Different file = shown here (visual review still required).
+          Same rule as section 2, but only for <strong>{fmtDate(attDate)}</strong>.
         </p>
 
-        {attError ? <p className="error">{attError}</p> : null}
         {!showDayAttendance ? (
-          <p className="muted small integrity-empty">
-            Needs <code>attendance_in_out</code> or <code>teacher_attendance</code> in the database.
-          </p>
+          <p className="muted small integrity-empty">Attendance tables not detected.</p>
         ) : attLoading ? (
-          <p className="muted small integrity-empty">Loading attendance for {fmtDate(attDate)}…</p>
+          <p className="muted small integrity-empty">Loading…</p>
         ) : dailyMismatchRows.length === 0 ? (
-          <p className="muted small integrity-empty">
-            No entry/exit photos on {fmtDate(attDate)} that differ from registration (or no captures that day).
-          </p>
+          <p className="muted small integrity-empty">No mismatches on this date.</p>
         ) : (
           <>
-            <div className="table-wrap institutes-table-wrap students-integrity-table-wrap students-integrity-table-wrap--wide">
+            <div className="table-wrap institutes-table-wrap students-integrity-table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Institute ID</th>
                     <th>Inst. No.</th>
                     <th>Student</th>
                     <th>Registration</th>
-                    <th>Entry photo</th>
-                    <th>Entry time</th>
-                    <th>Exit photo</th>
-                    <th>Exit time</th>
+                    <th>Entry</th>
+                    <th>Exit</th>
                     <th />
                   </tr>
                 </thead>
@@ -449,19 +665,10 @@ export function InstituteIntegrityPanel({
                     return (
                       <tr key={s.id} className="integrity-row-flagged">
                         <td>
-                          <strong>{instituteIdLabel}</strong>
-                          <div className="muted tiny">
-                            <code>{institute.id.slice(0, 8)}…</code>
-                          </div>
-                        </td>
-                        <td>
                           <strong>{instNo}</strong>
                         </td>
                         <td className="student-name-cell">
                           <strong>{name}</strong>
-                          <div className="muted tiny">
-                            <code>{s.id}</code>
-                          </div>
                         </td>
                         <td className="students-photo-cell">
                           <StudentDisplayPhoto student={s} displayName={name} size="sm" />
@@ -472,12 +679,6 @@ export function InstituteIntegrityPanel({
                           ) : (
                             <span className="muted small">—</span>
                           )}
-                          {entryDiff ? (
-                            <span className="badge badge-late integrity-diff-badge">≠ reg</span>
-                          ) : null}
-                        </td>
-                        <td className="integrity-ts-cell">
-                          {entryDiff ? fmtCaptureTimestamp(day.entryAt, attDate) : '—'}
                         </td>
                         <td className="students-photo-cell">
                           {exitDiff ? (
@@ -485,12 +686,6 @@ export function InstituteIntegrityPanel({
                           ) : (
                             <span className="muted small">—</span>
                           )}
-                          {exitDiff ? (
-                            <span className="badge badge-late integrity-diff-badge">≠ reg</span>
-                          ) : null}
-                        </td>
-                        <td className="integrity-ts-cell">
-                          {exitDiff ? fmtCaptureTimestamp(day.exitAt, attDate) : '—'}
                         </td>
                         <td className="actions-cell">
                           <button

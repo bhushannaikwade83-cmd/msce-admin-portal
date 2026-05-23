@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  captureFromInOutRow,
+  capturesFromTeacherRow,
+  buildStudentCaptureMismatches,
+  type AttendanceCaptureFlag,
+} from '../lib/attendanceCaptureScan'
 import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
 import type { DayInOutMerge } from '../lib/photoCompare'
 import { fetchAllPaged } from '../lib/supabasePaged'
@@ -153,6 +159,32 @@ export function IntegrityInstituteLoader({
   const [attLoading, setAttLoading] = useState(false)
   const [attError, setAttError] = useState<string | null>(null)
 
+  const defaultHistoryFrom = useMemo(() => {
+    const d = new Date()
+    d.setFullYear(d.getFullYear() - 1)
+    return d.toISOString().slice(0, 10)
+  }, [])
+  const [historyFrom, setHistoryFrom] = useState(defaultHistoryFrom)
+  const [historyTo, setHistoryTo] = useState(() => new Date().toISOString().slice(0, 10))
+  const [capturesByStudent, setCapturesByStudent] = useState<Record<string, AttendanceCaptureFlag[]>>({})
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [capturesScanned, setCapturesScanned] = useState(0)
+
+  const rollToStudentId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const s of students) {
+      map.set(s.id, s.id)
+      for (const k of studentRollIdentifiers(s)) map.set(k, s.id)
+    }
+    return map
+  }, [students])
+
+  const captureMismatches = useMemo(
+    () => buildStudentCaptureMismatches(students, capturesByStudent),
+    [students, capturesByStudent],
+  )
+
   const showDayAttendance =
     attendanceTables.includes('attendance_in_out') || attendanceTables.includes('teacher_attendance')
 
@@ -269,6 +301,100 @@ export function IntegrityInstituteLoader({
     void loadDayAttendance()
   }, [loadDayAttendance])
 
+  const resolveStudentIdFromRow = useCallback(
+    (row: Record<string, unknown>): string | null => {
+      const sid = row.student_id != null ? String(row.student_id).trim() : ''
+      if (sid && rollToStudentId.has(sid)) return rollToStudentId.get(sid)!
+      const sr = row.sr_no != null ? String(row.sr_no).trim() : ''
+      if (sr && rollToStudentId.has(sr)) return rollToStudentId.get(sr)!
+      return null
+    },
+    [rollToStudentId],
+  )
+
+  const loadHistoryCaptures = useCallback(async () => {
+    setHistoryError(null)
+    if (!showDayAttendance || students.length === 0) {
+      setCapturesByStudent({})
+      setCapturesScanned(0)
+      setHistoryLoading(false)
+      return
+    }
+    setHistoryLoading(true)
+    try {
+      const sb = getSupabase()
+      const byStudent: Record<string, AttendanceCaptureFlag[]> = {}
+      for (const s of students) byStudent[s.id] = []
+      let scanned = 0
+
+      if (attendanceTables.includes('attendance_in_out')) {
+        const rows = await fetchAllPaged<Record<string, unknown>>((rangeFrom, rangeTo) =>
+          applyInstituteCodeFilter(
+            sb
+              .from('attendance_in_out')
+              .select(
+                'student_id,sr_no,attendance_date,type,photo_url,photo_path,additional,created_at',
+              )
+              .gte('attendance_date', historyFrom)
+              .lte('attendance_date', historyTo)
+              .order('attendance_date', { ascending: false }),
+            institute,
+          ).range(rangeFrom, rangeTo),
+        )
+        for (const raw of rows) {
+          const cap = captureFromInOutRow(raw)
+          if (!cap) continue
+          scanned += 1
+          const stuId = resolveStudentIdFromRow(raw)
+          if (!stuId) continue
+          byStudent[stuId].push(cap)
+        }
+      } else if (attendanceTables.includes('teacher_attendance')) {
+        const rows = await fetchAllPaged<Record<string, unknown>>((rangeFrom, rangeTo) =>
+          sb
+            .from('teacher_attendance')
+            .select('student_id,date,payload,status,verification_selfie,created_at')
+            .eq('institute_id', institute.id)
+            .gte('date', historyFrom)
+            .lte('date', historyTo)
+            .order('date', { ascending: false })
+            .range(rangeFrom, rangeTo),
+        )
+        for (const raw of rows) {
+          const caps = capturesFromTeacherRow(raw)
+          if (caps.length === 0) continue
+          const roll = raw.student_id != null ? String(raw.student_id).trim() : ''
+          const stuId = rollToStudentId.get(roll)
+          if (!stuId) continue
+          scanned += caps.length
+          byStudent[stuId].push(...caps)
+        }
+      }
+
+      setCapturesByStudent(byStudent)
+      setCapturesScanned(scanned)
+    } catch (e) {
+      setCapturesByStudent({})
+      setCapturesScanned(0)
+      setHistoryError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [
+    showDayAttendance,
+    students,
+    attendanceTables,
+    institute,
+    historyFrom,
+    historyTo,
+    resolveStudentIdFromRow,
+    rollToStudentId,
+  ])
+
+  useEffect(() => {
+    void loadHistoryCaptures()
+  }, [loadHistoryCaptures])
+
   return (
     <InstituteIntegrityPanel
       institute={institute}
@@ -280,6 +406,16 @@ export function IntegrityInstituteLoader({
       attLoading={attLoading}
       attError={attError}
       showDayAttendance={showDayAttendance}
+      historyFrom={historyFrom}
+      historyTo={historyTo}
+      onHistoryFromChange={setHistoryFrom}
+      onHistoryToChange={setHistoryTo}
+      onReloadHistory={() => void loadHistoryCaptures()}
+      enableFullHistoryScan
+      captureMismatches={captureMismatches}
+      historyLoading={historyLoading}
+      historyError={historyError}
+      capturesScanned={capturesScanned}
       onSelectStudent={onSelectStudent ?? (() => {})}
     />
   )
