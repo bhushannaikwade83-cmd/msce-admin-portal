@@ -2074,6 +2074,206 @@ tbody tr:hover { background: var(--surface-hover); }
   flex-wrap: wrap;
 }
 
+.student-registration-photos-dual {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+.student-registration-photo-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.student-registration-photo-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted, #5a6474);
+  text-align: center;
+  max-width: 8rem;
+  line-height: 1.25;
+}
+
+.students-photo-mismatch-section {
+  padding: 1rem 1.25rem 1.25rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid var(--gov-orange, #ff6600);
+}
+
+.students-photo-mismatch-desc {
+  margin: 0 0 0.75rem;
+  max-width: 52rem;
+}
+
+.students-photo-mismatch-table-wrap table {
+  font-size: 0.88rem;
+}
+
+/* Attendance integrity review (cheat / proxy detection) */
+.students-integrity-section {
+  padding: 1rem 1.25rem 1.35rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid var(--gov-orange, #ff6600);
+}
+
+.students-integrity-desc {
+  margin: 0 0 1rem;
+  max-width: 56rem;
+}
+
+.integrity-block {
+  margin-top: 1.15rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border, #e2e8f0);
+}
+
+.integrity-block:first-of-type {
+  margin-top: 0.5rem;
+  padding-top: 0;
+  border-top: none;
+}
+
+.integrity-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.integrity-subheading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  flex: 1 1 auto;
+  min-width: 12rem;
+}
+
+.integrity-block-desc {
+  margin: 0 0 0.65rem;
+  max-width: 56rem;
+}
+
+.integrity-empty {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.integrity-date-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.integrity-date-field input[type='date'] {
+  font: inherit;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.integrity-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.65rem;
+}
+
+.integrity-ts-cell {
+  font-size: 0.8rem;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.integrity-diff-badge {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.68rem;
+}
+
+.integrity-row-flagged {
+  background: rgba(255, 102, 0, 0.04);
+}
+
+.students-integrity-table-wrap table {
+  font-size: 0.86rem;
+}
+
+.students-integrity-table-wrap--wide {
+  overflow-x: auto;
+}
+
+.students-integrity-table-wrap .students-photo-cell {
+  min-width: 4.5rem;
+  vertical-align: middle;
+}
+
+.muted.tiny {
+  font-size: 0.7rem;
+  margin-top: 0.15rem;
+}
+
+.integrity-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem 1rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.integrity-inst-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: min(100%, 18rem);
+}
+
+.integrity-inst-pick select {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  max-width: 22rem;
+}
+
+.integrity-page .integrity-mode-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.integrity-stat-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.integrity-inst-filter {
+  max-width: 11rem;
+  min-width: 8rem;
+}
+
+.integrity-photo-ref {
+  word-break: break-all;
+  font-size: 0.72rem;
+}
+
+.integrity-json-flags {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+.integrity-flag-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .student-avatar-lg {
   width: clamp(3.5rem, 12vw, 4.5rem);
   aspect-ratio: 1;

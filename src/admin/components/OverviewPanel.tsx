@@ -88,6 +88,15 @@ export function OverviewPanel() {
         </div>
 
         <div className="overview-tile card-elevated">
+          <div className="overview-tile-icon" aria-hidden>🛡️</div>
+          <h3>Cheat watch (all institutes)</h3>
+          <p>
+            Under <strong>Cheat watch</strong>, list students whose registration photo was replaced during
+            attendance (proxy risk) and find the same capture photo used for multiple students on one day.
+          </p>
+        </div>
+
+        <div className="overview-tile card-elevated">
           <div className="overview-tile-icon" aria-hidden>🔒</div>
           <h3>Row-Level Security</h3>
           <p>

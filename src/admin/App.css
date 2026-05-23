@@ -1113,3 +1113,56 @@ label.inline input[type='checkbox'] {
     grid-template-columns: 1fr;
   }
 }
+
+/* Institute instructors directory */
+.instructors-page .stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 0.8rem;
+}
+
+.instructors-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.instructors-inst-block {
+  padding: 0.85rem 1rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: #fff;
+}
+
+.instructors-inst-head {
+  margin-bottom: 0.65rem;
+}
+
+.instructors-inst-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gov-navy);
+}
+
+.instructors-inst-sep {
+  margin: 0 0.35rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.instructors-none {
+  margin: 0;
+  padding: 0.35rem 0;
+}
+
+.students-table-wrap td.small {
+  max-width: 11rem;
+  line-height: 1.35;
+  word-break: break-word;
+}

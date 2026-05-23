@@ -5,9 +5,11 @@ import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_TEL } from '../../siteSuppo
 export type DashboardTab =
   | 'overview'
   | 'admins'
+  | 'instructors'
   | 'institutes'
   | 'add'
   | 'students'
+  | 'integrity'
   | 'reports'
 
 type Props = {
@@ -27,9 +29,11 @@ type TabDef = {
 const tabs: TabDef[] = [
   { id: 'overview', label: 'Dashboard', icon: '🏠' },
   { id: 'admins', label: 'Admins & Access', icon: '🔐' },
+  { id: 'instructors', label: 'Instructors', icon: '👨‍🏫' },
   { id: 'institutes', label: 'Institutes', icon: '🏫' },
   { id: 'add', label: 'Add Institute', icon: '➕' },
   { id: 'students', label: 'Students', icon: '👨‍🎓' },
+  { id: 'integrity', label: 'Cheat watch', icon: '🛡️' },
   { id: 'reports', label: 'Reports', icon: '📑' },
 ]
 

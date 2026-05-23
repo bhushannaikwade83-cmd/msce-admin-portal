@@ -16,7 +16,9 @@ import {
   collectSubjectNamesFromTeacherPayload,
   flattenTeacherAttendanceRow,
 } from '../lib/teacherAttendancePayload'
-import { b2ObjectPathFromPhotoUrl } from '../lib/photoUrl'
+import { isFacePhotoUpdatedForAttendance } from '../lib/attendanceIntegrity'
+import { InstituteIntegrityPanel } from './InstituteIntegrityPanel'
+import { PhotoThumb } from './PhotoThumb'
 import {
   attendanceReportRows,
   csvEscape,
@@ -26,8 +28,9 @@ import {
 } from '../lib/reportCsv'
 import { downloadStudentReportPdf, fetchStudentReport } from '../lib/studentReportPdf'
 import type { InstituteRow } from './InstituteList'
-import { SecureNetworkImage } from './SecureNetworkImage'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
+import { EditStudentModal } from './EditStudentModal'
+import { formatSubjectsDisplay, subjectsFromStudent } from '../lib/studentSubjects'
 import {
   ATTENDANCE_CANDIDATES,
   SUBJECT_CANDIDATES,
@@ -49,10 +52,20 @@ type Student = Record<string, unknown> & {
   photo_url?: string | null
   face_photo_url?: string | null
   registration_photo_path?: string | null
+  original_face_photo_url?: string | null
+  original_registration_photo_path?: string | null
+  face_photo_changed_once?: boolean | null
+  face_photo_changed_at?: string | null
   face_embedding?: unknown
   is_active?: boolean | null
   email?: string | null
   phone?: string | null
+  subjects?: string[] | string | null
+  subject?: string | null
+  year?: string | null
+  first_name?: string | null
+  middle_name?: string | null
+  last_name?: string | null
 }
 
 type Subject = Record<string, unknown> & {
@@ -579,104 +592,6 @@ function SchemaBanner({ cfg, onRetry }: { cfg: SchemaConfig; onRetry: () => void
 }
 
 /* ══════════════════════════════════════════════════════════════
-   PHOTO LIGHTBOX
-══════════════════════════════════════════════════════════════ */
-
-function PhotoLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose])
-
-  return (
-    <div className="lightbox-overlay" onClick={onClose} role="dialog" aria-modal aria-label={alt}>
-      <div className="lightbox-inner" onClick={e => e.stopPropagation()}>
-        <button className="lightbox-close" onClick={onClose} aria-label="Close">✕</button>
-        <img src={src} alt={alt} className="lightbox-img" />
-        <p className="lightbox-caption">{alt}</p>
-      </div>
-    </div>
-  )
-}
-
-/* ══════════════════════════════════════════════════════════════
-   PHOTO THUMBNAIL
-══════════════════════════════════════════════════════════════ */
-
-function PhotoThumb({
-  url,
-  label,
-  compact = false,
-}: {
-  url: string | null | undefined
-  label: string
-  compact?: boolean
-}) {
-  const [lb, setLb] = useState(false)
-  const [resolved, setResolved] = useState<string | null>(null)
-  const raw = url ? String(url).trim() : ''
-  const storagePath = raw ? b2ObjectPathFromPhotoUrl(raw) : null
-
-  if (!raw) {
-    if (compact) {
-      return (
-        <div
-          className="att-photo-slot att-photo-empty att-photo-slot--compact"
-          title={`No ${label} photo`}
-          aria-hidden
-        >
-          <span className="att-photo-dash">—</span>
-        </div>
-      )
-    }
-    return (
-      <div className="att-photo-slot att-photo-empty">
-        <span className="att-photo-empty-icon">📷</span>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{label}</span>
-        <span className="att-photo-no-photo">No photo</span>
-      </div>
-    )
-  }
-
-  return (
-    <>
-      <div
-        className={`att-photo-slot${!resolved && raw ? ' att-photo-loading' : ''}${compact ? ' att-photo-slot--compact' : ''}`}
-        onClick={() => resolved && setLb(true)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && resolved && setLb(true)}
-        title={`View ${label} photo`}
-      >
-        <div className="att-photo-label">{label === 'In' ? '🟢' : '🔴'} {label}</div>
-        <SecureNetworkImage
-          imageUrl={raw}
-          storagePath={storagePath}
-          alt={`${label} photo`}
-          className="att-photo-img"
-          placeholder={
-            <div className="att-photo-err-msg" style={{ opacity: 0.75 }}>
-              <span>⏳</span>
-              <span>Loading…</span>
-            </div>
-          }
-          errorWidget={
-            <div className="att-photo-err-msg att-photo-error">
-              <span>⚠️</span>
-              <span>Failed to load</span>
-            </div>
-          }
-          onResolved={setResolved}
-        />
-        {resolved && !compact ? <div className="att-photo-overlay">🔍 View</div> : null}
-      </div>
-      {lb && resolved && <PhotoLightbox src={resolved} alt={`${label} photo`} onClose={() => setLb(false)} />}
-    </>
-  )
-}
-
-/* ══════════════════════════════════════════════════════════════
    LEVEL 3 — ATTENDANCE VIEW
 ══════════════════════════════════════════════════════════════ */
 
@@ -933,7 +848,7 @@ function AttendanceView({
 ══════════════════════════════════════════════════════════════ */
 
 function SubjectFolders({
-  student, subjectTable, attTable, institute, onBack, onSelectSubject,
+  student, subjectTable, attTable, institute, onBack, onSelectSubject, onStudentUpdated,
 }: {
   student: Student
   subjectTable: string | null
@@ -941,10 +856,12 @@ function SubjectFolders({
   institute: InstituteRow
   onBack: () => void
   onSelectSubject: (s: Subject) => void
+  onStudentUpdated?: (s: Student) => void
 }) {
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState<string | null>(null)
+  const [editingStudent, setEditingStudent] = useState(false)
 
   const studentName = pick(student, 'name', 'student_name', 'full_name') ?? student.id
 
@@ -1072,10 +989,39 @@ function SubjectFolders({
 
       {/* Student profile */}
       <div className="student-profile-card card-elevated">
-        <div className="student-avatar-lg">
-          <StudentDisplayPhoto student={student} displayName={studentName} size="lg" />
-          <span className="student-avatar-initials-lg">{initials(studentName)}</span>
-        </div>
+        {student.face_photo_changed_once === true &&
+        pick(student, 'original_face_photo_url', 'original_registration_photo_path') ? (
+          <div className="student-registration-photos-dual">
+            <div className="student-registration-photo-block">
+              <div className="student-registration-photo-label">Original registration</div>
+              <div className="student-avatar-lg">
+                <StudentDisplayPhoto
+                  student={{
+                    ...student,
+                    face_photo_url: student.original_face_photo_url,
+                    registration_photo_path: student.original_registration_photo_path,
+                    photo_thumbnail: null,
+                  }}
+                  displayName={`${studentName} (original)`}
+                  size="lg"
+                />
+                <span className="student-avatar-initials-lg">{initials(studentName)}</span>
+              </div>
+            </div>
+            <div className="student-registration-photo-block">
+              <div className="student-registration-photo-label">Updated registration (attendance)</div>
+              <div className="student-avatar-lg">
+                <StudentDisplayPhoto student={student} displayName={studentName} size="lg" />
+                <span className="student-avatar-initials-lg">{initials(studentName)}</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="student-avatar-lg">
+            <StudentDisplayPhoto student={student} displayName={studentName} size="lg" />
+            <span className="student-avatar-initials-lg">{initials(studentName)}</span>
+          </div>
+        )}
         <div className="student-profile-info">
           <div className="student-profile-name">{studentName}</div>
           {pick(student, 'roll_no', 'roll_number', 'rollno', 'admission_no') && (
@@ -1095,6 +1041,18 @@ function SubjectFolders({
           {pick(student, 'phone', 'mobile', 'mobile_no', 'contact_no', 'phone_number') && (
             <div className="student-profile-detail">📞 {pick(student, 'phone', 'mobile', 'mobile_no', 'contact_no', 'phone_number')}</div>
           )}
+          <div className="student-profile-detail">
+            📚 Enrolled subjects:{' '}
+            <strong>{formatSubjectsDisplay(subjectsFromStudent(student), 8)}</strong>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ marginTop: '0.5rem' }}
+            onClick={() => setEditingStudent(true)}
+          >
+            ✏️ Edit name / subjects
+          </button>
         </div>
       </div>
 
@@ -1172,6 +1130,25 @@ function SubjectFolders({
           )
         })}
       </div>
+
+      {editingStudent ? (
+        <EditStudentModal
+          student={student}
+          instituteLabel={institute.name ?? institute.institute_code ?? institute.id}
+          onClose={() => setEditingStudent(false)}
+          onSaved={async () => {
+            setEditingStudent(false)
+            try {
+              const sb = getSupabase()
+              const { data, error: qErr } = await sb.from('students').select('*').eq('id', student.id).maybeSingle()
+              if (qErr) throw qErr
+              if (data) onStudentUpdated?.(data as Student)
+            } catch {
+              /* list refresh on back */
+            }
+          }}
+        />
+      ) : null}
     </div>
   )
 }
@@ -1205,6 +1182,7 @@ function StudentsList({
   const [dayAtt, setDayAtt] = useState<Record<string, DayInOutMerge>>({})
   const [attLoading, setAttLoading] = useState(false)
   const [attError, setAttError] = useState<string | null>(null)
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null)
 
   const showDayAttendance =
     attendanceTables.includes('attendance_in_out') || attendanceTables.includes('teacher_attendance')
@@ -1245,9 +1223,15 @@ function StudentsList({
       const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno') ?? ''
       const cls = pick(s, 'class_name', 'class', 'grade') ?? ''
       const email = pick(s, 'email', 'email_id') ?? ''
-      return [name, roll, cls, email, s.id].some((v) => v.toLowerCase().includes(q))
+      const subs = subjectsFromStudent(s).join(' ')
+      return [name, roll, cls, email, subs, s.id].some((v) => v.toLowerCase().includes(q))
     })
   }, [students, search])
+
+  const photoMismatchStudents = useMemo(
+    () => sortStudents(students.filter(isFacePhotoUpdatedForAttendance)),
+    [students],
+  )
 
   const stats = useMemo(() => {
     let faceRegistered = 0
@@ -1258,9 +1242,10 @@ function StudentsList({
       total: students.length,
       faceRegistered,
       facePending: students.length - faceRegistered,
+      photoMismatch: photoMismatchStudents.length,
       inactive: students.filter((s) => s.is_active === false).length,
     }
-  }, [students])
+  }, [students, photoMismatchStudents.length])
 
   const tablePageCount = Math.max(1, Math.ceil(filtered.length / tablePageSize))
   const safeTablePage = Math.min(tablePage, tablePageCount - 1)
@@ -1412,7 +1397,26 @@ function StudentsList({
           <span className="institutes-stat-value">{loading ? '…' : stats.inactive.toLocaleString('en-IN')}</span>
           <span className="institutes-stat-label">Inactive</span>
         </div>
+        <div className="institutes-stat-card institutes-stat-card--warn">
+          <span className="institutes-stat-value">
+            {loading ? '…' : stats.photoMismatch.toLocaleString('en-IN')}
+          </span>
+          <span className="institutes-stat-label">Photo updated for attendance</span>
+        </div>
       </div>
+
+      <InstituteIntegrityPanel
+        institute={institute}
+        students={students}
+        loading={loading}
+        attDate={attDate}
+        onAttDateChange={setAttDate}
+        dayAtt={dayAtt}
+        attLoading={attLoading}
+        attError={attError}
+        showDayAttendance={showDayAttendance}
+        onSelectStudent={onSelectStudent}
+      />
 
       <AddStudentPanel institute={institute} onAdded={() => setReloadTick((t) => t + 1)} />
 
@@ -1495,6 +1499,7 @@ function StudentsList({
               <th>Name</th>
               <th>Roll</th>
               <th>Class</th>
+              <th>Subjects</th>
               <th title="Earliest entry on selected date (attendance_in_out)">Entry</th>
               <th title="Latest exit on selected date">Exit</th>
               <th>Face</th>
@@ -1505,13 +1510,13 @@ function StudentsList({
           <tbody>
             {students.length === 0 && !loading ? (
               <tr>
-                <td colSpan={9} className="muted">
+                <td colSpan={10} className="muted">
                   No students registered for this institute yet.
                 </td>
               </tr>
             ) : filtered.length === 0 && !loading ? (
               <tr>
-                <td colSpan={9} className="muted">
+                <td colSpan={10} className="muted">
                   No students match “{search}”. Clear the search to see all {students.length} row(s).
                 </td>
               </tr>
@@ -1525,6 +1530,7 @@ function StudentsList({
                 const faceOk = hasFacePhoto(s)
                 const classLabel = cls ? `${cls}${sec ? ` — ${sec}` : ''}` : studentFolderLabel(s)
                 const rowAtt = dayAtt[s.id]
+                const enrolledSubjects = subjectsFromStudent(s)
 
                 return (
                   <tr key={s.id} className={!active ? 'student-row-inactive' : undefined}>
@@ -1542,6 +1548,9 @@ function StudentsList({
                     </td>
                     <td>{roll}</td>
                     <td>{classLabel}</td>
+                    <td className="small" title={enrolledSubjects.join(', ') || undefined}>
+                      {formatSubjectsDisplay(enrolledSubjects)}
+                    </td>
                     <td className="students-day-att-cell">
                       {showDayAttendance ? (
                         <>
@@ -1577,13 +1586,22 @@ function StudentsList({
                       )}
                     </td>
                     <td className="actions-cell">
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm institutes-action-btn"
-                        onClick={() => onSelectStudent(s)}
-                      >
-                        Open
-                      </button>
+                      <div className="row" style={{ gap: '0.35rem', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm institutes-action-btn"
+                          onClick={() => setEditingStudent(s)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm institutes-action-btn"
+                          onClick={() => onSelectStudent(s)}
+                        >
+                          Open
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -1604,6 +1622,18 @@ function StudentsList({
           onPageSize={(n) => {
             setTablePageSize(n)
             setTablePage(0)
+          }}
+        />
+      ) : null}
+
+      {editingStudent ? (
+        <EditStudentModal
+          student={editingStudent}
+          instituteLabel={institute.name ?? institute.institute_code ?? institute.id}
+          onClose={() => setEditingStudent(null)}
+          onSaved={() => {
+            setReloadTick((t) => t + 1)
+            setEditingStudent(null)
           }}
         />
       ) : null}
@@ -2012,6 +2042,7 @@ export function StudentsSection({
             institute={institute}
             onBack={() => { setLevel('students'); setStudent(null) }}
             onSelectSubject={s => { setSubject(s); setLevel('attendance') }}
+            onStudentUpdated={(s) => setStudent(s)}
           />
         )}
         {level === 'attendance' && student && subject && schema.attendanceTable && institute && (

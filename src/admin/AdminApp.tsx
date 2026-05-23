@@ -5,10 +5,12 @@ import { DashboardLayout, type DashboardTab } from './layouts/DashboardLayout'
 import { LoginPage } from './pages/LoginPage'
 import { AddInstituteForm } from './components/AddInstituteForm'
 import { InstituteAdminsSection } from './components/InstituteAdminsSection'
+import { InstituteInstructorsSection } from './components/InstituteInstructorsSection'
 import { InstituteList } from './components/InstituteList'
 import { OverviewPanel } from './components/OverviewPanel'
 import { StudentsSection } from './components/StudentsSection'
 import { ReportsSection } from './components/ReportsSection'
+import { AttendanceIntegritySection } from './components/AttendanceIntegritySection'
 import './index.css'
 import './App.css'
 
@@ -69,6 +71,7 @@ function AuthenticatedApp() {
     >
       {tab === 'overview' && <OverviewPanel />}
       {tab === 'admins'   && <InstituteAdminsSection embedded />}
+      {tab === 'instructors' && <InstituteInstructorsSection embedded />}
       {tab === 'institutes' && (
         <InstituteList reloadToken={instituteReload} embedded onAddInstitute={() => setTab('add')} />
       )}
@@ -78,6 +81,15 @@ function AuthenticatedApp() {
           embedded
           jumpToInstituteId={studentsJumpInstituteId}
           onJumpToInstituteHandled={handleStudentsJumpHandled}
+        />
+      )}
+      {tab === 'integrity' && (
+        <AttendanceIntegritySection
+          embedded
+          onOpenInstitute={(instituteId) => {
+            setStudentsJumpInstituteId(instituteId)
+            setTab('students')
+          }}
         />
       )}
       {tab === 'reports' && (
