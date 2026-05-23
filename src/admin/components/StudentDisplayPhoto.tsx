@@ -16,20 +16,24 @@ export function StudentDisplayPhoto({ student, displayName, size }: Props) {
 
   if (!photoUrl && !storagePath && !thumbnail) return null
 
+  const wrapClass = size === 'lg' ? 'student-avatar-lg' : 'student-table-avatar'
+
   return (
-    <SecureNetworkImage
-      key={photoDeps}
-      imageUrl={photoUrl}
-      storagePath={storagePath}
-      cacheKey={studentId ? `student_face_${studentId}` : null}
-      version={version}
-      alt={displayName}
-      className={imgClass}
-      placeholder={
-        thumbnail ? (
-          <img src={thumbnail} alt="" className={imgClass} aria-hidden />
-        ) : null
-      }
-    />
+    <div className={wrapClass}>
+      <SecureNetworkImage
+        key={photoDeps}
+        imageUrl={photoUrl}
+        storagePath={storagePath}
+        cacheKey={studentId ? `student_face_${studentId}` : null}
+        version={version}
+        alt={displayName}
+        className={imgClass}
+        placeholder={
+          thumbnail ? (
+            <img src={thumbnail} alt="" className={imgClass} aria-hidden />
+          ) : null
+        }
+      />
+    </div>
   )
 }

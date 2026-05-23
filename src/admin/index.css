@@ -2209,7 +2209,35 @@ tbody tr:hover { background: var(--surface-hover); }
 
 .students-integrity-table-wrap .students-photo-cell {
   min-width: 4.5rem;
+  max-width: 5.5rem;
   vertical-align: middle;
+  overflow: hidden;
+}
+
+.students-integrity-table-wrap .student-table-avatar {
+  position: relative;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--accent-muted, #e8eef7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.students-integrity-table-wrap .student-table-avatar .student-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  inset: 0;
+}
+
+.integrity-page .students-integrity-section {
+  overflow: visible;
 }
 
 .muted.tiny {

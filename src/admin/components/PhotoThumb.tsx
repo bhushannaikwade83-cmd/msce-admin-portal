@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { b2ObjectPathFromPhotoUrl } from '../lib/photoUrl'
+import { ModalPortal } from './ModalPortal'
 import { SecureNetworkImage } from './SecureNetworkImage'
 
 function PhotoLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
@@ -12,15 +13,17 @@ function PhotoLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
   }, [onClose])
 
   return (
-    <div className="lightbox-overlay" onClick={onClose} role="dialog" aria-modal aria-label={alt}>
-      <div className="lightbox-inner" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="lightbox-close" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
-        <img src={src} alt={alt} className="lightbox-img" />
-        <p className="lightbox-caption">{alt}</p>
+    <ModalPortal>
+      <div className="lightbox-overlay" onClick={onClose} role="dialog" aria-modal aria-label={alt}>
+        <div className="lightbox-inner" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="lightbox-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+          <img src={src} alt={alt} className="lightbox-img" />
+          <p className="lightbox-caption">{alt}</p>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }
 
