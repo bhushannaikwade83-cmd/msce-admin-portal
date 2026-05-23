@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchPortalSessionInfo, type PortalSessionInfo } from '../lib/adminOnboardingPortal'
 import { compareInstituteId } from '../lib/instituteSort'
+import { fetchAllPortalInstructors, type PortalInstructorRow } from '../lib/portalInstructors'
 import { getSupabase } from '../lib/supabase'
 
 const REALTIME_RELOAD_MS = 450
@@ -8,26 +9,12 @@ const LIST_PAGE_SIZE = 50
 
 type InstituteRow = {
   id: string
-  institute_name: string
-  institute_code: string | null
-  active: boolean | null
-}
-
-type InstructorRow = {
-  id: string
   name: string | null
-  email: string | null
-  phone_number: string | null
-  status: string | null
-  institute_id: string | null
-  created_at: string | null
-  last_login: string | null
-  pin_hash: string | null
-  has_pin: boolean | null
-  pin_set_at: string | null
+  institute_code: string | null
+  is_active: boolean | null
 }
 
-export type InstructorDisplayRow = InstructorRow & {
+type InstructorDisplayRow = PortalInstructorRow & {
   instituteUuid: string
   instituteCode: string
   instituteName: string
@@ -51,12 +38,6 @@ function fmtWhen(iso: string | null | undefined) {
   }
 }
 
-function pinConfigured(row: InstructorRow): boolean {
-  if (row.has_pin === true) return true
-  const h = (row.pin_hash ?? '').trim()
-  return h.length > 0
-}
-
 function statusTone(status: string): string {
   const s = status.trim().toLowerCase()
   if (s === 'active' || s === 'approved') return 'badge-present'
@@ -68,26 +49,6 @@ function statusTone(status: string): string {
 function normalizeStatus(status: string | null | undefined): string {
   const s = (status ?? '').trim().toLowerCase()
   return s || 'unknown'
-}
-
-function buildInstituteLookup(institutes: InstituteRow[]) {
-  const byId = new Map<string, InstituteRow>()
-  const byCode = new Map<string, InstituteRow>()
-  for (const inst of institutes) {
-    byId.set(inst.id, inst)
-    const code = (inst.institute_code ?? '').trim()
-    if (code) byCode.set(code, inst)
-  }
-  return { byId, byCode }
-}
-
-function resolveInstitute(
-  profileInstituteId: string | null,
-  lookup: ReturnType<typeof buildInstituteLookup>,
-): InstituteRow | null {
-  const key = (profileInstituteId ?? '').trim()
-  if (!key) return null
-  return lookup.byId.get(key) ?? lookup.byCode.get(key) ?? null
 }
 
 function groupMatchesSearch(group: InstituteGroup, q: string): boolean {
@@ -104,12 +65,60 @@ function groupMatchesSearch(group: InstituteGroup, q: string): boolean {
   return hay.includes(q)
 }
 
+function buildGroups(institutes: InstituteRow[], rows: PortalInstructorRow[]): InstituteGroup[] {
+  const byInstitute = new Map<string, InstructorDisplayRow[]>()
+
+  for (const row of rows) {
+    const instituteUuid = (row.institute_uuid ?? row.institute_id ?? '').trim()
+    if (!instituteUuid) continue
+    const display: InstructorDisplayRow = {
+      ...row,
+      instituteUuid,
+      instituteCode: (row.institute_code ?? instituteUuid).trim(),
+      instituteName: row.institute_name?.trim() || '—',
+      pinConfigured: row.has_pin === true,
+    }
+    const list = byInstitute.get(instituteUuid) ?? []
+    list.push(display)
+    byInstitute.set(instituteUuid, list)
+  }
+
+  const built: InstituteGroup[] = institutes.map((inst) => {
+    const code = (inst.institute_code ?? inst.id).trim()
+    const list = byInstitute.get(inst.id) ?? []
+    list.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }))
+    return {
+      instituteUuid: inst.id,
+      instituteCode: code,
+      instituteName: inst.name?.trim() || code,
+      active: inst.is_active,
+      instructors: list,
+    }
+  })
+
+  for (const [uuid, list] of byInstitute) {
+    if (built.some((g) => g.instituteUuid === uuid)) continue
+    const first = list[0]
+    built.push({
+      instituteUuid: uuid,
+      instituteCode: first?.instituteCode ?? uuid,
+      instituteName: first?.instituteName ?? 'Unknown institute',
+      active: first?.institute_active ?? null,
+      instructors: list,
+    })
+  }
+
+  built.sort((a, b) => compareInstituteId(a.instituteCode, b.instituteCode))
+  return built
+}
+
 export function InstituteInstructorsSection({ embedded = false }: { embedded?: boolean }) {
   const [groups, setGroups] = useState<InstituteGroup[]>([])
   const [loading, setLoading] = useState(false)
   const [liveSync, setLiveSync] = useState(false)
   const [sessionInfo, setSessionInfo] = useState<PortalSessionInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loadSource, setLoadSource] = useState<'rpc' | 'direct' | null>(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [showEmptyInstitutes, setShowEmptyInstitutes] = useState(true)
@@ -125,80 +134,26 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
     try {
       const info = await fetchPortalSessionInfo()
       setSessionInfo(info)
+
       if (info && info.can_list_onboarding === false) {
         setGroups([])
+        setLoadSource(null)
+        if (!silent) setLoading(false)
         return
       }
 
-      const sb = getSupabase()
-      const [instRes, profRes] = await Promise.all([
-        sb
-          .from('institutes')
-          .select('id,institute_name,institute_code,active')
-          .order('institute_code', { ascending: true }),
-        sb
-          .from('profiles')
-          .select(
-            'id,name,email,phone_number,status,institute_id,created_at,last_login,pin_hash,has_pin,pin_set_at',
-          )
-          .eq('role', 'attendance_user')
-          .order('created_at', { ascending: false }),
-      ])
-
-      if (instRes.error) throw new Error(instRes.error.message)
-      if (profRes.error) throw new Error(profRes.error.message)
-
-      const institutes = (instRes.data ?? []) as InstituteRow[]
-      const instructors = (profRes.data ?? []) as InstructorRow[]
-      const lookup = buildInstituteLookup(institutes)
-
-      const byInstitute = new Map<string, InstructorDisplayRow[]>()
-      for (const row of instructors) {
-        const inst = resolveInstitute(row.institute_id, lookup)
-        const instituteUuid = inst?.id ?? (row.institute_id ?? '').trim()
-        if (!instituteUuid) continue
-        const display: InstructorDisplayRow = {
-          ...row,
-          instituteUuid,
-          instituteCode: (inst?.institute_code ?? instituteUuid).trim(),
-          instituteName: inst?.institute_name ?? '—',
-          pinConfigured: pinConfigured(row),
-        }
-        const list = byInstitute.get(instituteUuid) ?? []
-        list.push(display)
-        byInstitute.set(instituteUuid, list)
+      const { rows: instructorRows, institutes, source } = await fetchAllPortalInstructors()
+      setLoadSource(source)
+      if (source === 'direct') {
+        setError(
+          'Run migration 075_list_portal_instructors_all.sql in Supabase SQL Editor for the most reliable all-institute list.',
+        )
       }
 
-      const built: InstituteGroup[] = institutes.map((inst) => {
-        const code = (inst.institute_code ?? inst.id).trim()
-        const list = byInstitute.get(inst.id) ?? []
-        list.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }))
-        return {
-          instituteUuid: inst.id,
-          instituteCode: code,
-          instituteName: inst.institute_name,
-          active: inst.active,
-          instructors: list,
-        }
-      })
-
-      // Orphan instructors (institute row missing but profile exists)
-      for (const [uuid, list] of byInstitute) {
-        if (built.some((g) => g.instituteUuid === uuid)) continue
-        const first = list[0]
-        built.push({
-          instituteUuid: uuid,
-          instituteCode: first?.instituteCode ?? uuid,
-          instituteName: first?.instituteName ?? 'Unknown institute',
-          active: null,
-          instructors: list,
-        })
-      }
-
-      built.sort((a, b) => compareInstituteId(a.instituteCode, b.instituteCode))
-      setGroups(built)
+      setGroups(buildGroups(institutes, instructorRows))
     } catch (e) {
       setGroups([])
+      setLoadSource(null)
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       if (!silent) setLoading(false)
@@ -286,9 +241,16 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
             <h2>Institute instructors</h2>
           )}
           <p className="muted small">
-            Every institute and up to 4 staff / instructor accounts from the mobile app. PINs are stored
-            as a secure hash — this portal shows whether a PIN was set, not the 4-digit number (share that
-            only when creating the user in the app).
+            All institutes — staff / instructor accounts (<code>attendance_user</code>) from the mobile app.
+            PIN column shows whether login PIN was saved (not the 4-digit number).
+            {loadSource === 'rpc' ? (
+              <>
+                {' '}
+                <span className="badge badge-present" style={{ fontSize: '0.65rem' }}>
+                  Live RPC
+                </span>
+              </>
+            ) : null}
           </p>
         </div>
         <div className="row" style={{ gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
@@ -310,7 +272,9 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
         <p className="error" role="alert">
           Portal access: {sessionInfo.message ?? 'super_admin required'} — signed in as{' '}
           <strong>{sessionInfo.email ?? 'unknown'}</strong> (role:{' '}
-          <code>{sessionInfo.profile_role ?? 'missing'}</code>).
+          <code>{sessionInfo.profile_role ?? 'missing'}</code>). Sign in with{' '}
+          <code>gcctbcsupport@gmail.com</code> or run migration <code>058</code> /{' '}
+          <code>059</code> in Supabase, then sign out and sign in again.
         </p>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
@@ -327,7 +291,7 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
         </span>
         {stats.missingPin > 0 ? (
           <span className="stat-pill badge-absent" style={{ padding: '0.35rem 0.65rem' }}>
-            <strong>{stats.missingPin}</strong> missing PIN (cannot log in)
+            <strong>{stats.missingPin}</strong> missing PIN
           </span>
         ) : null}
         <span className="muted small">
@@ -378,8 +342,12 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
 
       {loading && groups.length === 0 ? (
         <p className="muted">Loading instructors…</p>
-      ) : filteredGroups.length === 0 ? (
-        <p className="muted">No institutes match your filters.</p>
+      ) : filteredGroups.length === 0 && !loading ? (
+        <p className="muted">
+          {sessionInfo?.can_list_onboarding === false
+            ? 'No data — fix portal login (see message above).'
+            : 'No instructors found. Add instructors in the mobile app (Institute → Add instructor).'}
+        </p>
       ) : (
         <div className="instructors-groups">
           {pageGroups.map((group) => (
@@ -428,13 +396,9 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
                           </td>
                           <td>
                             {row.pinConfigured ? (
-                              <span className="badge badge-present" title="PIN hash present — login allowed">
-                                PIN set
-                              </span>
+                              <span className="badge badge-present">PIN set</span>
                             ) : (
-                              <span className="badge badge-absent" title="No PIN hash — staff cannot sign in">
-                                Missing
-                              </span>
+                              <span className="badge badge-absent">Missing</span>
                             )}
                           </td>
                           <td className="small">{fmtWhen(row.pin_set_at)}</td>
