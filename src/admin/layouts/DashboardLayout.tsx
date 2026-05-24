@@ -14,6 +14,9 @@ export type DashboardTab =
 
 type Props = {
   userEmail: string | null
+  districtLabel?: string | null
+  readOnly?: boolean
+  allowedTabs?: DashboardTab[]
   activeTab: DashboardTab
   onTab: (t: DashboardTab) => void
   onSignOut: () => void | Promise<void>
@@ -37,11 +40,23 @@ const tabs: TabDef[] = [
   { id: 'reports', label: 'Reports', icon: '📑' },
 ]
 
-export function DashboardLayout({ userEmail, activeTab, onTab, onSignOut, children }: Props) {
+export function DashboardLayout({
+  userEmail,
+  districtLabel,
+  readOnly = false,
+  allowedTabs,
+  activeTab,
+  onTab,
+  onSignOut,
+  children,
+}: Props) {
   const headerRef = useRef<HTMLElement>(null)
   const navRef = useRef<HTMLElement>(null)
   const [signingOut, setSigningOut] = useState(false)
-  const currentTab = tabs.find((x) => x.id === activeTab)
+  const visibleTabs = allowedTabs?.length
+    ? tabs.filter((t) => allowedTabs.includes(t.id))
+    : tabs
+  const currentTab = visibleTabs.find((x) => x.id === activeTab) ?? visibleTabs[0]
 
   useDashChromeSync(headerRef, navRef)
 
@@ -67,8 +82,14 @@ export function DashboardLayout({ userEmail, activeTab, onTab, onSignOut, childr
           <div className="gov-header-subtitle">Maharashtra State Council of Examinations</div>
         </div>
         <div className="gov-header-right dash-header-actions">
-          <span className="gov-badge gov-badge-portal">Admin</span>
+          <span className="gov-badge gov-badge-portal">{districtLabel ? 'District' : 'Admin'}</span>
+          {readOnly ? <span className="gov-badge gov-badge-muted">View only</span> : null}
           <span className="gov-badge gov-badge-secure">🔒 Secure</span>
+          {districtLabel ? (
+            <span className="dash-district-label" title="Institutes filtered by district code prefix">
+              {districtLabel}
+            </span>
+          ) : null}
           <span className="dash-topnav-user" title={userEmail ?? ''}>
             {userEmail ?? '—'}
           </span>
@@ -85,7 +106,7 @@ export function DashboardLayout({ userEmail, activeTab, onTab, onSignOut, childr
 
       <nav ref={navRef} className="dash-topnav" aria-label="Main navigation">
         <div className="dash-topnav-scroll">
-          {tabs.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t.id}
               type="button"

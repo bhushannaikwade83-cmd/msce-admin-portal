@@ -370,7 +370,16 @@ function studentFolderLabel(s: Student): string {
   return label || 'All students'
 }
 
-function AddStudentPanel({ institute, onAdded }: { institute: InstituteRow; onAdded: () => void }) {
+function AddStudentPanel({
+  institute,
+  onAdded,
+  hidden = false,
+}: {
+  institute: InstituteRow
+  onAdded: () => void
+  hidden?: boolean
+}) {
+  if (hidden) return null
   const [open, setOpen] = useState(false)
   const [firstName, setFirstName] = useState('')
   const [middleName, setMiddleName] = useState('')
@@ -848,12 +857,13 @@ function AttendanceView({
 ══════════════════════════════════════════════════════════════ */
 
 function SubjectFolders({
-  student, subjectTable, attTable, institute, onBack, onSelectSubject, onStudentUpdated,
+  student, subjectTable, attTable, institute, readOnly = false, onBack, onSelectSubject, onStudentUpdated,
 }: {
   student: Student
   subjectTable: string | null
   attTable: string | null
   institute: InstituteRow
+  readOnly?: boolean
   onBack: () => void
   onSelectSubject: (s: Subject) => void
   onStudentUpdated?: (s: Student) => void
@@ -1045,14 +1055,16 @@ function SubjectFolders({
             📚 Enrolled subjects:{' '}
             <strong>{formatSubjectsDisplay(subjectsFromStudent(student), 8)}</strong>
           </div>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            style={{ marginTop: '0.5rem' }}
-            onClick={() => setEditingStudent(true)}
-          >
-            ✏️ Edit name / subjects
-          </button>
+          {!readOnly ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ marginTop: '0.5rem' }}
+              onClick={() => setEditingStudent(true)}
+            >
+              ✏️ Edit name / subjects
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -1131,7 +1143,7 @@ function SubjectFolders({
         })}
       </div>
 
-      {editingStudent ? (
+      {editingStudent && !readOnly ? (
         <EditStudentModal
           student={student}
           instituteLabel={institute.name ?? institute.institute_code ?? institute.id}
@@ -1161,12 +1173,14 @@ function StudentsList({
   institute,
   reloadToken = 0,
   attendanceTables,
+  readOnly = false,
   onBack,
   onSelectStudent,
 }: {
   institute: InstituteRow
   reloadToken?: number
   attendanceTables: string[]
+  readOnly?: boolean
   onBack: () => void
   onSelectStudent: (s: Student) => void
 }) {
@@ -1418,7 +1432,7 @@ function StudentsList({
         onSelectStudent={onSelectStudent}
       />
 
-      <AddStudentPanel institute={institute} onAdded={() => setReloadTick((t) => t + 1)} />
+      <AddStudentPanel institute={institute} onAdded={() => setReloadTick((t) => t + 1)} hidden={readOnly} />
 
       <div className="search-bar-row institutes-search-row students-att-toolbar">
         <div className="search-bar">
@@ -1587,13 +1601,15 @@ function StudentsList({
                     </td>
                     <td className="actions-cell">
                       <div className="row" style={{ gap: '0.35rem', flexWrap: 'wrap' }}>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm institutes-action-btn"
-                          onClick={() => setEditingStudent(s)}
-                        >
-                          Edit
-                        </button>
+                        {!readOnly ? (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm institutes-action-btn"
+                            onClick={() => setEditingStudent(s)}
+                          >
+                            Edit
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="btn btn-primary btn-sm institutes-action-btn"
@@ -1626,7 +1642,7 @@ function StudentsList({
         />
       ) : null}
 
-      {editingStudent ? (
+      {editingStudent && !readOnly ? (
         <EditStudentModal
           student={editingStudent}
           instituteLabel={institute.name ?? institute.institute_code ?? institute.id}
@@ -1883,10 +1899,12 @@ function InstitutePicker({
 
 export function StudentsSection({
   embedded = false,
+  readOnly = false,
   jumpToInstituteId = null,
   onJumpToInstituteHandled,
 }: {
   embedded?: boolean
+  readOnly?: boolean
   jumpToInstituteId?: string | null
   onJumpToInstituteHandled?: () => void
 }) {
@@ -1943,8 +1961,9 @@ export function StudentsSection({
         <div>
           {embedded ? <span className="section-kicker">Students</span> : <h2>Students</h2>}
           <p className="muted small students-page-lead">
-            Browse institutes, manage rosters, and open each student&apos;s subject folders with live attendance from
-            the database.
+            {readOnly
+              ? 'Browse institutes and students in your district. View attendance and reports — editing is disabled.'
+              : 'Browse institutes, manage rosters, and open each student\u2019s subject folders with live attendance from the database.'}
           </p>
           <div className="students-breadcrumb-trail tab-breadcrumb-trail">
             <span
@@ -2030,6 +2049,7 @@ export function StudentsSection({
             institute={institute}
             reloadToken={reloadToken}
             attendanceTables={schema.attendanceTables}
+            readOnly={readOnly}
             onBack={() => { setLevel('institutes'); setInstitute(null) }}
             onSelectStudent={(s) => { setStudent(s); setSubject(null); setLevel('subjects') }}
           />
@@ -2040,6 +2060,7 @@ export function StudentsSection({
             subjectTable={schema.subjectTable}
             attTable={schema.attendanceTable}
             institute={institute}
+            readOnly={readOnly}
             onBack={() => { setLevel('students'); setStudent(null) }}
             onSelectSubject={s => { setSubject(s); setLevel('attendance') }}
             onStudentUpdated={(s) => setStudent(s)}

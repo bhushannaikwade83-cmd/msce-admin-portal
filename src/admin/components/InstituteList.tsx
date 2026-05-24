@@ -99,6 +99,7 @@ function buildAdminGpsLines(
 type Props = {
   reloadToken?: number
   embedded?: boolean
+  readOnly?: boolean
   onAddInstitute?: () => void
 }
 
@@ -437,6 +438,7 @@ type AdminInviteRow = {
 export function InstituteList({
   reloadToken = 0,
   embedded = false,
+  readOnly = false,
   onAddInstitute,
 }: Props) {
   const { user } = useAuth()
@@ -618,7 +620,9 @@ export function InstituteList({
         <div>
           {!embedded ? <h2>Institutes</h2> : <span className="section-kicker">Institute directory</span>}
           <p className="muted small institutes-page-lead">
-            Manage institutes in the database. New institutes are registered as active automatically.
+            {readOnly
+              ? 'View institutes in your district (filtered by institute code). Editing is disabled.'
+              : 'Manage institutes in the database. New institutes are registered as active automatically.'}
           </p>
         </div>
         <div className="card-head-actions">
@@ -809,14 +813,16 @@ export function InstituteList({
                     {user ? (
                       <td className="actions-cell">
                         <div className="inst-actions-row">
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm institutes-action-btn"
-                            title="Edit institute in database"
-                            onClick={() => setEditing(r)}
-                          >
-                            Edit
-                          </button>
+                          {!readOnly ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm institutes-action-btn"
+                              title="Edit institute in database"
+                              onClick={() => setEditing(r)}
+                            >
+                              Edit
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="btn btn-primary btn-sm institutes-action-btn"
@@ -875,7 +881,7 @@ export function InstituteList({
           </button>
         </div>
       ) : null}
-      {editing ? (
+      {editing && !readOnly ? (
         <InstituteEditDialog
           institute={editing}
           onClose={() => setEditing(null)}

@@ -147,6 +147,14 @@ export type PortalSessionInfo = {
   profile_role?: string | null
   profile_status?: string | null
   institute_id?: string | null
+  is_super_admin_fn?: boolean
+  is_portal_district_viewer?: boolean
+  portal_district_key?: string | null
+  district_name?: string | null
+  institute_prefixes?: string[] | null
+  portal_mode?: 'super_admin' | 'district_viewer' | 'other' | 'anonymous' | null
+  read_only?: boolean
+  allowed_tabs?: string[] | null
   can_list_onboarding?: boolean
   message?: string
 }

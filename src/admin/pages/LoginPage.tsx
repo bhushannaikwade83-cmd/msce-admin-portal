@@ -47,7 +47,9 @@ export function LoginPage() {
             <div className="login-card-header">
               <div className="login-card-emblem" aria-hidden>🔐</div>
               <h2 className="login-heading">Authorised Sign In</h2>
-              <p className="login-lead">Use the website admin account credentials to access the portal.</p>
+              <p className="login-lead">
+                Sign in with your MSCE portal credentials (super admin or district viewer).
+              </p>
             </div>
 
             <form

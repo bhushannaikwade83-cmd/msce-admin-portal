@@ -105,10 +105,12 @@ function monthRange(month: string): { from: string; to: string } {
 
 export function ReportsSection({
   embedded = false,
+  readOnly = false,
   jumpToInstituteId = null,
   onJumpToInstituteHandled,
 }: {
   embedded?: boolean
+  readOnly?: boolean
   jumpToInstituteId?: string | null
   onJumpToInstituteHandled?: () => void
 }) {
@@ -426,9 +428,15 @@ export function ReportsSection({
         <div>
           {!embedded ? <h2>Reports</h2> : <span className="section-kicker">Attendance reports</span>}
           <p className="muted small reports-page-lead">
-            Choose an institute, set the report month, then download PDFs using the same{' '}
-            <code>attendance_in_out</code> logic as the MSCE app (tabular institute report or per-student daily
-            detail). Open from <strong>Institutes → Report</strong> to pre-select an institute.
+            {readOnly
+              ? 'View and download attendance reports for institutes in your district.'
+              : 'Choose an institute, set the report month, then download PDFs using the same '}
+            {!readOnly ? (
+              <>
+                <code>attendance_in_out</code> logic as the MSCE app (tabular institute report or per-student daily
+                detail). Open from <strong>Institutes → Report</strong> to pre-select an institute.
+              </>
+            ) : null}
           </p>
         </div>
         <div className="card-head-actions">
