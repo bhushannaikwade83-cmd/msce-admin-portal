@@ -43,24 +43,35 @@ function loadMergedEnv(): Record<string, string> {
   return merged
 }
 
-function resolveSupabase(merged: Record<string, string>): {
+function preferProcessEnvFirst(mode: string): boolean {
+  return mode === 'production' || !!process.env.VERCEL || !!process.env.CI
+}
+
+function resolveSupabase(merged: Record<string, string>, mode: string): {
   url: string
   anonKey: string
   storageBucket: string
 } {
+  const processFirst = preferProcessEnvFirst(mode)
+  const pick = (...values: string[]) => values.find((v) => v.trim())?.trim() ?? ''
+  const envUrl = pick(process.env.VITE_SUPABASE_URL || '', process.env.SUPABASE_URL || '')
+  const fileUrl = pick(merged.VITE_SUPABASE_URL || '', merged.SUPABASE_URL || '')
+  const envAnon = pick(process.env.VITE_SUPABASE_ANON_KEY || '', process.env.SUPABASE_ANON_KEY || '')
+  const fileAnon = pick(merged.VITE_SUPABASE_ANON_KEY || '', merged.SUPABASE_ANON_KEY || '')
+  const envBucket = pick(process.env.VITE_STORAGE_BUCKET || '')
+  const fileBucket = pick(merged.VITE_STORAGE_BUCKET || '')
   const url =
-    (merged.VITE_SUPABASE_URL || merged.SUPABASE_URL || '').trim() ||
-    (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim()
+    processFirst
+      ? pick(envUrl, fileUrl)
+      : pick(fileUrl, envUrl)
   const anonKey =
-    (merged.VITE_SUPABASE_ANON_KEY || merged.SUPABASE_ANON_KEY || '').trim() ||
-    (
-      process.env.VITE_SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      ''
-    ).trim()
+    processFirst
+      ? pick(envAnon, fileAnon)
+      : pick(fileAnon, envAnon)
   const storageBucket =
-    (merged.VITE_STORAGE_BUCKET || '').trim() ||
-    (process.env.VITE_STORAGE_BUCKET || '').trim()
+    processFirst
+      ? pick(envBucket, fileBucket)
+      : pick(fileBucket, envBucket)
   return { url, anonKey, storageBucket }
 }
 
@@ -94,7 +105,7 @@ const PROD_CSP = [
 
 export default defineConfig(({ mode }) => {
   const merged = loadMergedEnv()
-  const { url, anonKey, storageBucket } = resolveSupabase(merged)
+  const { url, anonKey, storageBucket } = resolveSupabase(merged, mode)
   if (mode === 'production' && (!url || !anonKey)) {
     console.warn(
       '[vite] Production build: set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in env or .env files.',
