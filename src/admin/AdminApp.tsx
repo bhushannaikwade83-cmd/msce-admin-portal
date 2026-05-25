@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AuthProvider } from './context/auth-context'
 import { PortalAccessProvider, usePortalAccess } from './context/portal-access-context'
 import { useAuth } from './hooks/useAuth'
@@ -57,6 +57,20 @@ function PortalAccessDenied({ message, email }: { message: string; email: string
   )
 }
 
+function TabPanel({
+  active,
+  children,
+}: {
+  active: boolean
+  children: ReactNode
+}) {
+  return (
+    <div hidden={!active} aria-hidden={!active}>
+      {children}
+    </div>
+  )
+}
+
 function AuthenticatedApp() {
   const { user, loading, configError, signOut } = useAuth()
   const portal = usePortalAccess()
@@ -64,18 +78,28 @@ function AuthenticatedApp() {
   const [instituteReload, setInstituteReload] = useState(0)
   const [studentsJumpInstituteId, setStudentsJumpInstituteId] = useState<string | null>(null)
   const [reportsJumpInstituteId, setReportsJumpInstituteId] = useState<string | null>(null)
+  const [mountedTabs, setMountedTabs] = useState<DashboardTab[]>(['overview'])
 
   const handleStudentsJumpHandled = useCallback(() => setStudentsJumpInstituteId(null), [])
   const handleReportsJumpHandled = useCallback(() => setReportsJumpInstituteId(null), [])
 
   const readOnly = portal.readOnly
   const allowedTabs = portal.allowedTabs
+  const visibleTabs = useMemo(
+    () => allowedTabs,
+    [allowedTabs],
+  )
 
   useEffect(() => {
     if (portal.mode === 'district_viewer' && !allowedTabs.includes(tab)) {
       setTab('institutes')
     }
   }, [portal.mode, allowedTabs, tab])
+
+  useEffect(() => {
+    if (!visibleTabs.includes(tab)) return
+    setMountedTabs((prev) => (prev.includes(tab) ? prev : [...prev, tab]))
+  }, [tab, visibleTabs])
 
   if (configError) {
     return <ConfigErrorScreen message={configError} />
@@ -108,43 +132,67 @@ function AuthenticatedApp() {
       onTab={setTab}
       onSignOut={signOut}
     >
-      {tab === 'overview' && <OverviewPanel />}
-      {tab === 'admins'   && <InstituteAdminsSection embedded />}
-      {tab === 'instructors' && <InstituteInstructorsSection embedded />}
-      {tab === 'institutes' && (
-        <InstituteList
-          reloadToken={instituteReload}
-          embedded
-          readOnly={readOnly}
-          onAddInstitute={readOnly ? undefined : () => setTab('add')}
-        />
-      )}
-      {tab === 'add'      && <AddInstituteForm onCreated={() => setInstituteReload((n) => n + 1)} embedded />}
-      {tab === 'students' && (
-        <StudentsSection
-          embedded
-          readOnly={readOnly}
-          jumpToInstituteId={studentsJumpInstituteId}
-          onJumpToInstituteHandled={handleStudentsJumpHandled}
-        />
-      )}
-      {tab === 'integrity' && (
-        <AttendanceIntegritySection
-          embedded
-          onOpenInstitute={(instituteId) => {
-            setStudentsJumpInstituteId(instituteId)
-            setTab('students')
-          }}
-        />
-      )}
-      {tab === 'reports' && (
-        <ReportsSection
-          embedded
-          readOnly={readOnly}
-          jumpToInstituteId={reportsJumpInstituteId}
-          onJumpToInstituteHandled={handleReportsJumpHandled}
-        />
-      )}
+      {visibleTabs.includes('overview') && mountedTabs.includes('overview') ? (
+        <TabPanel active={tab === 'overview'}>
+          <OverviewPanel />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('admins') && mountedTabs.includes('admins') ? (
+        <TabPanel active={tab === 'admins'}>
+          <InstituteAdminsSection embedded />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('instructors') && mountedTabs.includes('instructors') ? (
+        <TabPanel active={tab === 'instructors'}>
+          <InstituteInstructorsSection embedded />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('institutes') && mountedTabs.includes('institutes') ? (
+        <TabPanel active={tab === 'institutes'}>
+          <InstituteList
+            reloadToken={instituteReload}
+            embedded
+            readOnly={readOnly}
+            onAddInstitute={readOnly ? undefined : () => setTab('add')}
+          />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('add') && mountedTabs.includes('add') ? (
+        <TabPanel active={tab === 'add'}>
+          <AddInstituteForm onCreated={() => setInstituteReload((n) => n + 1)} embedded />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('students') && mountedTabs.includes('students') ? (
+        <TabPanel active={tab === 'students'}>
+          <StudentsSection
+            embedded
+            readOnly={readOnly}
+            jumpToInstituteId={studentsJumpInstituteId}
+            onJumpToInstituteHandled={handleStudentsJumpHandled}
+          />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('integrity') && mountedTabs.includes('integrity') ? (
+        <TabPanel active={tab === 'integrity'}>
+          <AttendanceIntegritySection
+            embedded
+            onOpenInstitute={(instituteId) => {
+              setStudentsJumpInstituteId(instituteId)
+              setTab('students')
+            }}
+          />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('reports') && mountedTabs.includes('reports') ? (
+        <TabPanel active={tab === 'reports'}>
+          <ReportsSection
+            embedded
+            readOnly={readOnly}
+            jumpToInstituteId={reportsJumpInstituteId}
+            onJumpToInstituteHandled={handleReportsJumpHandled}
+          />
+        </TabPanel>
+      ) : null}
     </DashboardLayout>
   )
 }
