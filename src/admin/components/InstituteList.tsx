@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import {
+  formatGpsPair,
+  gpsLatitude,
+  gpsLongitude,
+  gpsUpdatedAt,
+  type PortalGpsAdminLine,
+  type PortalGpsSettingRow,
+} from '../lib/instituteGpsPortal'
 import { sortByInstituteId } from '../lib/instituteSort'
 import { downloadCsv, instituteDirectoryCsvRows } from '../lib/reportCsv'
 import { fetchAllPaged } from '../lib/supabasePaged'
 import { getSupabase } from '../lib/supabase'
+import { InstituteGpsDialog } from './InstituteGpsDialog'
 import { InstituteReportModal } from './InstituteReportModal'
 import { ModalPortal } from './ModalPortal'
 
@@ -23,27 +32,12 @@ export type InstituteRow = {
   gps_locked?: boolean | null
 }
 
-/** One row in `gps_settings` (Flutter app source of truth). */
-type GpsSettingsRow = {
-  institute_id: string
-  admin_id: string
-  is_locked: boolean | null
-}
-
 type ProfileAdminRow = {
   id: string
   email: string | null
   name: string | null
   role: string | null
   institute_id: string | null
-}
-
-/** Merged view: each institute admin + optional gps_settings row */
-type AdminGpsLine = {
-  adminId: string
-  label: string
-  hasRow: boolean
-  is_locked: boolean | null
 }
 
 function isInstituteAdminRole(role: string | null | undefined): boolean {
@@ -60,13 +54,13 @@ function chunkIds(ids: string[], size: number): string[][] {
 function buildAdminGpsLines(
   instituteId: string,
   profiles: ProfileAdminRow[],
-  gpsRows: GpsSettingsRow[],
-): AdminGpsLine[] {
+  gpsRows: PortalGpsSettingRow[],
+): PortalGpsAdminLine[] {
   const admins = profiles.filter(
     (p) => p.institute_id === instituteId && isInstituteAdminRole(p.role),
   )
   const gpsForInst = gpsRows.filter((g) => g.institute_id === instituteId)
-  const lines: AdminGpsLine[] = []
+  const lines: PortalGpsAdminLine[] = []
   const coveredGps = new Set<string>()
 
   for (const p of admins) {
@@ -79,6 +73,9 @@ function buildAdminGpsLines(
       label,
       hasRow: !!g,
       is_locked: g?.is_locked ?? null,
+      latitude: gpsLatitude(g),
+      longitude: gpsLongitude(g),
+      updated_at: gpsUpdatedAt(g),
     })
   }
 
@@ -90,6 +87,9 @@ function buildAdminGpsLines(
       label: aid.length > 12 ? `${aid.slice(0, 8)}…` : aid,
       hasRow: true,
       is_locked: g.is_locked,
+      latitude: gpsLatitude(g),
+      longitude: gpsLongitude(g),
+      updated_at: gpsUpdatedAt(g),
     })
   }
 
@@ -134,6 +134,21 @@ function formFromInstituteRow(row: Record<string, unknown>): InstituteEditForm {
     country: pickR('country') || 'India',
     mobile_no: pickR('mobile_no'),
     is_active: row.is_active !== false,
+  }
+}
+
+function fmtDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return String(iso)
   }
 }
 
@@ -408,8 +423,8 @@ function InstituteEditDialog({
           </div>
           <p className="form-section-label span-2">GPS</p>
           <p className="muted small span-2" style={{ margin: 0, lineHeight: 1.45 }}>
-            Per-admin GPS lock/unlock is managed in the MSCE Attendance app. Use the institutes table GPS column to
-            review current lock status.
+            Per-admin GPS lock/unlock and history are managed from the institutes table GPS column. Use the Manage / Set
+            GPS buttons there to unlock, save new coordinates, and review change history.
           </p>
 
           <div className="modal-form-actions span-2">
@@ -448,12 +463,13 @@ export function InstituteList({
   const [info, setInfo] = useState<string | null>(null)
   const [gpsColExists, setGpsColExists] = useState<boolean | null>(null) // null = unknown yet
   /** institute_id → each admin’s GPS row (profiles + gps_settings, RLS-scoped) */
-  const [gpsAdminsByInstitute, setGpsAdminsByInstitute] = useState<Record<string, AdminGpsLine[]>>({})
+  const [gpsAdminsByInstitute, setGpsAdminsByInstitute] = useState<Record<string, PortalGpsAdminLine[]>>({})
   const [adminInvitesByInstitute, setAdminInvitesByInstitute] = useState<Record<string, AdminInviteRow | null>>({})
   const [search, setSearch] = useState('')
   const [tablePage, setTablePage] = useState(0)
   const [tablePageSize, setTablePageSize] = useState(TABLE_PAGE_SIZE_DEFAULT)
   const [editing, setEditing] = useState<InstituteRow | null>(null)
+  const [gpsEditing, setGpsEditing] = useState<{ institute: InstituteRow; line: PortalGpsAdminLine } | null>(null)
   const [reportInstitute, setReportInstitute] = useState<InstituteRow | null>(null)
 
   const filteredRows = useMemo(() => {
@@ -542,7 +558,7 @@ export function InstituteList({
       if (user?.id) {
         const instituteIds = fetched.map((r) => r.id)
         const chunks = chunkIds(instituteIds, 100)
-        let allGps: GpsSettingsRow[] = []
+        let allGps: PortalGpsSettingRow[] = []
         let allProfiles: ProfileAdminRow[] = []
         let gpsErrMsg: string | null = null
         let profErrMsg: string | null = null
@@ -550,8 +566,8 @@ export function InstituteList({
         const gpsResults = await Promise.all(
           chunks.map((ch) =>
             ch.length
-              ? sb.from('gps_settings').select('institute_id,admin_id,is_locked').in('institute_id', ch)
-              : Promise.resolve({ data: [] as GpsSettingsRow[], error: null }),
+              ? sb.from('gps_settings').select('*').in('institute_id', ch)
+              : Promise.resolve({ data: [] as PortalGpsSettingRow[], error: null }),
           ),
         )
         for (const r of gpsResults) {
@@ -559,7 +575,7 @@ export function InstituteList({
             gpsErrMsg = r.error.message
             break
           }
-          allGps = allGps.concat((r.data ?? []) as GpsSettingsRow[])
+          allGps = allGps.concat((r.data ?? []) as PortalGpsSettingRow[])
         }
 
         const profResults = await Promise.all(
@@ -585,7 +601,7 @@ export function InstituteList({
           setError(gpsErrMsg)
         } else {
           if (profErrMsg) setError(profErrMsg)
-          const map: Record<string, AdminGpsLine[]> = {}
+          const map: Record<string, PortalGpsAdminLine[]> = {}
           for (const inst of fetched) {
             map[inst.id] = buildAdminGpsLines(inst.id, allProfiles, allGps)
           }
@@ -770,6 +786,7 @@ export function InstituteList({
                           <ul className="gps-admin-stack">
                             {lines.map((line) => {
                               const locked = line.is_locked === true
+                              const coords = formatGpsPair(line.latitude, line.longitude)
                               return (
                                 <li key={line.adminId}>
                                   <div className="gps-admin-line">
@@ -777,19 +794,51 @@ export function InstituteList({
                                       {line.label}
                                     </span>
                                     {line.hasRow ? (
-                                      <span
-                                        className={`gps-badge ${locked ? 'gps-locked' : 'gps-unlocked'}`}
-                                        title={locked ? 'GPS locked' : 'GPS open'}
-                                      >
-                                        {locked ? '🔒' : '🔓'}
-                                      </span>
+                                      <>
+                                        <span
+                                          className={`gps-badge ${locked ? 'gps-locked' : 'gps-unlocked'}`}
+                                          title={locked ? 'GPS locked' : 'GPS open'}
+                                        >
+                                          {locked ? '🔒' : '🔓'}
+                                        </span>
+                                        {coords ? (
+                                          <span className="gps-admin-coords" title={coords}>
+                                            {coords}
+                                          </span>
+                                        ) : null}
+                                        {line.updated_at ? (
+                                          <span className="gps-admin-updated" title={fmtDateTime(line.updated_at)}>
+                                            {fmtDateTime(line.updated_at)}
+                                          </span>
+                                        ) : null}
+                                        {!readOnly ? (
+                                          <button
+                                            type="button"
+                                            className={`btn btn-sm institutes-action-btn ${locked ? 'btn-gps-unlock' : 'btn-gps-lock'}`}
+                                            onClick={() => setGpsEditing({ institute: r, line })}
+                                          >
+                                            Manage
+                                          </button>
+                                        ) : null}
+                                      </>
                                     ) : (
-                                      <span
-                                        className="badge badge-muted"
-                                        title="No gps_settings row yet — save location once in the MSCE Attendance app."
-                                      >
-                                        Not set
-                                      </span>
+                                      <>
+                                        <span
+                                          className="badge badge-muted"
+                                          title="No gps_settings row yet — save location once in the MSCE Attendance app."
+                                        >
+                                          Not set
+                                        </span>
+                                        {!readOnly ? (
+                                          <button
+                                            type="button"
+                                            className="btn btn-sm btn-gps-unlock institutes-action-btn"
+                                            onClick={() => setGpsEditing({ institute: r, line })}
+                                          >
+                                            Set GPS
+                                          </button>
+                                        ) : null}
+                                      </>
                                     )}
                                   </div>
                                 </li>
@@ -886,6 +935,17 @@ export function InstituteList({
           institute={editing}
           onClose={() => setEditing(null)}
           onSaved={() => void load()}
+        />
+      ) : null}
+      {gpsEditing && !readOnly ? (
+        <InstituteGpsDialog
+          institute={gpsEditing.institute}
+          line={gpsEditing.line}
+          onClose={() => setGpsEditing(null)}
+          onSaved={() => {
+            setInfo('GPS settings updated.')
+            void load()
+          }}
         />
       ) : null}
       {reportInstitute ? (
