@@ -1466,6 +1466,14 @@ tbody tr:hover { background: var(--surface-hover); }
   white-space: nowrap;
 }
 
+.dash-content-full .institutes-table-wrap td:nth-child(9),
+.dash-content-full .institutes-table-wrap th:nth-child(9) {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  vertical-align: top;
+}
+
 .dash-content-full .institutes-table-wrap td.actions-cell,
 .table-dash-compact td.actions-cell {
   overflow: visible;
@@ -1479,7 +1487,7 @@ tbody tr:hover { background: var(--surface-hover); }
 .dash-content-full .institutes-directory-table th:nth-child(8),
 .dash-content-full .institutes-directory-table td:nth-child(8) { min-width: 4.5rem; }
 .dash-content-full .institutes-directory-table th:nth-child(9),
-.dash-content-full .institutes-directory-table td:nth-child(9) { min-width: 6.5rem; }
+.dash-content-full .institutes-directory-table td:nth-child(9) { min-width: 16rem; }
 .dash-content-full .institutes-directory-table th:nth-child(10),
 .dash-content-full .institutes-directory-table td:nth-child(10) {
   min-width: 7.25rem;
