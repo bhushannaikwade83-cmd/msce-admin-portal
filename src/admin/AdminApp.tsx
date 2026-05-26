@@ -16,6 +16,7 @@ import './index.css'
 import './App.css'
 
 // MSCE Admin Portal — Maharashtra State Council of Examinations
+const ACTIVE_TAB_STORAGE_KEY = 'msce.admin.activeTab'
 
 function ConfigErrorScreen({ message }: { message: string }) {
   return (
@@ -71,10 +72,28 @@ function TabPanel({
   )
 }
 
+function loadStoredAdminTab(): DashboardTab {
+  if (typeof window === 'undefined') return 'overview'
+  const raw = window.sessionStorage.getItem(ACTIVE_TAB_STORAGE_KEY)
+  switch (raw) {
+    case 'overview':
+    case 'admins':
+    case 'instructors':
+    case 'institutes':
+    case 'add':
+    case 'students':
+    case 'integrity':
+    case 'reports':
+      return raw
+    default:
+      return 'overview'
+  }
+}
+
 function AuthenticatedApp() {
   const { user, loading, configError, signOut } = useAuth()
   const portal = usePortalAccess()
-  const [tab, setTab] = useState<DashboardTab>('overview')
+  const [tab, setTab] = useState<DashboardTab>(() => loadStoredAdminTab())
   const [instituteReload, setInstituteReload] = useState(0)
   const [studentsJumpInstituteId, setStudentsJumpInstituteId] = useState<string | null>(null)
   const [reportsJumpInstituteId, setReportsJumpInstituteId] = useState<string | null>(null)
@@ -100,6 +119,11 @@ function AuthenticatedApp() {
     if (!visibleTabs.includes(tab)) return
     setMountedTabs((prev) => (prev.includes(tab) ? prev : [...prev, tab]))
   }, [tab, visibleTabs])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(ACTIVE_TAB_STORAGE_KEY, tab)
+  }, [tab])
 
   if (configError) {
     return <ConfigErrorScreen message={configError} />

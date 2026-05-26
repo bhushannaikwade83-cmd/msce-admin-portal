@@ -91,6 +91,75 @@ type DrillLevel = 'institutes' | 'students' | 'subjects' | 'attendance'
 
 const TABLE_PAGE_SIZE_DEFAULT = 50
 const TABLE_PAGE_SIZE_OPTIONS = [25, 50, 100] as const
+const STUDENTS_VIEW_STORAGE_KEY = 'msce.admin.students.view'
+const ADD_STUDENT_DRAFT_PREFIX = 'msce.admin.students.addDraft.'
+
+type PersistedStudentsView = {
+  level: DrillLevel
+  institute: InstituteRow | null
+  student: Student | null
+  subject: Subject | null
+}
+
+type AddStudentDraft = {
+  open: boolean
+  firstName: string
+  middleName: string
+  lastName: string
+  year: string
+  subjectsCsv: string
+}
+
+function readSessionJson<T>(key: string): T | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(key)
+    if (!raw) return null
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
+}
+
+function writeSessionJson(key: string, value: unknown) {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(key, JSON.stringify(value))
+}
+
+function removeSessionValue(key: string) {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.removeItem(key)
+}
+
+function isDrillLevel(v: unknown): v is DrillLevel {
+  return v === 'institutes' || v === 'students' || v === 'subjects' || v === 'attendance'
+}
+
+function normalizePersistedStudentsView(raw: PersistedStudentsView | null): PersistedStudentsView | null {
+  if (!raw || !isDrillLevel(raw.level)) return null
+  const institute = raw.institute && typeof raw.institute.id === 'string' ? raw.institute : null
+  const student = raw.student && typeof raw.student.id === 'string' ? raw.student : null
+  const subject = raw.subject && typeof raw.subject.id === 'string' ? raw.subject : null
+
+  if (!institute) {
+    return { level: 'institutes', institute: null, student: null, subject: null }
+  }
+  if (!student) {
+    return { level: raw.level === 'institutes' ? 'institutes' : 'students', institute, student: null, subject: null }
+  }
+  if (!subject) {
+    return { level: raw.level === 'attendance' ? 'subjects' : raw.level, institute, student, subject: null }
+  }
+  return { level: raw.level, institute, student, subject }
+}
+
+function loadPersistedStudentsView(): PersistedStudentsView | null {
+  return normalizePersistedStudentsView(readSessionJson<PersistedStudentsView>(STUDENTS_VIEW_STORAGE_KEY))
+}
+
+function addStudentDraftKey(instituteId: string): string {
+  return `${ADD_STUDENT_DRAFT_PREFIX}${instituteId}`
+}
 
 function studentRollSortKey(s: Student): number {
   const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno')
@@ -379,7 +448,6 @@ function AddStudentPanel({
   onAdded: () => void
   hidden?: boolean
 }) {
-  if (hidden) return null
   const [open, setOpen] = useState(false)
   const [firstName, setFirstName] = useState('')
   const [middleName, setMiddleName] = useState('')
@@ -389,6 +457,40 @@ function AddStudentPanel({
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
+
+  useEffect(() => {
+    const saved = readSessionJson<AddStudentDraft>(addStudentDraftKey(institute.id))
+    if (!saved) return
+    setOpen(saved.open === true)
+    setFirstName(saved.firstName ?? '')
+    setMiddleName(saved.middleName ?? '')
+    setLastName(saved.lastName ?? '')
+    setYear(saved.year ?? `Year ${new Date().getFullYear()}`)
+    setSubjectsCsv(saved.subjectsCsv ?? '')
+  }, [institute.id])
+
+  useEffect(() => {
+    const hasDraft =
+      open ||
+      firstName.trim() !== '' ||
+      middleName.trim() !== '' ||
+      lastName.trim() !== '' ||
+      subjectsCsv.trim() !== '' ||
+      year.trim() !== `Year ${new Date().getFullYear()}`
+    const key = addStudentDraftKey(institute.id)
+    if (!hasDraft) {
+      removeSessionValue(key)
+      return
+    }
+    writeSessionJson(key, {
+      open,
+      firstName,
+      middleName,
+      lastName,
+      year,
+      subjectsCsv,
+    } satisfies AddStudentDraft)
+  }, [institute.id, open, firstName, middleName, lastName, year, subjectsCsv])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -470,7 +572,9 @@ function AddStudentPanel({
       setFirstName('')
       setMiddleName('')
       setLastName('')
+      setYear(`Year ${new Date().getFullYear()}`)
       setSubjectsCsv('')
+      removeSessionValue(addStudentDraftKey(institute.id))
       onAdded()
       setOpen(false)
     } catch (e) {
@@ -479,6 +583,8 @@ function AddStudentPanel({
       setBusy(false)
     }
   }
+
+  if (hidden) return null
 
   return (
     <div className="students-add-panel">
@@ -1908,10 +2014,10 @@ export function StudentsSection({
   jumpToInstituteId?: string | null
   onJumpToInstituteHandled?: () => void
 }) {
-  const [level, setLevel]         = useState<DrillLevel>('institutes')
-  const [institute, setInstitute] = useState<InstituteRow | null>(null)
-  const [student, setStudent]     = useState<Student | null>(null)
-  const [subject, setSubject]     = useState<Subject | null>(null)
+  const [level, setLevel]         = useState<DrillLevel>(() => loadPersistedStudentsView()?.level ?? 'institutes')
+  const [institute, setInstitute] = useState<InstituteRow | null>(() => loadPersistedStudentsView()?.institute ?? null)
+  const [student, setStudent]     = useState<Student | null>(() => loadPersistedStudentsView()?.student ?? null)
+  const [subject, setSubject]     = useState<Subject | null>(() => loadPersistedStudentsView()?.subject ?? null)
   const [schema, setSchema]       = useState<SchemaConfig>({
     subjectTable: null,
     attendanceTable: null,
@@ -1943,6 +2049,15 @@ export function StudentsSection({
       cancelled = true
     }
   }, [jumpToInstituteId, onJumpToInstituteHandled])
+
+  useEffect(() => {
+    writeSessionJson(STUDENTS_VIEW_STORAGE_KEY, {
+      level,
+      institute,
+      student,
+      subject,
+    } satisfies PersistedStudentsView)
+  }, [level, institute, student, subject])
 
   async function runDiscovery() {
     setSchemaLoading(true)

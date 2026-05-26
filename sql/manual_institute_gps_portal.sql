@@ -8,8 +8,8 @@ alter table public.gps_settings
 
 create table if not exists public.gps_settings_history (
   id uuid primary key default gen_random_uuid(),
-  institute_id uuid not null,
-  admin_id uuid not null,
+  institute_id text not null,
+  admin_id text not null,
   action text null,
   note text null,
   old_is_locked boolean null,
@@ -22,6 +22,10 @@ create table if not exists public.gps_settings_history (
   changed_by_user_id uuid null,
   changed_by_email text null
 );
+
+alter table public.gps_settings_history
+  alter column institute_id type text using institute_id::text,
+  alter column admin_id type text using admin_id::text;
 
 create index if not exists gps_settings_history_inst_admin_changed_idx
   on public.gps_settings_history (institute_id, admin_id, changed_at desc);
@@ -42,14 +46,17 @@ create policy gps_settings_history_insert_authenticated
   to authenticated
   with check (true);
 
+drop function if exists public.list_institute_gps_history_portal(uuid, uuid);
+drop function if exists public.update_institute_gps_setting_portal(uuid, uuid, boolean, double precision, double precision, text);
+
 create or replace function public.list_institute_gps_history_portal(
-  p_institute_id uuid,
-  p_admin_id uuid
+  p_institute_id text,
+  p_admin_id text
 )
 returns table (
   id uuid,
-  institute_id uuid,
-  admin_id uuid,
+  institute_id text,
+  admin_id text,
   action text,
   note text,
   old_is_locked boolean,
@@ -106,8 +113,8 @@ end;
 $$;
 
 create or replace function public.update_institute_gps_setting_portal(
-  p_institute_id uuid,
-  p_admin_id uuid,
+  p_institute_id text,
+  p_admin_id text,
   p_is_locked boolean,
   p_latitude double precision default null,
   p_longitude double precision default null,
@@ -123,6 +130,9 @@ declare
   v_prev public.gps_settings%rowtype;
   v_email text;
   v_action text;
+  v_gps_institute_type text;
+  v_gps_admin_type text;
+  v_inst_id_type text;
 begin
   if auth.uid() is null then
     raise exception 'Not authenticated';
@@ -149,11 +159,35 @@ begin
     raise exception 'Unlocked GPS requires both latitude and longitude';
   end if;
 
-  select *
+  select pg_catalog.format_type(a.atttypid, a.atttypmod)
+    into v_gps_institute_type
+  from pg_catalog.pg_attribute a
+  where a.attrelid = 'public.gps_settings'::regclass
+    and a.attname = 'institute_id'
+    and not a.attisdropped;
+
+  select pg_catalog.format_type(a.atttypid, a.atttypmod)
+    into v_gps_admin_type
+  from pg_catalog.pg_attribute a
+  where a.attrelid = 'public.gps_settings'::regclass
+    and a.attname = 'admin_id'
+    and not a.attisdropped;
+
+  select pg_catalog.format_type(a.atttypid, a.atttypmod)
+    into v_inst_id_type
+  from pg_catalog.pg_attribute a
+  where a.attrelid = 'public.institutes'::regclass
+    and a.attname = 'id'
+    and not a.attisdropped;
+
+  execute '
+    select *
+    from public.gps_settings g
+    where g.institute_id::text = $1
+      and g.admin_id::text = $2
+  '
     into v_prev
-  from public.gps_settings g
-  where g.institute_id = p_institute_id
-    and g.admin_id = p_admin_id;
+    using p_institute_id, p_admin_id;
 
   select nullif(auth.jwt() ->> 'email', '')
     into v_email;
@@ -202,31 +236,32 @@ begin
   );
 
   if v_prev.institute_id is null then
-    insert into public.gps_settings (
-      institute_id,
-      admin_id,
-      is_locked,
-      latitude,
-      longitude,
-      updated_at
+    execute format(
+      'insert into public.gps_settings (
+         institute_id,
+         admin_id,
+         is_locked,
+         latitude,
+         longitude,
+         updated_at
+       )
+       values (($1)::%s, ($2)::%s, $3, $4, $5, now())',
+      v_gps_institute_type,
+      v_gps_admin_type
     )
-    values (
-      p_institute_id,
-      p_admin_id,
-      p_is_locked,
-      p_latitude,
-      p_longitude,
-      now()
-    );
+      using p_institute_id, p_admin_id, p_is_locked, p_latitude, p_longitude;
   else
-    update public.gps_settings
-    set
-      is_locked = p_is_locked,
-      latitude = p_latitude,
-      longitude = p_longitude,
-      updated_at = now()
-    where institute_id = p_institute_id
-      and admin_id = p_admin_id;
+    execute '
+      update public.gps_settings
+      set
+        is_locked = $1,
+        latitude = $2,
+        longitude = $3,
+        updated_at = now()
+      where institute_id::text = $4
+        and admin_id::text = $5
+    '
+      using p_is_locked, p_latitude, p_longitude, p_institute_id, p_admin_id;
   end if;
 
   if exists (
@@ -236,7 +271,10 @@ begin
       and table_name = 'institutes'
       and column_name = 'gps_locked'
   ) then
-    execute 'update public.institutes set gps_locked = $1, updated_at = now() where id = $2'
+    execute format(
+      'update public.institutes set gps_locked = $1, updated_at = now() where id = ($2)::%s',
+      v_inst_id_type
+    )
       using p_is_locked, p_institute_id;
   end if;
 
@@ -248,5 +286,5 @@ begin
 end;
 $$;
 
-grant execute on function public.list_institute_gps_history_portal(uuid, uuid) to authenticated;
-grant execute on function public.update_institute_gps_setting_portal(uuid, uuid, boolean, double precision, double precision, text) to authenticated;
+grant execute on function public.list_institute_gps_history_portal(text, text) to authenticated;
+grant execute on function public.update_institute_gps_setting_portal(text, text, boolean, double precision, double precision, text) to authenticated;
