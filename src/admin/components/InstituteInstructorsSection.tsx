@@ -1,11 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import { fetchPortalSessionInfo, type PortalSessionInfo } from '../lib/adminOnboardingPortal'
 import { compareInstituteId } from '../lib/instituteSort'
+import {
+  createPortalInstructor,
+  deletePortalInstructor,
+  isValidInstructorMobile,
+  isValidInstructorPin,
+  updatePortalInstructor,
+} from '../lib/portalInstructorManage'
 import { fetchAllPortalInstructors, type PortalInstructorRow } from '../lib/portalInstructors'
+import { usePortalReadOnly } from '../context/portal-access-context'
 import { getSupabase } from '../lib/supabase'
+import { ModalPortal } from './ModalPortal'
 
 const REALTIME_RELOAD_MS = 450
 const LIST_PAGE_SIZE = 50
+const MAX_INSTRUCTORS = 4
 
 type InstituteRow = {
   id: string
@@ -112,7 +129,421 @@ function buildGroups(institutes: InstituteRow[], rows: PortalInstructorRow[]): I
   return built
 }
 
+function AddInstructorModal({
+  group,
+  saving,
+  onClose,
+  onSave,
+}: {
+  group: InstituteGroup
+  saving: boolean
+  onClose: () => void
+  onSave: (values: {
+    firstName: string
+    middleName: string
+    lastName: string
+    mobile: string
+    pin: string
+  }) => void | Promise<void>
+}) {
+  const [firstName, setFirstName] = useState('')
+  const [middleName, setMiddleName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [mobile, setMobile] = useState('')
+  const [pin, setPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setFormError(null)
+    const fn = firstName.trim()
+    const mn = middleName.trim()
+    const ln = lastName.trim()
+    const mob = mobile.trim()
+    const p = pin.trim()
+    const cp = confirmPin.trim()
+    if (!fn || !mn || !ln) {
+      setFormError('First name, middle name, and last name are all required.')
+      return
+    }
+    if (!isValidInstructorMobile(mob)) {
+      setFormError('Enter a valid mobile number (10–15 digits).')
+      return
+    }
+    if (!isValidInstructorPin(p)) {
+      setFormError('PIN must be exactly 4 digits.')
+      return
+    }
+    if (p !== cp) {
+      setFormError('PIN and confirm PIN must match.')
+      return
+    }
+    await onSave({ firstName: fn, middleName: mn, lastName: ln, mobile: mob, pin: p })
+  }
+
+  return (
+    <ModalPortal>
+      <div
+        className="modal-overlay"
+        role="dialog"
+        aria-modal
+        aria-labelledby="add-instructor-title"
+        onClick={onClose}
+      >
+        <div className="modal-panel card-elevated" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <h2 id="add-instructor-title" style={{ margin: 0, fontSize: '1.05rem' }}>
+              Add institute instructor
+            </h2>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={saving}>
+              ✕
+            </button>
+          </div>
+          <p className="modal-subtitle">
+            <strong>{group.instituteName}</strong>
+            <br />
+            Institute ID <code>{group.instituteCode}</code> — same login as in the mobile app (Institute ID + PIN).
+          </p>
+          {formError ? (
+            <p className="error" style={{ marginTop: '0.75rem' }}>
+              {formError}
+            </p>
+          ) : null}
+          <form className="modal-form" onSubmit={(e) => void handleSubmit(e)} autoComplete="off">
+            <div className="field">
+              <label htmlFor="add-inst-first">
+                First name <span className="req">*</span>
+              </label>
+              <input
+                id="add-inst-first"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+                disabled={saving}
+                autoComplete="off"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="add-inst-middle">
+                Middle name <span className="req">*</span>
+              </label>
+              <input
+                id="add-inst-middle"
+                value={middleName}
+                onChange={(e) => setMiddleName(e.target.value)}
+                required
+                disabled={saving}
+                autoComplete="off"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="add-inst-last">
+                Last name <span className="req">*</span>
+              </label>
+              <input
+                id="add-inst-last"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+                disabled={saving}
+                autoComplete="off"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="add-inst-mobile">
+                Mobile <span className="req">*</span>
+              </label>
+              <input
+                id="add-inst-mobile"
+                type="tel"
+                inputMode="tel"
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                required
+                disabled={saving}
+                autoComplete="off"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="add-inst-pin">
+                PIN (4 digits) <span className="req">*</span>
+              </label>
+              <input
+                id="add-inst-pin"
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                required
+                disabled={saving}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="add-inst-pin2">
+                Confirm PIN <span className="req">*</span>
+              </label>
+              <input
+                id="add-inst-pin2"
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                value={confirmPin}
+                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                required
+                disabled={saving}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="modal-form-actions">
+              <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? 'Creating…' : 'Create instructor'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </ModalPortal>
+  )
+}
+
+function EditInstructorModal({
+  row,
+  group,
+  saving,
+  onClose,
+  onSave,
+}: {
+  row: InstructorDisplayRow
+  group: InstituteGroup
+  saving: boolean
+  onClose: () => void
+  onSave: (values: { fullName: string; mobile: string; pin: string }) => void | Promise<void>
+}) {
+  const [fullName, setFullName] = useState(row.name?.trim() ?? '')
+  const [mobile, setMobile] = useState(row.phone_number?.trim() ?? '')
+  const [pin, setPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setFormError(null)
+    const name = fullName.trim()
+    const mob = mobile.trim()
+    const p = pin.trim()
+    const cp = confirmPin.trim()
+    if (name.length < 2) {
+      setFormError('Full name is required.')
+      return
+    }
+    if (!isValidInstructorMobile(mob)) {
+      setFormError('Enter a valid mobile number (10–15 digits).')
+      return
+    }
+    if (p || cp) {
+      if (!isValidInstructorPin(p)) {
+        setFormError('New PIN must be exactly 4 digits.')
+        return
+      }
+      if (p !== cp) {
+        setFormError('PIN and confirm PIN must match.')
+        return
+      }
+    }
+    await onSave({ fullName: name, mobile: mob, pin: p })
+  }
+
+  return (
+    <ModalPortal>
+      <div
+        className="modal-overlay"
+        role="dialog"
+        aria-modal
+        aria-labelledby="edit-instructor-title"
+        onClick={onClose}
+      >
+        <div className="modal-panel card-elevated" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <h2 id="edit-instructor-title" style={{ margin: 0, fontSize: '1.05rem' }}>
+              Edit instructor
+            </h2>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={saving}>
+              ✕
+            </button>
+          </div>
+          <p className="modal-subtitle">
+            <strong>{group.instituteName}</strong> · ID <code>{group.instituteCode}</code>
+          </p>
+          {formError ? (
+            <p className="error" style={{ marginTop: '0.75rem' }}>
+              {formError}
+            </p>
+          ) : null}
+          <form className="modal-form" onSubmit={(e) => void handleSubmit(e)} autoComplete="off">
+            <div className="field">
+              <label htmlFor="edit-inst-name">
+                Full name <span className="req">*</span>
+              </label>
+              <input
+                id="edit-inst-name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                disabled={saving}
+                autoComplete="off"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="edit-inst-mobile">
+                Mobile <span className="req">*</span>
+              </label>
+              <input
+                id="edit-inst-mobile"
+                type="tel"
+                inputMode="tel"
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                required
+                disabled={saving}
+                autoComplete="off"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="edit-inst-pin">New PIN (optional, 4 digits)</label>
+              <input
+                id="edit-inst-pin"
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                disabled={saving}
+                autoComplete="new-password"
+                placeholder="Leave blank to keep current PIN"
+              />
+            </div>
+            {pin ? (
+              <div className="field">
+                <label htmlFor="edit-inst-pin2">Confirm new PIN</label>
+                <input
+                  id="edit-inst-pin2"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  disabled={saving}
+                  autoComplete="new-password"
+                />
+              </div>
+            ) : null}
+            <div className="modal-form-actions">
+              <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </ModalPortal>
+  )
+}
+
+function DeleteInstructorModal({
+  row,
+  group,
+  saving,
+  onClose,
+  onConfirm,
+}: {
+  row: InstructorDisplayRow
+  group: InstituteGroup
+  saving: boolean
+  onClose: () => void
+  onConfirm: () => void | Promise<void>
+}) {
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  return (
+    <ModalPortal>
+      <div
+        className="modal-overlay"
+        role="dialog"
+        aria-modal
+        aria-labelledby="delete-instructor-title"
+        onClick={onClose}
+      >
+        <div className="modal-panel card-elevated" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <h2 id="delete-instructor-title" style={{ margin: 0, fontSize: '1.05rem' }}>
+              Remove instructor?
+            </h2>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={saving}>
+              ✕
+            </button>
+          </div>
+          <p className="modal-subtitle">
+            Remove <strong>{row.name?.trim() || 'this instructor'}</strong> from{' '}
+            <strong>{group.instituteName}</strong> (ID <code>{group.instituteCode}</code>)?
+            <br />
+            <span className="muted small">
+              This deletes their login from Supabase Auth. They cannot sign in with their PIN until an admin adds them
+              again (app or website).
+            </span>
+          </p>
+          <div className="modal-form-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ background: 'var(--accent-red, #c62828)' }}
+              disabled={saving}
+              onClick={() => void onConfirm()}
+            >
+              {saving ? 'Removing…' : 'Remove instructor'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  )
+}
+
 export function InstituteInstructorsSection({ embedded = false }: { embedded?: boolean }) {
+  const readOnly = usePortalReadOnly()
   const [groups, setGroups] = useState<InstituteGroup[]>([])
   const [loading, setLoading] = useState(false)
   const [liveSync, setLiveSync] = useState(false)
@@ -122,8 +553,16 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [showEmptyInstitutes, setShowEmptyInstitutes] = useState(true)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [addGroup, setAddGroup] = useState<InstituteGroup | null>(null)
+  const [editing, setEditing] = useState<{ row: InstructorDisplayRow; group: InstituteGroup } | null>(null)
+  const [deleting, setDeleting] = useState<{ row: InstructorDisplayRow; group: InstituteGroup } | null>(null)
+  const [saving, setSaving] = useState(false)
   const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+
+  const canManage =
+    !readOnly && sessionInfo !== null && sessionInfo.can_list_onboarding !== false
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true
@@ -229,6 +668,77 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
     setPage(0)
   }, [search, showEmptyInstitutes])
 
+  async function handleCreateInstructor(
+    values: {
+      firstName: string
+      middleName: string
+      lastName: string
+      mobile: string
+      pin: string
+    },
+    group: InstituteGroup,
+  ) {
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const res = await createPortalInstructor({
+        instituteKey: group.instituteCode || group.instituteUuid,
+        ...values,
+      })
+      if (!res.success) throw new Error(res.message ?? 'Could not create instructor')
+      setAddGroup(null)
+      setSuccess(`Instructor added for ${group.instituteCode}.`)
+      await load({ silent: true })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleUpdateInstructor(
+    values: { fullName: string; mobile: string; pin: string },
+    row: InstructorDisplayRow,
+  ) {
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const res = await updatePortalInstructor({
+        profileId: row.id,
+        fullName: values.fullName,
+        mobile: values.mobile,
+        pin: values.pin || undefined,
+      })
+      if (!res.success) throw new Error(res.message ?? 'Could not update instructor')
+      setEditing(null)
+      setSuccess('Instructor updated.')
+      await load({ silent: true })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteInstructor(row: InstructorDisplayRow) {
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const res = await deletePortalInstructor(row.id)
+      if (!res.success) throw new Error(res.message ?? 'Could not remove instructor')
+      setDeleting(null)
+      setSuccess('Instructor removed.')
+      await load({ silent: true })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const shell = embedded ? 'dash-section card-elevated instructors-page' : 'card instructors-page'
 
   return (
@@ -241,7 +751,8 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
             <h2>Institute instructors</h2>
           )}
           <p className="muted small">
-            All institutes — staff / instructor accounts (<code>attendance_user</code>) from the mobile app.
+            All institutes — staff / instructor accounts (<code>attendance_user</code>). Super admins can add, edit,
+            or remove instructors here (same rules as the mobile app: max 4 per institute, Institute ID + PIN login).
             PIN column shows whether login PIN was saved (not the 4-digit number).
             {loadSource === 'rpc' ? (
               <>
@@ -278,6 +789,17 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
         </p>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
+      {success ? (
+        <p className="success" role="status">
+          {success}
+        </p>
+      ) : null}
+      {canManage ? (
+        <p className="muted small" style={{ marginBottom: '0.75rem' }}>
+          Deploy Edge Function <code>portal-manage-instructor</code> in Supabase if add/edit/delete returns a 404.
+          Optional SQL: <code>sql/manual_portal_instructors.sql</code>.
+        </p>
+      ) : null}
 
       <div className="instructors-summary row" style={{ flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
         <span className="stat-pill">
@@ -346,13 +868,15 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
         <p className="muted">
           {sessionInfo?.can_list_onboarding === false
             ? 'No data — fix portal login (see message above).'
-            : 'No instructors found. Add instructors in the mobile app (Institute → Add instructor).'}
+            : canManage
+              ? 'No instructors found. Use Add instructor on an institute below, or add from the mobile app.'
+              : 'No instructors found. Add instructors in the mobile app (Institute → Add instructor).'}
         </p>
       ) : (
         <div className="instructors-groups">
           {pageGroups.map((group) => (
             <section key={group.instituteUuid} className="instructors-inst-block card-elevated">
-              <header className="instructors-inst-head">
+              <header className="instructors-inst-head row" style={{ justifyContent: 'space-between', gap: '0.75rem' }}>
                 <div>
                   <h3 className="instructors-inst-title">
                     <span className="mono">{group.instituteCode}</span>
@@ -360,11 +884,25 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
                     {group.instituteName}
                   </h3>
                   <p className="muted small">
-                    {group.instructors.length} / 4 instructor slot
+                    {group.instructors.length} / {MAX_INSTRUCTORS} instructor slot
                     {group.instructors.length === 1 ? '' : 's'} used
                     {group.active === false ? ' · Institute inactive' : ''}
                   </p>
                 </div>
+                {canManage && group.instructors.length < MAX_INSTRUCTORS ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={saving}
+                    onClick={() => {
+                      setError(null)
+                      setSuccess(null)
+                      setAddGroup(group)
+                    }}
+                  >
+                    Add instructor
+                  </button>
+                ) : null}
               </header>
               {group.instructors.length === 0 ? (
                 <p className="muted small instructors-none">No instructors registered for this institute.</p>
@@ -381,6 +919,7 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
                         <th>PIN set at</th>
                         <th>Created</th>
                         <th>Last login</th>
+                        {canManage ? <th>Actions</th> : null}
                       </tr>
                     </thead>
                     <tbody>
@@ -404,6 +943,36 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
                           <td className="small">{fmtWhen(row.pin_set_at)}</td>
                           <td className="small">{fmtWhen(row.created_at)}</td>
                           <td className="small">{fmtWhen(row.last_login)}</td>
+                          {canManage ? (
+                            <td>
+                              <div className="row" style={{ gap: '0.35rem', flexWrap: 'wrap' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  disabled={saving}
+                                  onClick={() => {
+                                    setError(null)
+                                    setSuccess(null)
+                                    setEditing({ row, group })
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  disabled={saving}
+                                  onClick={() => {
+                                    setError(null)
+                                    setSuccess(null)
+                                    setDeleting({ row, group })
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>
@@ -437,6 +1006,33 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
             Next
           </button>
         </div>
+      ) : null}
+
+      {addGroup ? (
+        <AddInstructorModal
+          group={addGroup}
+          saving={saving}
+          onClose={() => !saving && setAddGroup(null)}
+          onSave={(values) => handleCreateInstructor(values, addGroup)}
+        />
+      ) : null}
+      {editing ? (
+        <EditInstructorModal
+          row={editing.row}
+          group={editing.group}
+          saving={saving}
+          onClose={() => !saving && setEditing(null)}
+          onSave={(values) => handleUpdateInstructor(values, editing.row)}
+        />
+      ) : null}
+      {deleting ? (
+        <DeleteInstructorModal
+          row={deleting.row}
+          group={deleting.group}
+          saving={saving}
+          onClose={() => !saving && setDeleting(null)}
+          onConfirm={() => handleDeleteInstructor(deleting.row)}
+        />
       ) : null}
     </div>
   )
