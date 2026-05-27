@@ -12,20 +12,29 @@ export function GpsCoordCompare({
   previousLabel = 'Previous GPS',
   currentLabel = 'Current GPS',
   currentHint,
+  showLockStatus = false,
 }: {
   previous: GpsCoordSnapshot | null
   current: GpsCoordSnapshot | null
   previousLabel?: string
   currentLabel?: string
   currentHint?: string | null
+  /** Lock/unlock is controlled in the app after admin saves GPS — hidden on portal by default. */
+  showLockStatus?: boolean
 }) {
   return (
     <div className="student-registration-photos-dual gps-coords-dual">
-      <GpsCoordBlock label={previousLabel} snapshot={previous} emptyText="No prior GPS on record" />
+      <GpsCoordBlock
+        label={previousLabel}
+        snapshot={previous}
+        emptyText="No prior GPS on record"
+        showLockStatus={showLockStatus}
+      />
       <GpsCoordBlock
         label={currentLabel}
         snapshot={current}
         emptyText={currentHint ?? 'Not set — institute can set from app'}
+        showLockStatus={showLockStatus}
       />
     </div>
   )
@@ -35,10 +44,12 @@ function GpsCoordBlock({
   label,
   snapshot,
   emptyText,
+  showLockStatus,
 }: {
   label: string
   snapshot: GpsCoordSnapshot | null
   emptyText: string
+  showLockStatus: boolean
 }) {
   const lat = snapshot?.latitude ?? null
   const lng = snapshot?.longitude ?? null
@@ -53,7 +64,7 @@ function GpsCoordBlock({
         {pair ? (
           <>
             <div className="gps-coord-value mono">{pair}</div>
-            {locked != null ? (
+            {showLockStatus && locked != null ? (
               <span className={`gps-badge ${locked ? 'gps-locked' : 'gps-unlocked'}`}>
                 {locked ? '🔒 Locked' : '🔓 Unlocked'}
               </span>

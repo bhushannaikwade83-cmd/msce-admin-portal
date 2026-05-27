@@ -423,8 +423,9 @@ function InstituteEditDialog({
           </div>
           <p className="form-section-label span-2">GPS</p>
           <p className="muted small span-2" style={{ margin: 0, lineHeight: 1.45 }}>
-            Per-admin GPS lock/unlock and history are managed from the institutes table GPS column. Use the Manage / Set
-            GPS buttons there to unlock, save new coordinates, and review change history.
+            Per-admin GPS: use <strong>Clear GPS</strong> in the institutes table to save the current location as
+            previous and set coordinates to null. The institute admin sets the new location in the app; the app locks GPS
+            after save.
           </p>
 
           <div className="modal-form-actions span-2">
@@ -785,7 +786,6 @@ export function InstituteList({
                         ) : (
                           <ul className="gps-admin-stack">
                             {lines.map((line) => {
-                              const locked = line.is_locked === true
                               const coords = formatGpsPair(line.latitude, line.longitude)
                               return (
                                 <li key={line.adminId}>
@@ -793,53 +793,40 @@ export function InstituteList({
                                     <span className="gps-admin-label" title={line.label}>
                                       {line.label}
                                     </span>
-                                    {line.hasRow ? (
-                                      <>
-                                        <span
-                                          className={`gps-badge ${locked ? 'gps-locked' : 'gps-unlocked'}`}
-                                          title={locked ? 'GPS locked' : 'GPS open'}
-                                        >
-                                          {locked ? '🔒' : '🔓'}
-                                        </span>
-                                        {coords ? (
-                                          <span className="gps-admin-coords" title={coords}>
-                                            {coords}
-                                          </span>
-                                        ) : null}
-                                        {line.updated_at ? (
-                                          <span className="gps-admin-updated" title={fmtDateTime(line.updated_at)}>
-                                            {fmtDateTime(line.updated_at)}
-                                          </span>
-                                        ) : null}
-                                        {!readOnly ? (
-                                          <button
-                                            type="button"
-                                            className={`btn btn-sm institutes-action-btn ${locked ? 'btn-gps-unlock' : 'btn-gps-lock'}`}
-                                            onClick={() => setGpsEditing({ institute: r, line })}
-                                          >
-                                            Manage
-                                          </button>
-                                        ) : null}
-                                      </>
+                                    {coords ? (
+                                      <span className="gps-admin-coords" title={coords}>
+                                        {coords}
+                                      </span>
                                     ) : (
-                                      <>
-                                        <span
-                                          className="badge badge-muted"
-                                          title="No gps_settings row yet — save location once in the MSCE Attendance app."
-                                        >
-                                          Not set
-                                        </span>
-                                        {!readOnly ? (
-                                          <button
-                                            type="button"
-                                            className="btn btn-sm btn-gps-unlock institutes-action-btn"
-                                            onClick={() => setGpsEditing({ institute: r, line })}
-                                          >
-                                            Set GPS
-                                          </button>
-                                        ) : null}
-                                      </>
+                                      <span
+                                        className="badge badge-muted"
+                                        title="No coordinates — set in app or cleared from portal"
+                                      >
+                                        Not set
+                                      </span>
                                     )}
+                                    {line.updated_at ? (
+                                      <span className="gps-admin-updated" title={fmtDateTime(line.updated_at)}>
+                                        {fmtDateTime(line.updated_at)}
+                                      </span>
+                                    ) : null}
+                                    {!readOnly && coords ? (
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-gps-clear institutes-action-btn"
+                                        onClick={() => setGpsEditing({ institute: r, line })}
+                                      >
+                                        Clear GPS
+                                      </button>
+                                    ) : !readOnly && line.hasRow ? (
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-ghost institutes-action-btn"
+                                        onClick={() => setGpsEditing({ institute: r, line })}
+                                      >
+                                        History
+                                      </button>
+                                    ) : null}
                                   </div>
                                 </li>
                               )

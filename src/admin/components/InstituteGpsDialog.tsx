@@ -14,7 +14,7 @@ import {
   gpsLatitude,
   gpsLongitude,
   gpsUpdatedAt,
-  saveGpsSettingWithHistory,
+  hasGpsCoordinates,
   type PortalGpsAdminLine,
   type PortalGpsHistoryRow,
 } from '../lib/instituteGpsPortal'
@@ -35,17 +35,6 @@ function fmtDateTime(iso: string | null | undefined): string {
   }
 }
 
-function coordInputValue(n: number | null): string {
-  return n == null ? '' : String(n)
-}
-
-function parseCoord(value: string): number | null {
-  const s = value.trim()
-  if (!s) return null
-  const n = Number(s)
-  return Number.isFinite(n) ? n : null
-}
-
 export function InstituteGpsDialog({
   institute,
   line,
@@ -60,12 +49,10 @@ export function InstituteGpsDialog({
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [historyBusy, setHistoryBusy] = useState(true)
-  const [geoBusy, setGeoBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [historyErr, setHistoryErr] = useState<string | null>(null)
-  const [isLocked, setIsLocked] = useState(line.is_locked === true)
-  const [latitude, setLatitude] = useState(coordInputValue(line.latitude))
-  const [longitude, setLongitude] = useState(coordInputValue(line.longitude))
+  const [latitude, setLatitude] = useState<number | null>(line.latitude)
+  const [longitude, setLongitude] = useState<number | null>(line.longitude)
   const [note, setNote] = useState('')
   const [currentChangedAt, setCurrentChangedAt] = useState<string | null>(line.updated_at)
   const [history, setHistory] = useState<PortalGpsHistoryRow[]>([])
@@ -87,9 +74,8 @@ export function InstituteGpsDialog({
       try {
         const row = await fetchGpsSettingRow(institute.id, line.adminId)
         if (cancelled) return
-        setIsLocked(row?.is_locked === true)
-        setLatitude(coordInputValue(gpsLatitude(row)))
-        setLongitude(coordInputValue(gpsLongitude(row)))
+        setLatitude(gpsLatitude(row))
+        setLongitude(gpsLongitude(row))
         setCurrentChangedAt(gpsUpdatedAt(row))
       } catch (e) {
         if (!cancelled) setErr(e instanceof Error ? e.message : String(e))
@@ -120,33 +106,6 @@ export function InstituteGpsDialog({
     void loadHistory()
   }, [institute.id, line.adminId])
 
-  const parsedLat = useMemo(() => parseCoord(latitude), [latitude])
-  const parsedLng = useMemo(() => parseCoord(longitude), [longitude])
-  const latValid = parsedLat == null || (parsedLat >= -90 && parsedLat <= 90)
-  const lngValid = parsedLng == null || (parsedLng >= -180 && parsedLng <= 180)
-  const canSaveCoords = parsedLat != null && parsedLng != null && latValid && lngValid
-
-  async function useCurrentLocation() {
-    if (!navigator.geolocation) {
-      setErr('Browser geolocation is not available on this device.')
-      return
-    }
-    setGeoBusy(true)
-    setErr(null)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitude(String(pos.coords.latitude))
-        setLongitude(String(pos.coords.longitude))
-        setGeoBusy(false)
-      },
-      (geoErr) => {
-        setErr(geoErr.message || 'Could not read current device location.')
-        setGeoBusy(false)
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    )
-  }
-
   async function clearGps() {
     setErr(null)
     setBusy(true)
@@ -157,9 +116,8 @@ export function InstituteGpsDialog({
         note: note.trim() || undefined,
       })
       const row = await fetchGpsSettingRow(institute.id, line.adminId)
-      setIsLocked(false)
-      setLatitude('')
-      setLongitude('')
+      setLatitude(gpsLatitude(row))
+      setLongitude(gpsLongitude(row))
       setCurrentChangedAt(gpsUpdatedAt(row))
       await loadHistory()
       setConfirmClear(false)
@@ -171,47 +129,16 @@ export function InstituteGpsDialog({
     }
   }
 
-  async function save() {
-    setErr(null)
-    if (!latValid || !lngValid) {
-      setErr('Latitude must be between -90 and 90, and longitude between -180 and 180.')
-      return
-    }
-    if (!isLocked && (parsedLat == null || parsedLng == null)) {
-      setErr('Enter both latitude and longitude before saving an unlocked GPS.')
-      return
-    }
-    setBusy(true)
-    try {
-      await saveGpsSettingWithHistory({
-        instituteId: institute.id,
-        adminId: line.adminId,
-        isLocked,
-        latitude: parsedLat,
-        longitude: parsedLng,
-        note,
-      })
-      await loadHistory()
-      onSaved()
-      onClose()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const currentPair = formatGpsPair(parsedLat, parsedLng)
+  const currentPair = formatGpsPair(latitude, longitude)
   const previousSnapshot = useMemo(() => previousGpsFromHistory(history), [history])
   const currentSnapshot = useMemo(
     () => ({
-      latitude: parsedLat,
-      longitude: parsedLng,
-      isLocked,
+      latitude,
+      longitude,
     }),
-    [parsedLat, parsedLng, isLocked],
+    [latitude, longitude],
   )
-  const canClearGps = parsedLat != null && parsedLng != null
+  const canClearGps = hasGpsCoordinates(latitude, longitude)
 
   return (
     <ModalPortal>
@@ -219,7 +146,7 @@ export function InstituteGpsDialog({
         <div className="modal-panel modal-panel-gps card-elevated" onClick={(e) => e.stopPropagation()}>
           <div className="modal-head">
             <h2 id="gps-dialog-title" style={{ margin: 0, fontSize: '1.05rem' }}>
-              Manage GPS
+              Clear institute GPS
             </h2>
             <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={busy}>
               ✕
@@ -227,9 +154,9 @@ export function InstituteGpsDialog({
           </div>
 
           <p className="modal-subtitle">
-            Unlock, set, or clear GPS for this institute admin. <strong>Clear GPS</strong> saves the current location as
-            previous (history) and sets coordinates to empty so the institute can set a new location from the mobile app.
-            Previous and current locations are shown side by side (same layout as registration vs attendance photos).
+            Website action: save the <strong>current</strong> coordinates as previous (history), set latitude and
+            longitude to <strong>null</strong> in the database. The institute admin sets the new location in the mobile
+            app (current device location → save). The app locks GPS after that — lock/unlock is not done on this website.
           </p>
 
           <div className="gps-modal-meta">
@@ -251,108 +178,55 @@ export function InstituteGpsDialog({
               current={currentSnapshot}
               previousLabel="Previous GPS (saved)"
               currentLabel="Current GPS"
-              currentHint={
-                confirmClear
-                  ? 'Will be cleared — institute sets new location in app'
-                  : 'Not set — institute can set from app (GPS tab)'
-              }
+              currentHint="Not set — institute admin sets new location in app, then app locks GPS"
             />
             <div className="muted small" style={{ marginTop: '0.65rem' }}>
               Last change: {fmtDateTime(currentChangedAt)}
               {currentPair ? (
                 <>
                   {' '}
-                  · Editing: <span className="mono">{currentPair}</span>
+                  · Current: <span className="mono">{currentPair}</span>
                 </>
               ) : null}
             </div>
           </div>
 
-          <div className="gps-form-grid">
-            <div className="field field-checkbox span-2">
+          {canClearGps ? (
+            <div className="field" style={{ marginTop: '1rem' }}>
+              <label htmlFor="gps-clear-note">Note (optional)</label>
               <input
-                id="gps-edit-locked"
-                type="checkbox"
-                checked={isLocked}
-                onChange={(e) => setIsLocked(e.target.checked)}
-                disabled={busy || loading}
-              />
-              <label htmlFor="gps-edit-locked">Keep GPS locked after save</label>
-            </div>
-
-            <div className="field">
-              <label htmlFor="gps-edit-lat">Latitude</label>
-              <input
-                id="gps-edit-lat"
-                type="number"
-                inputMode="decimal"
-                step="0.000001"
-                value={latitude}
-                onChange={(e) => setLatitude(e.target.value)}
-                disabled={busy || loading || isLocked}
-                placeholder="18.520430"
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="gps-edit-lng">Longitude</label>
-              <input
-                id="gps-edit-lng"
-                type="number"
-                inputMode="decimal"
-                step="0.000001"
-                value={longitude}
-                onChange={(e) => setLongitude(e.target.value)}
-                disabled={busy || loading || isLocked}
-                placeholder="73.856744"
-              />
-            </div>
-
-            <div className="field span-2">
-              <label htmlFor="gps-edit-note">Change note (optional)</label>
-              <input
-                id="gps-edit-note"
+                id="gps-clear-note"
                 type="text"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 disabled={busy || loading}
-                placeholder="Why did you unlock or move this GPS?"
+                placeholder="Reason for clearing GPS (portal audit)"
               />
             </div>
-          </div>
+          ) : null}
 
           <div className="gps-modal-actions">
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => void useCurrentLocation()}
-              disabled={busy || loading || geoBusy || isLocked}
-            >
-              {geoBusy ? 'Reading GPS…' : 'Use current device location'}
-            </button>
-            {canClearGps && !confirmClear ? (
+            {!canClearGps ? (
+              <p className="muted small">
+                No GPS coordinates to clear. Institute admin can set location in the app when ready.
+              </p>
+            ) : !confirmClear ? (
               <button
                 type="button"
-                className="btn btn-ghost btn-sm btn-gps-clear"
+                className="btn btn-primary btn-sm btn-gps-clear"
                 disabled={busy || loading}
                 onClick={() => setConfirmClear(true)}
               >
-                Clear GPS (set to null)
+                Clear GPS (set coordinates to null)
               </button>
-            ) : null}
-            {confirmClear ? (
+            ) : (
               <div className="gps-clear-confirm">
                 <span className="small">
-                  Save <strong>{currentPair}</strong> as previous and clear current GPS? Institute admin sets new
-                  location in the app.
+                  Save <strong>{currentPair}</strong> as previous and set current GPS to null? Institute admin will add
+                  the new location from the app.
                 </span>
                 <div className="row" style={{ gap: '0.4rem', marginTop: '0.4rem' }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={busy}
-                    onClick={() => void clearGps()}
-                  >
+                  <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void clearGps()}>
                     {busy ? 'Clearing…' : 'Yes, clear GPS'}
                   </button>
                   <button
@@ -365,18 +239,12 @@ export function InstituteGpsDialog({
                   </button>
                 </div>
               </div>
-            ) : null}
-            <span className="muted small">
-              {!isLocked && !canSaveCoords ? 'Enter both coordinates to save an unlocked GPS.' : ' '}
-            </span>
+            )}
           </div>
 
           <div className="modal-form-actions">
             <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
-              Cancel
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={busy || loading}>
-              {busy ? 'Saving…' : 'Save GPS'}
+              Close
             </button>
           </div>
 
@@ -407,7 +275,7 @@ export function InstituteGpsDialog({
                         current={current}
                         previousLabel="Previous"
                         currentLabel="New"
-                        currentHint="Not set (cleared or pending)"
+                        currentHint="Not set — set from app"
                       />
                       <div className="muted small" style={{ marginTop: '0.5rem' }}>
                         By {item.changed_by_email ?? item.changed_by_user_id ?? 'unknown user'}

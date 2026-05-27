@@ -160,6 +160,7 @@ begin
   end if;
 
   if p_clear_coordinates then
+    -- Portal: only null coordinates; institute admin sets new location in app (app locks after save).
     p_latitude := null;
     p_longitude := null;
     p_is_locked := false;
@@ -274,7 +275,7 @@ begin
       using p_is_locked, p_latitude, p_longitude, p_institute_id, p_admin_id;
   end if;
 
-  if exists (
+  if not p_clear_coordinates and exists (
     select 1
     from information_schema.columns
     where table_schema = 'public'

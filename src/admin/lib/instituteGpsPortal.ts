@@ -145,7 +145,7 @@ export async function clearGpsSettingWithHistory(params: {
     p_longitude: null,
     p_note:
       params.note?.trim() ||
-      'Portal: GPS cleared — previous location saved; institute sets new location from app.',
+      'Portal: coordinates set to null; previous location saved. Institute admin sets new GPS in app (app locks after save).',
     p_clear_coordinates: true,
   })
   if (error) {
