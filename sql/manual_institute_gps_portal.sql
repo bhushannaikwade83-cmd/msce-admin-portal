@@ -48,6 +48,9 @@ create policy gps_settings_history_insert_authenticated
 
 drop function if exists public.list_institute_gps_history_portal(uuid, uuid);
 drop function if exists public.update_institute_gps_setting_portal(uuid, uuid, boolean, double precision, double precision, text);
+-- Remove duplicate overloads (6-arg vs 7-arg) — PostgREST cannot pick between them.
+drop function if exists public.update_institute_gps_setting_portal(text, text, boolean, double precision, double precision, text);
+drop function if exists public.update_institute_gps_setting_portal(text, text, boolean, double precision, double precision, text, boolean);
 
 create or replace function public.list_institute_gps_history_portal(
   p_institute_id text,

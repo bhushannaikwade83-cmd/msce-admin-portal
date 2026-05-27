@@ -119,6 +119,7 @@ export async function saveGpsSettingWithHistory(params: {
     p_latitude: params.latitude,
     p_longitude: params.longitude,
     p_note: params.note?.trim() || null,
+    p_clear_coordinates: false,
   })
   if (error) {
     throw new Error(`${error.message} Run sql/manual_institute_gps_portal.sql in Supabase if portal GPS write access is not enabled yet.`)
