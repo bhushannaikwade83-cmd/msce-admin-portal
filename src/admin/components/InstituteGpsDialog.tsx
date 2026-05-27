@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { InstituteRow } from './InstituteList'
+import {
+  GpsCoordCompare,
+  historyItemToCompare,
+  previousGpsFromHistory,
+} from './GpsCoordCompare'
 import { ModalPortal } from './ModalPortal'
 import {
+  clearGpsSettingWithHistory,
   fetchGpsHistoryRows,
   fetchGpsSettingRow,
   formatGpsPair,
@@ -63,6 +69,7 @@ export function InstituteGpsDialog({
   const [note, setNote] = useState('')
   const [currentChangedAt, setCurrentChangedAt] = useState<string | null>(line.updated_at)
   const [history, setHistory] = useState<PortalGpsHistoryRow[]>([])
+  const [confirmClear, setConfirmClear] = useState(false)
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -140,6 +147,30 @@ export function InstituteGpsDialog({
     )
   }
 
+  async function clearGps() {
+    setErr(null)
+    setBusy(true)
+    try {
+      await clearGpsSettingWithHistory({
+        instituteId: institute.id,
+        adminId: line.adminId,
+        note: note.trim() || undefined,
+      })
+      const row = await fetchGpsSettingRow(institute.id, line.adminId)
+      setIsLocked(false)
+      setLatitude('')
+      setLongitude('')
+      setCurrentChangedAt(gpsUpdatedAt(row))
+      await loadHistory()
+      setConfirmClear(false)
+      onSaved()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function save() {
     setErr(null)
     if (!latValid || !lngValid) {
@@ -171,6 +202,16 @@ export function InstituteGpsDialog({
   }
 
   const currentPair = formatGpsPair(parsedLat, parsedLng)
+  const previousSnapshot = useMemo(() => previousGpsFromHistory(history), [history])
+  const currentSnapshot = useMemo(
+    () => ({
+      latitude: parsedLat,
+      longitude: parsedLng,
+      isLocked,
+    }),
+    [parsedLat, parsedLng, isLocked],
+  )
+  const canClearGps = parsedLat != null && parsedLng != null
 
   return (
     <ModalPortal>
@@ -186,8 +227,9 @@ export function InstituteGpsDialog({
           </div>
 
           <p className="modal-subtitle">
-            Unlock, set, and relock GPS for this institute admin. Every save appends a GPS history row with the old and
-            new values.
+            Unlock, set, or clear GPS for this institute admin. <strong>Clear GPS</strong> saves the current location as
+            previous (history) and sets coordinates to empty so the institute can set a new location from the mobile app.
+            Previous and current locations are shown side by side (same layout as registration vs attendance photos).
           </p>
 
           <div className="gps-modal-meta">
@@ -202,17 +244,28 @@ export function InstituteGpsDialog({
           {err ? <p className="error" style={{ marginTop: '0.75rem' }}>{err}</p> : null}
           {loading ? <p className="muted small">Loading current GPS…</p> : null}
 
-          <div className="gps-current-card">
-            <div>
-              <div className="gps-current-label">Current status</div>
-              <div className="gps-current-main">
-                <span className={`gps-badge ${isLocked ? 'gps-locked' : 'gps-unlocked'}`}>
-                  {isLocked ? '🔒 Locked' : '🔓 Unlocked'}
-                </span>
-                <span className="gps-current-coords">{currentPair ?? 'No GPS set yet'}</span>
-              </div>
+          <div className="gps-compare-card">
+            <div className="gps-current-label">Previous vs current location</div>
+            <GpsCoordCompare
+              previous={previousSnapshot}
+              current={currentSnapshot}
+              previousLabel="Previous GPS (saved)"
+              currentLabel="Current GPS"
+              currentHint={
+                confirmClear
+                  ? 'Will be cleared — institute sets new location in app'
+                  : 'Not set — institute can set from app (GPS tab)'
+              }
+            />
+            <div className="muted small" style={{ marginTop: '0.65rem' }}>
+              Last change: {fmtDateTime(currentChangedAt)}
+              {currentPair ? (
+                <>
+                  {' '}
+                  · Editing: <span className="mono">{currentPair}</span>
+                </>
+              ) : null}
             </div>
-            <div className="muted small">Last change: {fmtDateTime(currentChangedAt)}</div>
           </div>
 
           <div className="gps-form-grid">
@@ -277,6 +330,42 @@ export function InstituteGpsDialog({
             >
               {geoBusy ? 'Reading GPS…' : 'Use current device location'}
             </button>
+            {canClearGps && !confirmClear ? (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-gps-clear"
+                disabled={busy || loading}
+                onClick={() => setConfirmClear(true)}
+              >
+                Clear GPS (set to null)
+              </button>
+            ) : null}
+            {confirmClear ? (
+              <div className="gps-clear-confirm">
+                <span className="small">
+                  Save <strong>{currentPair}</strong> as previous and clear current GPS? Institute admin sets new
+                  location in the app.
+                </span>
+                <div className="row" style={{ gap: '0.4rem', marginTop: '0.4rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={busy}
+                    onClick={() => void clearGps()}
+                  >
+                    {busy ? 'Clearing…' : 'Yes, clear GPS'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={busy}
+                    onClick={() => setConfirmClear(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <span className="muted small">
               {!isLocked && !canSaveCoords ? 'Enter both coordinates to save an unlocked GPS.' : ' '}
             </span>
@@ -305,34 +394,28 @@ export function InstituteGpsDialog({
               <p className="muted small">No GPS history recorded yet for this admin.</p>
             ) : (
               <div className="gps-history-list">
-                {history.map((item) => (
-                  <article key={item.id} className="gps-history-item">
-                    <div className="gps-history-head">
-                      <strong>{item.action ?? 'update'}</strong>
-                      <span className="muted small">{fmtDateTime(item.changed_at)}</span>
-                    </div>
-                    <div className="gps-history-body">
-                      <div>
-                        <span className="muted small">Old:</span>{' '}
-                        <span>{formatGpsPair(item.old_latitude, item.old_longitude) ?? '—'}</span>{' '}
-                        <span className={`gps-badge ${(item.old_is_locked ?? false) ? 'gps-locked' : 'gps-unlocked'}`}>
-                          {(item.old_is_locked ?? false) ? '🔒' : '🔓'}
-                        </span>
+                {history.map((item) => {
+                  const { previous, current } = historyItemToCompare(item)
+                  return (
+                    <article key={item.id} className="gps-history-item">
+                      <div className="gps-history-head">
+                        <strong>{item.action ?? 'update'}</strong>
+                        <span className="muted small">{fmtDateTime(item.changed_at)}</span>
                       </div>
-                      <div>
-                        <span className="muted small">New:</span>{' '}
-                        <span>{formatGpsPair(item.new_latitude, item.new_longitude) ?? '—'}</span>{' '}
-                        <span className={`gps-badge ${(item.new_is_locked ?? false) ? 'gps-locked' : 'gps-unlocked'}`}>
-                          {(item.new_is_locked ?? false) ? '🔒' : '🔓'}
-                        </span>
-                      </div>
-                      <div className="muted small">
+                      <GpsCoordCompare
+                        previous={previous}
+                        current={current}
+                        previousLabel="Previous"
+                        currentLabel="New"
+                        currentHint="Not set (cleared or pending)"
+                      />
+                      <div className="muted small" style={{ marginTop: '0.5rem' }}>
                         By {item.changed_by_email ?? item.changed_by_user_id ?? 'unknown user'}
                         {item.note ? ` · ${item.note}` : ''}
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  )
+                })}
               </div>
             )}
           </div>

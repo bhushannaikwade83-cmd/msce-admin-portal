@@ -118,7 +118,8 @@ create or replace function public.update_institute_gps_setting_portal(
   p_is_locked boolean,
   p_latitude double precision default null,
   p_longitude double precision default null,
-  p_note text default null
+  p_note text default null,
+  p_clear_coordinates boolean default false
 )
 returns jsonb
 language plpgsql
@@ -155,7 +156,11 @@ begin
     raise exception 'Longitude must be between -180 and 180';
   end if;
 
-  if p_is_locked = false and (p_latitude is null or p_longitude is null) then
+  if p_clear_coordinates then
+    p_latitude := null;
+    p_longitude := null;
+    p_is_locked := false;
+  elsif p_is_locked = false and (p_latitude is null or p_longitude is null) then
     raise exception 'Unlocked GPS requires both latitude and longitude';
   end if;
 
@@ -192,7 +197,9 @@ begin
   select nullif(auth.jwt() ->> 'email', '')
     into v_email;
 
-  if found then
+  if p_clear_coordinates then
+    v_action := 'clear_gps';
+  elsif found then
     if coalesce(v_prev.is_locked, false) <> p_is_locked and p_is_locked = false then
       v_action := 'unlock';
     elsif coalesce(v_prev.is_locked, false) <> p_is_locked and p_is_locked = true then
@@ -287,4 +294,4 @@ end;
 $$;
 
 grant execute on function public.list_institute_gps_history_portal(text, text) to authenticated;
-grant execute on function public.update_institute_gps_setting_portal(text, text, boolean, double precision, double precision, text) to authenticated;
+grant execute on function public.update_institute_gps_setting_portal(text, text, boolean, double precision, double precision, text, boolean) to authenticated;

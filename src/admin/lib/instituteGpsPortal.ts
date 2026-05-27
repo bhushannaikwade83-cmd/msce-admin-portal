@@ -64,6 +64,15 @@ export function formatGpsPair(lat: number | null, lng: number | null): string | 
   return `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`
 }
 
+export function googleMapsUrl(lat: number | null, lng: number | null): string | null {
+  if (!Number.isFinite(lat ?? NaN) || !Number.isFinite(lng ?? NaN)) return null
+  return `https://www.google.com/maps?q=${lat},${lng}`
+}
+
+export function hasGpsCoordinates(lat: number | null, lng: number | null): boolean {
+  return formatGpsPair(lat, lng) != null
+}
+
 export async function fetchGpsSettingRow(instituteId: string, adminId: string): Promise<PortalGpsSettingRow | null> {
   const sb = getSupabase()
   const { data, error } = await sb
@@ -117,5 +126,34 @@ export async function saveGpsSettingWithHistory(params: {
   const result = (data ?? {}) as SaveGpsResult
   if (result.success === false) {
     throw new Error(result.message ?? 'Could not save GPS settings.')
+  }
+}
+
+/** Clears GPS (null lat/lng, unlocked). Previous coordinates are stored in history as "old". */
+export async function clearGpsSettingWithHistory(params: {
+  instituteId: string
+  adminId: string
+  note?: string
+}): Promise<void> {
+  const sb = getSupabase()
+  const { data, error } = await sb.rpc('update_institute_gps_setting_portal', {
+    p_institute_id: params.instituteId,
+    p_admin_id: params.adminId,
+    p_is_locked: false,
+    p_latitude: null,
+    p_longitude: null,
+    p_note:
+      params.note?.trim() ||
+      'Portal: GPS cleared — previous location saved; institute sets new location from app.',
+    p_clear_coordinates: true,
+  })
+  if (error) {
+    throw new Error(
+      `${error.message} Run sql/manual_institute_gps_portal.sql in Supabase (includes clear GPS support).`,
+    )
+  }
+  const result = (data ?? {}) as SaveGpsResult
+  if (result.success === false) {
+    throw new Error(result.message ?? 'Could not clear GPS settings.')
   }
 }
