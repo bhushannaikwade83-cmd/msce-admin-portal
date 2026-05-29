@@ -227,7 +227,8 @@ export default function PromoPage() {
       <div className="promo-guide-bleed">
         <PromoGuideLayout>
           <section id="guide" className="section">
-            <div className="section-heading app-card section-heading-card card-3d">
+            <hr className="promo-guide-hrule promo-guide-hrule-main" aria-hidden />
+            <div className="section-heading app-card section-heading-card card-3d promo-guide-intro-head">
               <p className="section-chip">Step-by-step</p>
               <h3>Complete institute instructions</h3>
               <p className="section-lead">

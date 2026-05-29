@@ -165,8 +165,14 @@ html:has(.app-ui) #root {
 }
 
 .app-ui .promo-guide-sidebar {
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+  background: linear-gradient(180deg, #f4f7fb 0%, #e8eef5 100%) !important;
   border-right: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.app-ui .promo-guide-hrule {
+  border-top-color: var(--border);
 }
 
 .app-ui .promo-guide-sidebar-link {
@@ -562,10 +568,18 @@ html:has(.app-ui) #root {
   font-weight: 700;
 }
 
-.app-ui .promo-guide-main .section-heading-card {
+.app-ui .promo-guide-main .section-heading-card,
+.app-ui .promo-guide-main .promo-guide-intro-head {
   padding: 18px 20px;
   margin-bottom: 16px;
+  text-align: left !important;
+}
+
+.app-ui .promo-guide-main .section-heading-card h3,
+.app-ui .promo-guide-main .section-heading-card .section-lead {
   text-align: left;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .section-heading-card {

@@ -28,8 +28,9 @@ const sidebarGroups = [
 
 export function GuideSidebar() {
   return (
-    <aside className="promo-guide-sidebar app-card card-3d" aria-label="Page sections">
+    <aside className="promo-guide-sidebar" aria-label="Page sections">
       <p className="promo-guide-sidebar-title">On this page</p>
+      <hr className="promo-guide-hrule" aria-hidden />
       {sidebarGroups.map((group) => (
         <div key={group.title} className="promo-guide-sidebar-group">
           <p className="promo-guide-sidebar-group-label">{group.title}</p>
