@@ -6,6 +6,7 @@ import {
   photoDontList,
   type GuideSection,
 } from './instituteGuide'
+import { InstructorTroubleshootingSection, StudentRegAttendanceVideoSection } from './InstructorHelpSections'
 import { ScreenshotWalkthrough } from './ScreenshotWalkthrough'
 import { PROMO_SITE_TITLE } from '../siteTitle'
 import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_TEL } from '../siteSupport'
@@ -156,6 +157,12 @@ export default function PromoPage() {
             <a className="btn-3d btn-3d-ghost" href="#guide">
               Instructions
             </a>
+            <a className="btn-3d btn-3d-ghost" href="#troubleshooting">
+              Errors &amp; fixes
+            </a>
+            <a className="btn-3d btn-3d-ghost" href="#video-tutorial">
+              Video
+            </a>
             <a className="btn-3d btn-3d-ghost" href="#app-screens">
               Screenshots
             </a>
@@ -272,6 +279,10 @@ export default function PromoPage() {
           </p>
         </section>
 
+        <InstructorTroubleshootingSection />
+
+        <StudentRegAttendanceVideoSection />
+
         <ScreenshotWalkthrough />
 
         <section className="section">
@@ -349,6 +360,10 @@ export default function PromoPage() {
         <a href={apkUrl} className="app-nav-item" download="MSCE-Attendance.apk">
           <span className="app-nav-icon">⬇</span>
           <span>APK</span>
+        </a>
+        <a href="#troubleshooting" className="app-nav-item">
+          <span className="app-nav-icon">?</span>
+          <span>Help</span>
         </a>
         <a href="#support" className="app-nav-item">
           <span className="app-nav-icon">✉</span>

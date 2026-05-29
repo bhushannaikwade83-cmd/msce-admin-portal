@@ -23,6 +23,8 @@ export const guideNav = [
   { id: 'students', label: 'Students & face' },
   { id: 'attendance', label: 'Mark attendance' },
   { id: 'staff', label: 'Instructor' },
+  { id: 'troubleshooting', label: 'Errors & fixes' },
+  { id: 'video-tutorial', label: 'Video' },
   { id: 'app-screens', label: 'Screenshots' },
 ] as const
 
@@ -129,6 +131,7 @@ export const instituteGuideSections: GuideSection[] = [
         title: 'Lock your point',
         body: 'Save / lock your personal attendance GPS point at that physical location. The app uses your device’s current location when you lock.',
         bullets: [
+          'Stand in the centre of the room (not the doorway) — see Errors & fixes → GPS room',
           'Radius is fixed at 15 metres in all directions from the locked point',
           'The radius cannot be widened in the app — this prevents marking from home or far away',
         ],

@@ -702,6 +702,78 @@ main {
   color: #ffe2c4;
 }
 
+.troubleshoot-infographic-wrap {
+  margin: 1rem 0 1.25rem;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.troubleshoot-infographic {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+  object-fit: contain;
+}
+
+.troubleshoot-lang-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.troubleshoot-related-link {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #7ec8ff;
+  margin-left: 0.25rem;
+}
+
+.section-lead-mr {
+  font-size: 1.05rem;
+  opacity: 0.95;
+}
+
+.guide-video-card {
+  padding: 1.25rem 1.5rem 1.5rem;
+  max-width: 56rem;
+}
+
+.guide-video-player {
+  width: 100%;
+  max-height: min(70vh, 480px);
+  border-radius: 14px;
+  background: #000;
+}
+
+.guide-video-placeholder {
+  padding: 2rem 1.5rem;
+  text-align: center;
+  border-radius: 14px;
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.guide-video-placeholder-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.guide-video-checklist {
+  margin: 1.25rem 0 0;
+  padding-left: 1.25rem;
+  line-height: 1.55;
+}
+
+.guide-video-checklist li {
+  margin-bottom: 0.35rem;
+}
+
 .photo-rules-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
