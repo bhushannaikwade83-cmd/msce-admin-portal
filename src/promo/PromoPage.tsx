@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
-  guideNav,
   instituteGuideSections,
   photoDoList,
   photoDontList,
   type GuideSection,
 } from './instituteGuide'
+import { PromoGuideLayout } from './GuideSidebar'
 import { InstructorTroubleshootingSection, StudentRegAttendanceVideoSection } from './InstructorHelpSections'
 import { ScreenshotWalkthrough } from './ScreenshotWalkthrough'
 import { PROMO_SITE_TITLE } from '../siteTitle'
@@ -223,67 +223,62 @@ export default function PromoPage() {
           </div>
         </section>
 
-        <section id="guide" className="section">
-          <div className="section-heading app-card section-heading-card card-3d">
-            <p className="section-chip">Step-by-step</p>
-            <h3>Complete institute instructions</h3>
-            <p className="section-lead">
-              Follow these sections in order the first time you set up a device at your institute.
+        <PromoGuideLayout>
+          <section id="guide" className="section">
+            <div className="section-heading app-card section-heading-card card-3d">
+              <p className="section-chip">Step-by-step</p>
+              <h3>Complete institute instructions</h3>
+              <p className="section-lead">
+                Follow these sections in order the first time you set up a device at your institute. Use the
+                sidebar on the left to jump to any topic.
+              </p>
+            </div>
+
+            <div className="guide-grid">
+              {instituteGuideSections.map((section) => (
+                <GuideSectionBlock key={section.id} section={section} />
+              ))}
+            </div>
+          </section>
+
+          <section id="photo-rules" className="section">
+            <div className="section-heading app-card section-heading-card card-3d">
+              <p className="section-chip">Camera rules</p>
+              <h3>Face photo & attendance capture</h3>
+              <p className="section-lead">Same rules shown on the Students screen in the app.</p>
+            </div>
+            <div className="photo-rules-grid">
+              <div className="app-card card-3d photo-rules-card photo-rules-card-do">
+                <h4>Do</h4>
+                <ul className="check-list">
+                  {photoDoList.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="app-card card-3d photo-rules-card photo-rules-card-warn">
+                <h4>Do not</h4>
+                <ul className="cross-list">
+                  {photoDontList.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <p className="photo-rules-note app-info-banner">
+              <strong>Registration vs attendance:</strong> face registration asks for{' '}
+              <strong>two blinks</strong> then a still capture. Marking Entry or Exit uses{' '}
+              <strong>one blink</strong>, then the app matches the live face to the registered student
+              you selected.
             </p>
-          </div>
+          </section>
 
-          <nav className="guide-nav" aria-label="Instruction sections">
-            {guideNav.map((item) => (
-              <a key={item.id} href={`#${item.id}`} className="guide-nav-link btn-3d btn-3d-ghost btn-3d-sm">
-                {item.label}
-              </a>
-            ))}
-          </nav>
+          <InstructorTroubleshootingSection />
 
-          <div className="guide-grid">
-            {instituteGuideSections.map((section) => (
-              <GuideSectionBlock key={section.id} section={section} />
-            ))}
-          </div>
-        </section>
+          <StudentRegAttendanceVideoSection />
 
-        <section id="photo-rules" className="section">
-          <div className="section-heading app-card section-heading-card card-3d">
-            <p className="section-chip">Camera rules</p>
-            <h3>Face photo & attendance capture</h3>
-            <p className="section-lead">Same rules shown on the Students screen in the app.</p>
-          </div>
-          <div className="photo-rules-grid">
-            <div className="app-card card-3d photo-rules-card photo-rules-card-do">
-              <h4>Do</h4>
-              <ul className="check-list">
-                {photoDoList.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="app-card card-3d photo-rules-card photo-rules-card-warn">
-              <h4>Do not</h4>
-              <ul className="cross-list">
-                {photoDontList.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-          <p className="photo-rules-note app-info-banner">
-            <strong>Registration vs attendance:</strong> face registration asks for{' '}
-            <strong>two blinks</strong> then a still capture. Marking Entry or Exit uses{' '}
-            <strong>one blink</strong>, then the app matches the live face to the registered student
-            you selected.
-          </p>
-        </section>
-
-        <InstructorTroubleshootingSection />
-
-        <StudentRegAttendanceVideoSection />
-
-        <ScreenshotWalkthrough />
+          <ScreenshotWalkthrough />
+        </PromoGuideLayout>
 
         <section className="section">
           <div className="download-card app-card card-3d">

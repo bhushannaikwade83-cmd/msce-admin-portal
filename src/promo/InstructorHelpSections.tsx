@@ -90,14 +90,6 @@ export function InstructorTroubleshootingSection() {
         </p>
       </div>
 
-      <nav className="guide-nav" aria-label="Troubleshooting topics">
-        {instructorTroubleshootingCards.map((c) => (
-          <a key={c.id} href={`#${c.id}`} className="guide-nav-link btn-3d btn-3d-ghost btn-3d-sm">
-            {c.icon} {c.id === 'usb-debugging' ? 'USB / GPS spoof' : c.id === 'photo-edit-once' ? 'Photo edit' : 'GPS room'}
-          </a>
-        ))}
-      </nav>
-
       <div className="guide-grid">
         {instructorTroubleshootingCards.map((card) => (
           <TroubleshootingCardBlock key={card.id} card={card} />
@@ -137,43 +129,44 @@ export function StudentRegAttendanceVideoSection() {
         </p>
       </div>
 
-      <div className="guide-video-card app-card card-3d">
-        {videoOk === true ? (
-          <video
-            className="guide-video-player"
-            controls
-            playsInline
-            preload="metadata"
-          >
-            <source src={STUDENT_REG_ATTENDANCE_VIDEO_URL} type="video/mp4" />
-            Your browser does not support video playback.
-          </video>
-        ) : videoOk === false ? (
-          <div className="guide-video-placeholder">
-            <p className="guide-video-placeholder-title">Video coming soon</p>
-            <p className="muted small">
-              MSCE will upload the training video here. File path:{' '}
-              <code>public/videos/student-registration-attendance.mp4</code>
-            </p>
-            <p className="muted small">
-              Until then, use the written steps in{' '}
-              <a href="#students">Register students</a> and <a href="#attendance">Mark attendance</a> above, and
-              the <a href="#troubleshooting">error help</a> cards.
-            </p>
-          </div>
-        ) : (
-          <p className="muted small" style={{ padding: '2rem', textAlign: 'center' }}>
-            Checking for video…
-          </p>
-        )}
+      <div className="guide-video-layout app-card card-3d">
+        <div className="guide-video-stage">
+          {videoOk === true ? (
+            <video
+              className="guide-video-player"
+              controls
+              playsInline
+              preload="metadata"
+            >
+              <source src={STUDENT_REG_ATTENDANCE_VIDEO_URL} type="video/mp4" />
+              Your browser does not support video playback.
+            </video>
+          ) : videoOk === false ? (
+            <div className="guide-video-placeholder">
+              <p className="guide-video-placeholder-title">Video coming soon</p>
+              <p className="muted small">
+                Upload <code>public/videos/student-registration-attendance.mp4</code>
+              </p>
+            </div>
+          ) : (
+            <p className="muted small guide-video-loading">Checking for video…</p>
+          )}
+        </div>
 
-        <ul className="guide-video-checklist">
-          <li>Install latest APK from this page</li>
-          <li>Login → PIN → GPS lock at room centre (15 m)</li>
-          <li>Add student → face registration (2 blinks)</li>
-          <li>Mark Entry / Exit (1 blink, correct student selected)</li>
-          <li>Stay inside GPS zone; turn off USB debugging if blocked</li>
-        </ul>
+        <aside className="guide-video-side">
+          <p className="guide-video-side-title">Steps in this video</p>
+          <ul className="guide-video-checklist">
+            <li>Install latest APK from this page</li>
+            <li>Login → PIN → GPS lock at room centre (15 m)</li>
+            <li>Add student → face registration (2 blinks)</li>
+            <li>Mark Entry / Exit (1 blink, correct student selected)</li>
+            <li>Stay inside GPS zone; turn off USB debugging if blocked</li>
+          </ul>
+          <p className="muted small">
+            Related: <a href="#students">Register students</a> · <a href="#attendance">Mark attendance</a> ·{' '}
+            <a href="#troubleshooting">Error help</a>
+          </p>
+        </aside>
       </div>
     </section>
   )

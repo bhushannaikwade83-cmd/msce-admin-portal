@@ -164,6 +164,26 @@ html:has(.app-ui) #root {
   justify-content: flex-start;
 }
 
+.app-ui .promo-guide-sidebar {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(26, 60, 110, 0.12);
+}
+
+.app-ui .promo-guide-sidebar-link {
+  color: var(--gov-navy, #1a3c6e);
+}
+
+.app-ui .promo-guide-sidebar-link:hover {
+  background: rgba(43, 91, 160, 0.12);
+  color: var(--gov-blue, #2b5ba0);
+}
+
+.app-ui .guide-video-layout {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(26, 60, 110, 0.1);
+  border-radius: 20px;
+}
+
 .app-ui .screenshot-layout {
   grid-template-columns: minmax(220px, 340px) 1fr;
 }

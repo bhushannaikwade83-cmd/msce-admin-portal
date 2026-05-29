@@ -738,16 +738,133 @@ main {
   opacity: 0.95;
 }
 
-.guide-video-card {
-  padding: 1.25rem 1.5rem 1.5rem;
-  max-width: 56rem;
+/* Guide area: full-width main + sticky sidebar */
+.promo-guide-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+  width: 100%;
+  padding: 0 1.25rem 2rem;
+  box-sizing: border-box;
+}
+
+.promo-guide-main {
+  min-width: 0;
+  width: 100%;
+}
+
+.promo-guide-main .section {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.promo-guide-sidebar {
+  position: sticky;
+  top: 88px;
+  align-self: stretch;
+  min-height: calc(100vh - 120px);
+  max-height: calc(100vh - 88px);
+  overflow-y: auto;
+  padding: 1rem 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  scroll-margin-top: 88px;
+}
+
+.promo-guide-sidebar-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted, #5a6474);
+}
+
+.promo-guide-sidebar-group-label {
+  margin: 0.5rem 0 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #5a6474);
+}
+
+.promo-guide-sidebar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.promo-guide-sidebar-link {
+  display: block;
+  padding: 0.45rem 0.55rem;
+  margin: 0.1rem 0;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+  line-height: 1.3;
+  transition: background 0.12s ease;
+}
+
+.promo-guide-sidebar-link:hover {
+  background: rgba(43, 91, 160, 0.1);
+}
+
+.promo-guide-sidebar-apk {
+  margin-top: auto;
+  width: 100%;
+  text-align: center;
+  font-size: 0.82rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.guide-video-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 1.25rem;
+  padding: 1.25rem;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.guide-video-stage {
+  width: 100%;
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a0a;
+  border-radius: 14px;
+  overflow: hidden;
 }
 
 .guide-video-player {
   width: 100%;
-  max-height: min(70vh, 480px);
-  border-radius: 14px;
+  max-height: min(85vh, 720px);
+  height: auto;
+  object-fit: contain;
+  display: block;
   background: #000;
+}
+
+.guide-video-side {
+  padding: 0.25rem 0;
+}
+
+.guide-video-side-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.guide-video-loading {
+  padding: 3rem 1rem;
+  text-align: center;
 }
 
 .guide-video-placeholder {
@@ -975,6 +1092,54 @@ main {
   .screenshot-frame {
     max-width: 320px;
     margin: 0 auto;
+  }
+}
+
+@media (max-width: 960px) {
+  .promo-guide-layout {
+    grid-template-columns: 1fr;
+    padding: 0 0.75rem 1.5rem;
+  }
+
+  .promo-guide-sidebar {
+    position: static;
+    min-height: 0;
+    max-height: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.75rem;
+  }
+
+  .promo-guide-sidebar-title {
+    width: 100%;
+  }
+
+  .promo-guide-sidebar-group {
+    display: contents;
+  }
+
+  .promo-guide-sidebar-group-label {
+    display: none;
+  }
+
+  .promo-guide-sidebar-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .promo-guide-sidebar-list li {
+    display: inline;
+  }
+
+  .promo-guide-sidebar-apk {
+    width: auto;
+    margin-top: 0;
+  }
+
+  .guide-video-layout {
+    grid-template-columns: 1fr;
   }
 }
 
