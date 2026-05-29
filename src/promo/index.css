@@ -738,53 +738,73 @@ main {
   opacity: 0.95;
 }
 
-/* Full viewport width — edge to edge (break out of app-main gutter) */
+/* Guide block: outside padded app-main — true edge-to-edge */
 .promo-guide-bleed {
-  width: 100vw;
+  width: 100%;
   max-width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
-/* Guide area: sidebar flush left, content to right edge */
 .promo-guide-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
   gap: 0;
   align-items: stretch;
   width: 100%;
   min-height: calc(100vh - 80px);
   padding: 0;
+  margin: 0;
   box-sizing: border-box;
 }
 
 .promo-guide-main {
   min-width: 0;
   width: 100%;
-  padding: 1.25rem clamp(1rem, 2.5vw, 2.5rem) 2.5rem;
+  padding: 0.75rem 0.75rem 2rem 0.5rem;
   box-sizing: border-box;
 }
 
 .promo-guide-main .section {
-  padding-left: 0;
-  padding-right: 0;
+  padding: 1.5rem 0 0.5rem;
+  margin: 0;
   width: 100%;
   max-width: none;
+}
+
+.promo-guide-main .guide-grid {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.promo-guide-main .guide-section,
+.promo-guide-main .section-heading-card,
+.promo-guide-main .photo-rules-card,
+.promo-guide-main .photo-rules-note,
+.promo-guide-main .screenshot-card,
+.promo-guide-main .troubleshoot-card {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+  box-sizing: border-box;
 }
 
 .section-video-full {
   padding-left: 0 !important;
   padding-right: 0 !important;
-  margin-left: calc(-1 * clamp(1rem, 2.5vw, 2.5rem));
-  margin-right: calc(-1 * clamp(1rem, 2.5vw, 2.5rem));
-  width: calc(100% + 2 * clamp(1rem, 2.5vw, 2.5rem));
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
   max-width: none;
 }
 
 .section-heading-inset {
-  margin-left: clamp(1rem, 2.5vw, 2.5rem);
-  margin-right: clamp(1rem, 2.5vw, 2.5rem);
+  margin-left: 0.5rem;
+  margin-right: 0.75rem;
 }
 
 .promo-guide-sidebar {
@@ -856,11 +876,13 @@ main {
 }
 
 /* Video: full width left edge to right edge of viewport */
+/* Video breaks out to full viewport width (main column is right of sidebar) */
 .guide-video-fullbleed {
   width: 100vw;
   max-width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
+  padding: 0;
   box-sizing: border-box;
 }
 
@@ -1157,15 +1179,13 @@ main {
     padding: 1rem 1rem 2rem;
   }
 
-  .section-video-full {
-    margin-left: -1rem;
-    margin-right: -1rem;
-    width: calc(100% + 2rem);
+  .promo-guide-main {
+    padding: 0.5rem 0.5rem 1.5rem;
   }
 
   .section-heading-inset {
-    margin-left: 0;
-    margin-right: 0;
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
   }
 
   .promo-guide-sidebar {

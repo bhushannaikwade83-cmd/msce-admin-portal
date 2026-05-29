@@ -177,7 +177,7 @@ export default function PromoPage() {
       </header>
 
       <div className="page-shell">
-      <main className="app-main">
+      <main className="app-main app-main-top">
         <section className="hero app-card card-3d">
           <div className="hero-copy">
             <p className="section-chip">For institutes & staff</p>
@@ -222,8 +222,9 @@ export default function PromoPage() {
             />
           </div>
         </section>
+      </main>
 
-        <div className="promo-guide-bleed">
+      <div className="promo-guide-bleed">
         <PromoGuideLayout>
           <section id="guide" className="section">
             <div className="section-heading app-card section-heading-card card-3d">
@@ -280,8 +281,9 @@ export default function PromoPage() {
 
           <ScreenshotWalkthrough />
         </PromoGuideLayout>
-        </div>
+      </div>
 
+      <main className="app-main app-main-bottom">
         <section className="section">
           <div className="download-card app-card card-3d">
             <div>
