@@ -117,8 +117,8 @@ export function StudentRegAttendanceVideoSection() {
   }, [])
 
   return (
-    <section id="video-tutorial" className="section">
-      <div className="section-heading app-card section-heading-card card-3d">
+    <section id="video-tutorial" className="section section-video-full">
+      <div className="section-heading app-card section-heading-card card-3d section-heading-inset">
         <p className="section-chip">Video tutorial</p>
         <h3>Student registration &amp; attendance marking</h3>
         <p className="section-lead section-lead-mr">
@@ -129,7 +129,7 @@ export function StudentRegAttendanceVideoSection() {
         </p>
       </div>
 
-      <div className="guide-video-layout app-card card-3d">
+      <div className="guide-video-fullbleed">
         <div className="guide-video-stage">
           {videoOk === true ? (
             <video
@@ -153,20 +153,20 @@ export function StudentRegAttendanceVideoSection() {
           )}
         </div>
 
-        <aside className="guide-video-side">
+        <div className="guide-video-steps-bar app-card card-3d">
           <p className="guide-video-side-title">Steps in this video</p>
-          <ul className="guide-video-checklist">
+          <ul className="guide-video-checklist guide-video-checklist-inline">
             <li>Install latest APK from this page</li>
             <li>Login → PIN → GPS lock at room centre (15 m)</li>
             <li>Add student → face registration (2 blinks)</li>
             <li>Mark Entry / Exit (1 blink, correct student selected)</li>
             <li>Stay inside GPS zone; turn off USB debugging if blocked</li>
           </ul>
-          <p className="muted small">
+          <p className="muted small guide-video-related">
             Related: <a href="#students">Register students</a> · <a href="#attendance">Mark attendance</a> ·{' '}
             <a href="#troubleshooting">Error help</a>
           </p>
-        </aside>
+        </div>
       </div>
     </section>
   )

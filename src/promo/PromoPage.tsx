@@ -223,6 +223,7 @@ export default function PromoPage() {
           </div>
         </section>
 
+        <div className="promo-guide-bleed">
         <PromoGuideLayout>
           <section id="guide" className="section">
             <div className="section-heading app-card section-heading-card card-3d">
@@ -279,6 +280,7 @@ export default function PromoPage() {
 
           <ScreenshotWalkthrough />
         </PromoGuideLayout>
+        </div>
 
         <section className="section">
           <div className="download-card app-card card-3d">

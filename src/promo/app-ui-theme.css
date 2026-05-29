@@ -165,8 +165,8 @@ html:has(.app-ui) #root {
 }
 
 .app-ui .promo-guide-sidebar {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(26, 60, 110, 0.12);
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+  border-right: 1px solid var(--border) !important;
 }
 
 .app-ui .promo-guide-sidebar-link {
@@ -178,10 +178,13 @@ html:has(.app-ui) #root {
   color: var(--gov-blue, #2b5ba0);
 }
 
-.app-ui .guide-video-layout {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(26, 60, 110, 0.1);
-  border-radius: 20px;
+.app-ui .guide-video-fullbleed {
+  background: #0a0a0a;
+}
+
+.app-ui .guide-video-steps-bar {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-top: 1px solid var(--border) !important;
 }
 
 .app-ui .screenshot-layout {
