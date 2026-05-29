@@ -747,16 +747,18 @@ main {
   box-sizing: border-box;
 }
 
-.promo-guide-layout {
-  display: grid;
-  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
-  gap: 0;
-  align-items: stretch;
+.promo-guide-main-only {
   width: 100%;
-  min-height: calc(100vh - 80px);
-  padding: 0;
+  max-width: none;
   margin: 0;
+  padding: 0.65rem 0.75rem 2rem;
   box-sizing: border-box;
+  text-align: left;
+}
+
+.promo-guide-jump-nav {
+  margin: 0 0 1.25rem;
+  justify-content: flex-start;
 }
 
 .promo-guide-hrule {
@@ -770,14 +772,7 @@ main {
   margin: 0 0 1rem;
 }
 
-.promo-guide-main {
-  min-width: 0;
-  width: 100%;
-  padding: 0.65rem 0.75rem 2rem 0;
-  box-sizing: border-box;
-  text-align: left;
-}
-
+.promo-guide-main-only .section,
 .promo-guide-main .section {
   padding: 1.5rem 0 0.5rem;
   margin: 0;
@@ -785,6 +780,7 @@ main {
   max-width: none;
 }
 
+.promo-guide-main-only .guide-grid,
 .promo-guide-main .guide-grid {
   width: 100%;
   max-width: none;
@@ -792,6 +788,12 @@ main {
   padding: 0;
 }
 
+.promo-guide-main-only .guide-section,
+.promo-guide-main-only .section-heading-card,
+.promo-guide-main-only .photo-rules-card,
+.promo-guide-main-only .photo-rules-note,
+.promo-guide-main-only .screenshot-card,
+.promo-guide-main-only .troubleshoot-card,
 .promo-guide-main .guide-section,
 .promo-guide-main .section-heading-card,
 .promo-guide-main .photo-rules-card,
@@ -806,6 +808,12 @@ main {
   text-align: left;
 }
 
+.promo-guide-main-only .promo-guide-intro-head,
+.promo-guide-main-only .guide-section-head,
+.promo-guide-main-only .guide-step,
+.promo-guide-main-only .guide-callout,
+.promo-guide-main-only .section-heading,
+.promo-guide-main-only .section-lead,
 .promo-guide-main .promo-guide-intro-head,
 .promo-guide-main .guide-section-head,
 .promo-guide-main .guide-step,
@@ -815,16 +823,19 @@ main {
   text-align: left;
 }
 
+.promo-guide-main-only .section-lead,
 .promo-guide-main .section-lead {
   margin-left: 0;
   margin-right: 0;
   max-width: none;
 }
 
+.promo-guide-main-only .guide-section-head,
 .promo-guide-main .guide-section-head {
   justify-content: flex-start;
 }
 
+.promo-guide-main-only .guide-steps,
 .promo-guide-main .guide-steps {
   padding-left: 0;
 }
@@ -843,74 +854,7 @@ main {
   margin-right: 0.75rem;
 }
 
-.promo-guide-sidebar {
-  position: sticky;
-  top: 80px;
-  align-self: stretch;
-  min-height: calc(100vh - 80px);
-  max-height: calc(100vh - 80px);
-  overflow-y: auto;
-  padding: 0.85rem 0.65rem 1.25rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  scroll-margin-top: 80px;
-  border-radius: 0 !important;
-  border: none !important;
-  border-right: 1px solid rgba(26, 60, 110, 0.12) !important;
-  box-shadow: none !important;
-  background: linear-gradient(180deg, #f4f7fb 0%, #e8eef5 100%);
-  text-align: left;
-}
-
-.promo-guide-sidebar-group-label {
-  margin: 0.65rem 0 0.3rem;
-  padding-left: 0.5rem;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted, #5a6474);
-}
-
-.promo-guide-sidebar-group:first-child .promo-guide-sidebar-group-label {
-  margin-top: 0.15rem;
-}
-
-.promo-guide-sidebar-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.promo-guide-sidebar-link {
-  display: block;
-  padding: 0.4rem 0.5rem 0.4rem 0.5rem;
-  margin: 0;
-  border-radius: 0 6px 6px 0;
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: inherit;
-  text-decoration: none;
-  line-height: 1.3;
-  transition: background 0.12s ease;
-}
-
-.promo-guide-sidebar-link:hover {
-  background: rgba(43, 91, 160, 0.1);
-}
-
-.promo-guide-sidebar-apk {
-  margin-top: auto;
-  width: calc(100% - 0.5rem);
-  margin-left: 0.5rem;
-  text-align: center;
-  font-size: 0.82rem;
-  padding: 0.55rem 0.5rem;
-}
-
 /* Video: full width left edge to right edge of viewport */
-/* Video breaks out to full viewport width (main column is right of sidebar) */
 .guide-video-fullbleed {
   width: 100vw;
   max-width: 100vw;
@@ -1204,60 +1148,13 @@ main {
 }
 
 @media (max-width: 960px) {
-  .promo-guide-layout {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
-
-  .promo-guide-main {
-    padding: 1rem 1rem 2rem;
-  }
-
-  .promo-guide-main {
-    padding: 0.5rem 0.5rem 1.5rem;
+  .promo-guide-main-only {
+    padding: 0.5rem 0.65rem 1.5rem;
   }
 
   .section-heading-inset {
     margin-left: 0.5rem;
     margin-right: 0.5rem;
-  }
-
-  .promo-guide-sidebar {
-    position: static;
-    min-height: 0;
-    max-height: none;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem 0.75rem;
-    border-right: none !important;
-  }
-
-  .promo-guide-sidebar-title {
-    width: 100%;
-  }
-
-  .promo-guide-sidebar-group {
-    display: contents;
-  }
-
-  .promo-guide-sidebar-group-label {
-    display: none;
-  }
-
-  .promo-guide-sidebar-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-  }
-
-  .promo-guide-sidebar-list li {
-    display: inline;
-  }
-
-  .promo-guide-sidebar-apk {
-    width: auto;
-    margin-top: 0;
   }
 
   .guide-video-stage {

@@ -5,7 +5,7 @@ import {
   photoDontList,
   type GuideSection,
 } from './instituteGuide'
-import { PromoGuideLayout } from './GuideSidebar'
+import { GuideJumpNav, PromoGuideLayout } from './GuideSidebar'
 import { InstructorTroubleshootingSection, StudentRegAttendanceVideoSection } from './InstructorHelpSections'
 import { ScreenshotWalkthrough } from './ScreenshotWalkthrough'
 import { PROMO_SITE_TITLE } from '../siteTitle'
@@ -227,15 +227,16 @@ export default function PromoPage() {
       <div className="promo-guide-bleed">
         <PromoGuideLayout>
           <section id="guide" className="section">
-            <hr className="promo-guide-hrule promo-guide-hrule-main" aria-hidden />
             <div className="section-heading app-card section-heading-card card-3d promo-guide-intro-head">
               <p className="section-chip">Step-by-step</p>
               <h3>Complete institute instructions</h3>
               <p className="section-lead">
                 Follow these sections in order the first time you set up a device at your institute. Use the
-                sidebar on the left to jump to any topic.
+                links below to jump to any topic.
               </p>
             </div>
+
+            <GuideJumpNav />
 
             <div className="guide-grid">
               {instituteGuideSections.map((section) => (
