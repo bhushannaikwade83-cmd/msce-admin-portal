@@ -497,11 +497,17 @@ label.inline input[type='checkbox'] {
 
 .institutes-stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
   gap: 0.75rem;
   margin-bottom: 1rem;
   width: 100%;
   min-width: 0;
+}
+
+.inst-admin-access-cell .badge {
+  white-space: normal;
+  text-align: left;
+  line-height: 1.25;
 }
 
 .institutes-stat-card {
@@ -530,6 +536,48 @@ label.inline input[type='checkbox'] {
 .institutes-stat-card--warn {
   border-color: rgba(230, 126, 34, 0.35);
   background: linear-gradient(180deg, #fff8f0 0%, #fff 100%);
+}
+
+.institutes-stats-scope-hint {
+  margin: 0 0 0.65rem;
+  line-height: 1.4;
+}
+
+.institutes-stat-card--clickable {
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+
+.institutes-stat-card--clickable:hover:not(:disabled) {
+  border-color: var(--gov-navy-light, #2b5ba0);
+  box-shadow: var(--shadow-elevated);
+}
+
+.institutes-stat-card--clickable.is-active {
+  border-width: 2px;
+  box-shadow: var(--shadow-elevated);
+}
+
+.institutes-stat-card--clickable.institutes-stat-card--warn.is-active {
+  border-color: var(--warn);
+}
+
+.institutes-stat-card--clickable.institutes-stat-card--active.is-active {
+  border-color: var(--gov-green);
+}
+
+.institutes-stat-hint {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.3;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .institutes-stat-value {
@@ -564,6 +612,62 @@ label.inline input[type='checkbox'] {
   overflow-wrap: break-word;
   word-break: break-word;
   hyphens: auto;
+}
+
+.institutes-district-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.85rem;
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: #f8fafc;
+}
+
+.institutes-district-filter--locked {
+  background: linear-gradient(90deg, #eef4fc 0%, #f8fafc 100%);
+}
+
+.institutes-district-filter-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.institutes-district-filter-value {
+  font-weight: 700;
+  color: var(--gov-navy, #1a3c6e);
+}
+
+.institutes-district-filter-select,
+.institutes-district-select {
+  min-width: min(100%, 18rem);
+  max-width: 100%;
+  flex: 1 1 16rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: #fff;
+  color: inherit;
+}
+
+.institutes-district-filter-count {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.institutes-district-filter-count strong {
+  color: var(--gov-navy, #1a3c6e);
+}
+
+.institutes-district-filter-hint {
+  flex: 1 1 100%;
 }
 
 .institutes-search-row {

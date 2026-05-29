@@ -9,7 +9,15 @@ import {
   type PortalGpsSettingRow,
 } from '../lib/instituteGpsPortal'
 import { sortByInstituteId } from '../lib/instituteSort'
+import {
+  findPortalDistrictByKey,
+  findPortalDistrictForPrefixes,
+  instituteRowMatchesPrefixes,
+} from '../lib/portalDistricts'
+import { downloadInstituteDirectoryPdf } from '../lib/instituteDirectoryPdf'
 import { downloadCsv, instituteDirectoryCsvRows } from '../lib/reportCsv'
+import { usePortalAccess } from '../context/portal-access-context'
+import { InstituteDistrictFilter } from './InstituteDistrictFilter'
 import { fetchAllPaged } from '../lib/supabasePaged'
 import { getSupabase } from '../lib/supabase'
 import { InstituteGpsDialog } from './InstituteGpsDialog'
@@ -451,6 +459,43 @@ type AdminInviteRow = {
   claimed: boolean | null
 }
 
+type AdminAccessKind = 'pending' | 'password_set' | 'no_invite'
+type AdminAccessFilter = 'all' | 'pending' | 'password_set'
+
+function adminAccessKind(
+  instituteId: string,
+  invites: Record<string, AdminInviteRow | null>,
+): AdminAccessKind {
+  const inv = invites[instituteId]
+  if (!inv) return 'no_invite'
+  return inv.claimed ? 'password_set' : 'pending'
+}
+
+function computeInstituteStats(
+  scope: InstituteRow[],
+  invites: Record<string, AdminInviteRow | null>,
+) {
+  let active = 0
+  let pendingPassword = 0
+  let passwordSetInApp = 0
+  let noAdminInvite = 0
+  for (const r of scope) {
+    if (r.is_active !== false) active += 1
+    const kind = adminAccessKind(r.id, invites)
+    if (kind === 'no_invite') noAdminInvite += 1
+    else if (kind === 'password_set') passwordSetInApp += 1
+    else pendingPassword += 1
+  }
+  return {
+    total: scope.length,
+    active,
+    inactive: scope.length - active,
+    pendingPassword,
+    passwordSetInApp,
+    noAdminInvite,
+  }
+}
+
 export function InstituteList({
   reloadToken = 0,
   embedded = false,
@@ -458,6 +503,12 @@ export function InstituteList({
   onAddInstitute,
 }: Props) {
   const { user } = useAuth()
+  const portal = usePortalAccess()
+  const lockedDistrict = useMemo(
+    () => findPortalDistrictForPrefixes(portal.institutePrefixes),
+    [portal.institutePrefixes],
+  )
+  const [districtKey, setDistrictKey] = useState('')
   const [rows, setRows] = useState<InstituteRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -467,21 +518,116 @@ export function InstituteList({
   const [gpsAdminsByInstitute, setGpsAdminsByInstitute] = useState<Record<string, PortalGpsAdminLine[]>>({})
   const [adminInvitesByInstitute, setAdminInvitesByInstitute] = useState<Record<string, AdminInviteRow | null>>({})
   const [search, setSearch] = useState('')
+  const [adminAccessFilter, setAdminAccessFilter] = useState<AdminAccessFilter>('all')
   const [tablePage, setTablePage] = useState(0)
   const [tablePageSize, setTablePageSize] = useState(TABLE_PAGE_SIZE_DEFAULT)
   const [editing, setEditing] = useState<InstituteRow | null>(null)
   const [gpsEditing, setGpsEditing] = useState<{ institute: InstituteRow; line: PortalGpsAdminLine } | null>(null)
   const [reportInstitute, setReportInstitute] = useState<InstituteRow | null>(null)
+  const [pdfExporting, setPdfExporting] = useState(false)
+
+  const effectiveDistrictKey =
+    portal.mode === 'district_viewer' && lockedDistrict ? lockedDistrict.key : districtKey
+
+  const districtFilteredRows = useMemo(() => {
+    if (!effectiveDistrictKey) return rows
+    const district = findPortalDistrictByKey(effectiveDistrictKey)
+    if (!district) return rows
+    return rows.filter((r) => instituteRowMatchesPrefixes(r, district.prefixes))
+  }, [rows, effectiveDistrictKey])
+
+  const adminAccessFilteredRows = useMemo(() => {
+    if (adminAccessFilter === 'all') return districtFilteredRows
+    return districtFilteredRows.filter(
+      (r) => adminAccessKind(r.id, adminInvitesByInstitute) === adminAccessFilter,
+    )
+  }, [districtFilteredRows, adminAccessFilter, adminInvitesByInstitute])
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter((r) =>
+    if (!q) return adminAccessFilteredRows
+    return adminAccessFilteredRows.filter((r) =>
       [r.name, r.institute_code, r.id, r.city, r.state, r.pincode]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     )
-  }, [rows, search])
+  }, [adminAccessFilteredRows, search])
+
+  const stats = useMemo(
+    () => computeInstituteStats(districtFilteredRows, adminInvitesByInstitute),
+    [districtFilteredRows, adminInvitesByInstitute],
+  )
+
+  const selectedDistrict = effectiveDistrictKey
+    ? findPortalDistrictByKey(effectiveDistrictKey)
+    : null
+
+  const listSummary = useMemo(() => {
+    if (loading) return '…'
+    const totalLoaded = rows.length
+    const inDistrict = districtFilteredRows.length
+    const inAdminFilter = adminAccessFilteredRows.length
+    const shown = filteredRows.length
+    const districtLabel = selectedDistrict?.name ?? 'all districts'
+
+    if (search.trim()) {
+      const parts = [`${shown.toLocaleString('en-IN')} matching search`]
+      if (adminAccessFilter !== 'all') {
+        parts.push(`of ${inAdminFilter.toLocaleString('en-IN')} in filter`)
+      } else if (effectiveDistrictKey) {
+        parts.push(`of ${inDistrict.toLocaleString('en-IN')} in ${districtLabel}`)
+      } else {
+        parts.push(`of ${totalLoaded.toLocaleString('en-IN')}`)
+      }
+      return parts.join(' · ')
+    }
+
+    if (adminAccessFilter === 'pending') {
+      const remaining = inDistrict - inAdminFilter
+      return [
+        `Showing ${shown.toLocaleString('en-IN')} pending password setup`,
+        remaining > 0 ? `${remaining.toLocaleString('en-IN')} remaining in ${districtLabel}` : null,
+        effectiveDistrictKey
+          ? `${inDistrict.toLocaleString('en-IN')} in ${districtLabel} · ${totalLoaded.toLocaleString('en-IN')} total loaded`
+          : `${totalLoaded.toLocaleString('en-IN')} total loaded`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    }
+
+    if (adminAccessFilter === 'password_set') {
+      const remaining = inDistrict - inAdminFilter
+      return [
+        `Showing ${shown.toLocaleString('en-IN')} password set in app`,
+        remaining > 0 ? `${remaining.toLocaleString('en-IN')} remaining in ${districtLabel}` : null,
+        effectiveDistrictKey
+          ? `${inDistrict.toLocaleString('en-IN')} in ${districtLabel} · ${totalLoaded.toLocaleString('en-IN')} total loaded`
+          : `${totalLoaded.toLocaleString('en-IN')} total loaded`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    }
+
+    if (effectiveDistrictKey) {
+      return `${shown.toLocaleString('en-IN')} in ${districtLabel} · ${totalLoaded.toLocaleString('en-IN')} total loaded`
+    }
+    return `${shown.toLocaleString('en-IN')} of ${totalLoaded.toLocaleString('en-IN')} shown`
+  }, [
+    loading,
+    rows.length,
+    districtFilteredRows.length,
+    adminAccessFilteredRows.length,
+    filteredRows.length,
+    search,
+    adminAccessFilter,
+    effectiveDistrictKey,
+    selectedDistrict?.name,
+  ])
+
+  function toggleAdminAccessFilter(next: 'pending' | 'password_set') {
+    setAdminAccessFilter((current) => (current === next ? 'all' : next))
+    setTablePage(0)
+  }
 
   const tablePageCount = Math.max(1, Math.ceil(filteredRows.length / tablePageSize))
   const safeTablePage = Math.min(tablePage, tablePageCount - 1)
@@ -493,7 +639,11 @@ export function InstituteList({
 
   useEffect(() => {
     setTablePage(0)
-  }, [search, tablePageSize])
+  }, [search, tablePageSize, effectiveDistrictKey, adminAccessFilter])
+
+  useEffect(() => {
+    setAdminAccessFilter('all')
+  }, [effectiveDistrictKey])
 
   useEffect(() => {
     if (tablePage > tablePageCount - 1) {
@@ -501,26 +651,30 @@ export function InstituteList({
     }
   }, [tablePage, tablePageCount])
 
-  const stats = useMemo(() => {
-    let active = 0
-    let pendingAdmin = 0
-    for (const r of rows) {
-      if (r.is_active !== false) active += 1
-      const inv = adminInvitesByInstitute[r.id]
-      if (inv && !inv.claimed) pendingAdmin += 1
-    }
-    return {
-      total: rows.length,
-      active,
-      inactive: rows.length - active,
-      pendingAdmin,
-    }
-  }, [rows, adminInvitesByInstitute])
-
   function exportDirectoryCsv() {
-    const { header, data } = instituteDirectoryCsvRows(rows)
+    const { header, data } = instituteDirectoryCsvRows(adminAccessFilteredRows)
     const stamp = new Date().toISOString().slice(0, 10)
     downloadCsv(`institutes_directory_${stamp}.csv`, header, data)
+  }
+
+  function exportDirectoryPdf() {
+    if (districtFilteredRows.length === 0) return
+    setPdfExporting(true)
+    setError(null)
+    try {
+      const scopeLabel = selectedDistrict?.name ?? 'All districts'
+      downloadInstituteDirectoryPdf({
+        scopeLabel,
+        scopeInstitutes: districtFilteredRows,
+        allInstitutes: rows,
+        invitesByInstituteId: adminInvitesByInstitute,
+      })
+      setInfo(`PDF exported for ${scopeLabel} (${districtFilteredRows.length.toLocaleString('en-IN')} institutes).`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPdfExporting(false)
+    }
   }
 
   const load = useCallback(async () => {
@@ -651,9 +805,18 @@ export function InstituteList({
           <button
             type="button"
             className="btn btn-ghost btn-sm"
+            onClick={exportDirectoryPdf}
+            disabled={loading || pdfExporting || districtFilteredRows.length === 0}
+            title="Download summary + district breakdown + institute lists (pending vs completed) as PDF"
+          >
+            {pdfExporting ? 'PDF…' : '📄 Directory PDF'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
             onClick={exportDirectoryCsv}
             disabled={loading || rows.length === 0}
-            title="Download all institutes as CSV"
+            title="Download filtered institutes as CSV"
           >
             📥 Directory CSV
           </button>
@@ -662,6 +825,29 @@ export function InstituteList({
           </button>
         </div>
       </div>
+
+      <InstituteDistrictFilter
+        rows={rows}
+        districtKey={effectiveDistrictKey}
+        onDistrictKeyChange={(key) => {
+          setDistrictKey(key)
+          setTablePage(0)
+        }}
+        filteredCount={districtFilteredRows.length}
+        lockedDistrict={portal.mode === 'district_viewer' ? lockedDistrict : null}
+        disabled={loading}
+      />
+
+      {selectedDistrict ? (
+        <p className="muted small institutes-stats-scope-hint">
+          Counts below are for <strong>{selectedDistrict.name}</strong> ({districtFilteredRows.length.toLocaleString('en-IN')}{' '}
+          institutes). Click a password card to filter the table.
+        </p>
+      ) : (
+        <p className="muted small institutes-stats-scope-hint">
+          Select a district to narrow counts, or click a password card to filter the table.
+        </p>
+      )}
 
       <div className="institutes-stat-grid">
         <div className="institutes-stat-card">
@@ -676,10 +862,40 @@ export function InstituteList({
           <span className="institutes-stat-value">{loading ? '…' : stats.inactive.toLocaleString('en-IN')}</span>
           <span className="institutes-stat-label">Inactive</span>
         </div>
-        <div className="institutes-stat-card institutes-stat-card--warn">
-          <span className="institutes-stat-value">{loading ? '…' : stats.pendingAdmin.toLocaleString('en-IN')}</span>
-          <span className="institutes-stat-label">Admin pending setup</span>
-        </div>
+        <button
+          type="button"
+          className={`institutes-stat-card institutes-stat-card--warn institutes-stat-card--clickable${adminAccessFilter === 'pending' ? ' is-active' : ''}`}
+          onClick={() => toggleAdminAccessFilter('pending')}
+          aria-pressed={adminAccessFilter === 'pending'}
+          disabled={loading}
+        >
+          <span className="institutes-stat-value">
+            {loading ? '…' : stats.pendingPassword.toLocaleString('en-IN')}
+          </span>
+          <span className="institutes-stat-label">Pending password setup</span>
+          <span className="institutes-stat-hint">
+            {adminAccessFilter === 'pending'
+              ? 'Click to show all in district'
+              : 'Click to list only pending setup'}
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`institutes-stat-card institutes-stat-card--active institutes-stat-card--clickable${adminAccessFilter === 'password_set' ? ' is-active' : ''}`}
+          onClick={() => toggleAdminAccessFilter('password_set')}
+          aria-pressed={adminAccessFilter === 'password_set'}
+          disabled={loading}
+        >
+          <span className="institutes-stat-value">
+            {loading ? '…' : stats.passwordSetInApp.toLocaleString('en-IN')}
+          </span>
+          <span className="institutes-stat-label">Password set in app</span>
+          <span className="institutes-stat-hint">
+            {adminAccessFilter === 'password_set'
+              ? 'Click to show all in district'
+              : 'Click to list only password completed'}
+          </span>
+        </button>
       </div>
 
       <div className="search-bar-row institutes-search-row">
@@ -702,9 +918,21 @@ export function InstituteList({
             </button>
           ) : null}
         </div>
-        <span className="search-count">
-          {loading ? '…' : `${filteredRows.length} of ${rows.length} shown`}
+        <span className="search-count" aria-live="polite">
+          {listSummary}
         </span>
+        {adminAccessFilter !== 'all' ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              setAdminAccessFilter('all')
+              setTablePage(0)
+            }}
+          >
+            Clear password filter
+          </button>
+        ) : null}
       </div>
       {error ? <p className="error">{error}</p> : null}
       {info ? <p className="success">{info}</p> : null}
@@ -719,7 +947,7 @@ export function InstituteList({
               <th>City</th>
               <th>Pincode</th>
               <th>State</th>
-              <th>Admin setup</th>
+              <th>Admin access</th>
               <th>Active</th>
               <th title={user ? 'GPS lock status per admin' : 'GPS lock status'}>GPS</th>
               {user ? <th>Actions</th> : null}
@@ -735,7 +963,15 @@ export function InstituteList({
             ) : filteredRows.length === 0 && !loading ? (
               <tr>
                 <td colSpan={user ? 10 : 9} className="muted">
-                  No institutes match “{search}”. Clear the search box to see all {rows.length} row(s).
+                  {search
+                    ? `No institutes match “${search}”. Clear the search box to see all ${adminAccessFilteredRows.length} row(s) in this filter.`
+                    : adminAccessFilter === 'pending'
+                      ? 'No institutes with pending password setup in this filter.'
+                      : adminAccessFilter === 'password_set'
+                        ? 'No institutes with password set in app in this filter.'
+                        : effectiveDistrictKey
+                          ? 'No institutes match this district filter.'
+                          : 'No institutes to show.'}
                 </td>
               </tr>
             ) : (
@@ -757,14 +993,22 @@ export function InstituteList({
                     <td title={r.state ?? undefined}>{r.state ?? '—'}</td>
                     <td>
                       {invite ? (
-                        <div className="small">
-                          <div><strong>{invite.full_name ?? '—'}</strong></div>
-                          <div>{invite.phone ?? '—'}</div>
-                          <div>{invite.email ?? '—'}</div>
-                          <div className="muted">{invite.claimed ? 'Password created' : 'Waiting in app'}</div>
+                        <div className="small inst-admin-access-cell">
+                          <div>
+                            {invite.claimed ? (
+                              <span className="badge badge-present">Password set in app</span>
+                            ) : (
+                              <span className="badge badge-half">Pending password setup</span>
+                            )}
+                          </div>
+                          <div style={{ marginTop: '0.35rem' }}>
+                            <strong>{invite.full_name ?? '—'}</strong>
+                          </div>
+                          <div className="muted">{invite.phone ?? '—'}</div>
+                          <div className="muted">{invite.email ?? '—'}</div>
                         </div>
                       ) : (
-                        <span className="badge badge-muted">Not added</span>
+                        <span className="badge badge-muted">No admin invite</span>
                       )}
                     </td>
                     <td>

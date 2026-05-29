@@ -9,6 +9,14 @@ import { downloadInstituteReportPdf, fetchInstituteReport } from '../lib/institu
 import { discoverSchema, type SchemaConfig } from '../lib/schemaDiscovery'
 import { downloadStudentReportPdf, fetchStudentReport } from '../lib/studentReportPdf'
 import type { InstituteRow } from './InstituteList'
+import { InstituteDistrictFilter } from './InstituteDistrictFilter'
+import { usePortalAccess } from '../context/portal-access-context'
+import { sortByInstituteId } from '../lib/instituteSort'
+import {
+  findPortalDistrictByKey,
+  findPortalDistrictForPrefixes,
+  instituteRowMatchesPrefixes,
+} from '../lib/portalDistricts'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
 
 type Student = Record<string, unknown> & {
@@ -114,6 +122,12 @@ export function ReportsSection({
   jumpToInstituteId?: string | null
   onJumpToInstituteHandled?: () => void
 }) {
+  const portal = usePortalAccess()
+  const lockedDistrict = useMemo(
+    () => findPortalDistrictForPrefixes(portal.institutePrefixes),
+    [portal.institutePrefixes],
+  )
+  const [districtKey, setDistrictKey] = useState('')
   const [schema, setSchema] = useState<SchemaConfig>({
     subjectTable: null,
     attendanceTable: null,
@@ -164,7 +178,7 @@ export function ReportsSection({
       const raw = await fetchAllPaged<InstituteRow>((rangeFrom, rangeTo) =>
         sb.from('institutes').select('*').order('name').range(rangeFrom, rangeTo),
       )
-      setInstitutes(raw as InstituteRow[])
+      setInstitutes(sortByInstituteId(raw as InstituteRow[]))
     } catch {
       setInstitutes([])
     } finally {
@@ -273,15 +287,25 @@ export function ReportsSection({
     else void loadInstitutes()
   }, [institute, loadInstitutes, loadStudents, runDiscovery])
 
+  const effectiveDistrictKey =
+    portal.mode === 'district_viewer' && lockedDistrict ? lockedDistrict.key : districtKey
+
+  const districtFilteredInst = useMemo(() => {
+    if (!effectiveDistrictKey) return institutes
+    const district = findPortalDistrictByKey(effectiveDistrictKey)
+    if (!district) return institutes
+    return institutes.filter((i) => instituteRowMatchesPrefixes(i, district.prefixes))
+  }, [institutes, effectiveDistrictKey])
+
   const filteredInst = useMemo(() => {
     const q = instSearch.trim().toLowerCase()
-    if (!q) return institutes
-    return institutes.filter((i) =>
+    if (!q) return districtFilteredInst
+    return districtFilteredInst.filter((i) =>
       [i.name, i.institute_code, i.city, i.state, i.id]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     )
-  }, [institutes, instSearch])
+  }, [districtFilteredInst, instSearch])
 
   const instTablePageCount = Math.max(1, Math.ceil(filteredInst.length / instTablePageSize))
   const safeInstTablePage = Math.min(instTablePage, instTablePageCount - 1)
@@ -292,7 +316,7 @@ export function ReportsSection({
 
   useEffect(() => {
     setInstTablePage(0)
-  }, [instSearch, instTablePageSize])
+  }, [instSearch, instTablePageSize, effectiveDistrictKey])
 
   useEffect(() => {
     if (instTablePage > instTablePageCount - 1) {
@@ -525,6 +549,18 @@ export function ReportsSection({
 
       {!institute ? (
         <>
+          <InstituteDistrictFilter
+            rows={institutes}
+            districtKey={effectiveDistrictKey}
+            onDistrictKeyChange={(key) => {
+              setDistrictKey(key)
+              setInstTablePage(0)
+            }}
+            filteredCount={districtFilteredInst.length}
+            lockedDistrict={portal.mode === 'district_viewer' ? lockedDistrict : null}
+            disabled={instLoading}
+          />
+
           <div className="search-bar-row reports-search-row">
             <div className="search-bar">
               <span className="search-icon">🔍</span>
@@ -547,7 +583,11 @@ export function ReportsSection({
               ) : null}
             </div>
             <span className="search-count">
-              {instLoading ? '…' : `${filteredInst.length} of ${institutes.length} shown`}
+              {instLoading
+                ? '…'
+                : effectiveDistrictKey
+                  ? `${filteredInst.length} of ${districtFilteredInst.length} in district · ${institutes.length} total loaded`
+                  : `${filteredInst.length} of ${institutes.length} shown`}
             </span>
           </div>
 
@@ -579,7 +619,11 @@ export function ReportsSection({
                 ) : filteredInst.length === 0 && !instLoading ? (
                   <tr>
                     <td colSpan={5} className="muted">
-                      No institutes match “{instSearch}”. Clear the search to see all {institutes.length} row(s).
+                      {instSearch
+                        ? `No institutes match “${instSearch}”. Clear the search to see all ${districtFilteredInst.length} row(s) in this filter.`
+                        : effectiveDistrictKey
+                          ? 'No institutes match this district filter.'
+                          : 'No institutes to show.'}
                     </td>
                   </tr>
                 ) : (

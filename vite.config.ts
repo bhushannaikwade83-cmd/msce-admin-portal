@@ -28,6 +28,8 @@ function parseEnvFile(filePath: string): Record<string, string> {
 
 function loadMergedEnv(): Record<string, string> {
   const flutterRoots = [
+    path.resolve(__dirname, '../MSCE APP 2'),
+    path.resolve(__dirname, '../MSCE APP'),
     path.resolve(__dirname, '../MSCE 2'),
     path.resolve(__dirname, '../MSCE'),
   ]

@@ -28,6 +28,13 @@ import {
 } from '../lib/reportCsv'
 import { downloadStudentReportPdf, fetchStudentReport } from '../lib/studentReportPdf'
 import type { InstituteRow } from './InstituteList'
+import { InstituteDistrictFilter } from './InstituteDistrictFilter'
+import { usePortalAccess } from '../context/portal-access-context'
+import {
+  findPortalDistrictByKey,
+  findPortalDistrictForPrefixes,
+  instituteRowMatchesPrefixes,
+} from '../lib/portalDistricts'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
 import { EditStudentModal } from './EditStudentModal'
 import { formatSubjectsDisplay, subjectsFromStudent } from '../lib/studentSubjects'
@@ -1775,6 +1782,12 @@ function InstitutePicker({
   reloadToken?: number
   onSelectInstitute: (i: InstituteRow) => void
 }) {
+  const portal = usePortalAccess()
+  const lockedDistrict = useMemo(
+    () => findPortalDistrictForPrefixes(portal.institutePrefixes),
+    [portal.institutePrefixes],
+  )
+  const [districtKey, setDistrictKey] = useState('')
   const [institutes, setInstitutes] = useState<InstituteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1809,15 +1822,25 @@ function InstitutePicker({
     setTimeout(() => searchRef.current?.focus(), 100)
   }, [load, reloadToken])
 
+  const effectiveDistrictKey =
+    portal.mode === 'district_viewer' && lockedDistrict ? lockedDistrict.key : districtKey
+
+  const districtFiltered = useMemo(() => {
+    if (!effectiveDistrictKey) return institutes
+    const district = findPortalDistrictByKey(effectiveDistrictKey)
+    if (!district) return institutes
+    return institutes.filter((i) => instituteRowMatchesPrefixes(i, district.prefixes))
+  }, [institutes, effectiveDistrictKey])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return institutes
-    return institutes.filter((i) =>
+    if (!q) return districtFiltered
+    return districtFiltered.filter((i) =>
       [i.name, i.institute_code, i.id, i.city, i.state, i.pincode]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q)),
     )
-  }, [institutes, search])
+  }, [districtFiltered, search])
 
   const stats = useMemo(() => {
     let active = 0
@@ -1841,7 +1864,7 @@ function InstitutePicker({
 
   useEffect(() => {
     setTablePage(0)
-  }, [search, tablePageSize])
+  }, [search, tablePageSize, effectiveDistrictKey])
 
   useEffect(() => {
     if (tablePage > tablePageCount - 1) {
@@ -1851,6 +1874,18 @@ function InstitutePicker({
 
   return (
     <div className="students-panel">
+      <InstituteDistrictFilter
+        rows={institutes}
+        districtKey={effectiveDistrictKey}
+        onDistrictKeyChange={(key) => {
+          setDistrictKey(key)
+          setTablePage(0)
+        }}
+        filteredCount={districtFiltered.length}
+        lockedDistrict={portal.mode === 'district_viewer' ? lockedDistrict : null}
+        disabled={loading}
+      />
+
       <div className="institutes-stat-grid">
         <div className="institutes-stat-card">
           <span className="institutes-stat-value">{loading ? '…' : stats.total.toLocaleString('en-IN')}</span>
@@ -1892,7 +1927,11 @@ function InstitutePicker({
           ) : null}
         </div>
         <span className="search-count">
-          {loading ? '…' : `${filtered.length} of ${institutes.length} shown`}
+          {loading
+            ? '…'
+            : effectiveDistrictKey
+              ? `${filtered.length} of ${districtFiltered.length} in district · ${institutes.length} total loaded`
+              : `${filtered.length} of ${institutes.length} shown`}
         </span>
         <button
           type="button"
@@ -1900,7 +1939,7 @@ function InstitutePicker({
           disabled={loading || institutes.length === 0}
           title="Download institute list as CSV"
           onClick={() => {
-            const { header, data } = instituteDirectoryCsvRows(institutes)
+            const { header, data } = instituteDirectoryCsvRows(districtFiltered)
             const stamp = new Date().toISOString().slice(0, 10)
             downloadCsv(`institutes_directory_${stamp}.csv`, header, data)
           }}

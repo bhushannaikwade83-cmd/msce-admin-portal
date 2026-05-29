@@ -331,7 +331,7 @@ function InviteTable({
                     </span>
                   ) : (
                     <span className="badge badge-half" style={{ marginTop: '0.35rem' }}>
-                      Awaiting password setup
+                      Pending password setup
                     </span>
                   )}
                   {inv.profileEmail && inv.profileEmail !== inv.email ? (
