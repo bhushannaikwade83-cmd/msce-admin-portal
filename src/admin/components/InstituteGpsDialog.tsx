@@ -15,6 +15,7 @@ import {
   gpsLongitude,
   gpsUpdatedAt,
   hasGpsCoordinates,
+  saveGpsSettingWithHistory,
   type PortalGpsAdminLine,
   type PortalGpsHistoryRow,
 } from '../lib/instituteGpsPortal'
@@ -57,6 +58,10 @@ export function InstituteGpsDialog({
   const [currentChangedAt, setCurrentChangedAt] = useState<string | null>(line.updated_at)
   const [history, setHistory] = useState<PortalGpsHistoryRow[]>([])
   const [confirmClear, setConfirmClear] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editLatitude, setEditLatitude] = useState(String(latitude ?? ''))
+  const [editLongitude, setEditLongitude] = useState(String(longitude ?? ''))
+  const [editNote, setEditNote] = useState('')
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -121,6 +126,43 @@ export function InstituteGpsDialog({
       setCurrentChangedAt(gpsUpdatedAt(row))
       await loadHistory()
       setConfirmClear(false)
+      onSaved()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function saveManualGps() {
+    setErr(null)
+    const lat = editLatitude.trim() ? Number(editLatitude) : null
+    const lng = editLongitude.trim() ? Number(editLongitude) : null
+
+    if ((editLatitude.trim() || editLongitude.trim()) && (!Number.isFinite(lat) || !Number.isFinite(lng))) {
+      setErr('Both latitude and longitude must be valid numbers.')
+      return
+    }
+
+    setBusy(true)
+    try {
+      await saveGpsSettingWithHistory({
+        instituteId: institute.id,
+        adminId: line.adminId,
+        isLocked: false,
+        latitude: lat,
+        longitude: lng,
+        note: editNote.trim() || `Portal: manually set GPS coordinates`,
+      })
+      const row = await fetchGpsSettingRow(institute.id, line.adminId)
+      setLatitude(gpsLatitude(row))
+      setLongitude(gpsLongitude(row))
+      setCurrentChangedAt(gpsUpdatedAt(row))
+      await loadHistory()
+      setEditMode(false)
+      setEditLatitude('')
+      setEditLongitude('')
+      setEditNote('')
       onSaved()
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -206,34 +248,108 @@ export function InstituteGpsDialog({
           ) : null}
 
           <div className="gps-modal-actions">
-            {!canClearGps ? (
-              <p className="muted small">
-                No GPS coordinates to clear. Institute admin can set location in the app when ready.
-              </p>
-            ) : !confirmClear ? (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm btn-gps-clear"
-                disabled={busy || loading}
-                onClick={() => setConfirmClear(true)}
-              >
-                Clear GPS (set coordinates to null)
-              </button>
+            {!editMode ? (
+              <>
+                {!canClearGps ? (
+                  <p className="muted small">
+                    No GPS coordinates to clear. Institute admin can set location in the app when ready.
+                  </p>
+                ) : !confirmClear ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm btn-gps-clear"
+                    disabled={busy || loading}
+                    onClick={() => setConfirmClear(true)}
+                  >
+                    Clear GPS (set coordinates to null)
+                  </button>
+                ) : (
+                  <div className="gps-clear-confirm">
+                    <span className="small">
+                      Save <strong>{currentPair}</strong> as previous and set current GPS to null? Institute admin will add
+                      the new location from the app.
+                    </span>
+                    <div className="row" style={{ gap: '0.4rem', marginTop: '0.4rem' }}>
+                      <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void clearGps()}>
+                        {busy ? 'Clearing…' : 'Yes, clear GPS'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={busy}
+                        onClick={() => setConfirmClear(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  disabled={busy || loading}
+                  onClick={() => {
+                    setEditMode(true)
+                    setEditLatitude(String(latitude ?? ''))
+                    setEditLongitude(String(longitude ?? ''))
+                    setEditNote('')
+                  }}
+                >
+                  ✎ Edit coordinates manually
+                </button>
+              </>
             ) : (
-              <div className="gps-clear-confirm">
-                <span className="small">
-                  Save <strong>{currentPair}</strong> as previous and set current GPS to null? Institute admin will add
-                  the new location from the app.
-                </span>
-                <div className="row" style={{ gap: '0.4rem', marginTop: '0.4rem' }}>
-                  <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void clearGps()}>
-                    {busy ? 'Clearing…' : 'Yes, clear GPS'}
+              <div className="gps-edit-form" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem', marginTop: '1rem' }}>
+                <h4 style={{ margin: '0 0 0.75rem' }}>Edit GPS coordinates</h4>
+                <div className="field">
+                  <label htmlFor="gps-edit-lat">Latitude</label>
+                  <input
+                    id="gps-edit-lat"
+                    type="number"
+                    step="0.00001"
+                    value={editLatitude}
+                    onChange={(e) => setEditLatitude(e.target.value)}
+                    disabled={busy}
+                    placeholder="e.g. 19.12345"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="gps-edit-lng">Longitude</label>
+                  <input
+                    id="gps-edit-lng"
+                    type="number"
+                    step="0.00001"
+                    value={editLongitude}
+                    onChange={(e) => setEditLongitude(e.target.value)}
+                    disabled={busy}
+                    placeholder="e.g. 72.12345"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="gps-edit-note">Note (optional)</label>
+                  <input
+                    id="gps-edit-note"
+                    type="text"
+                    value={editNote}
+                    onChange={(e) => setEditNote(e.target.value)}
+                    disabled={busy}
+                    placeholder="Reason for manual update"
+                  />
+                </div>
+                <div className="row" style={{ gap: '0.4rem', marginTop: '0.75rem' }}>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void saveManualGps()}>
+                    {busy ? 'Saving…' : 'Save coordinates'}
                   </button>
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
                     disabled={busy}
-                    onClick={() => setConfirmClear(false)}
+                    onClick={() => {
+                      setEditMode(false)
+                      setEditLatitude('')
+                      setEditLongitude('')
+                      setEditNote('')
+                    }}
                   >
                     Cancel
                   </button>

@@ -31,10 +31,20 @@ export function instituteRowMatchesPrefixes(
   row: { id: string; institute_code?: string | null },
   prefixes: readonly string[],
 ): boolean {
+  if (!prefixes.length) return true
   return (
     instituteCodeMatchesPrefixes(row.id, prefixes) ||
     instituteCodeMatchesPrefixes(row.institute_code, prefixes)
   )
+}
+
+/** Client-side guard when RLS or RPC returns extra rows (super-admin paths). */
+export function filterInstitutesByPortalPrefixes<T extends { id: string; institute_code?: string | null }>(
+  rows: readonly T[],
+  prefixes: readonly string[],
+): T[] {
+  if (!prefixes.length) return [...rows]
+  return rows.filter((r) => instituteRowMatchesPrefixes(r, prefixes))
 }
 
 export function findPortalDistrictByKey(key: string): PortalDistrict | undefined {

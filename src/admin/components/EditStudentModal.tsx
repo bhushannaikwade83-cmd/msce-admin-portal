@@ -34,6 +34,7 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
   const [subjectsCsv, setSubjectsCsv] = useState(subjectsToCsv(subjectsFromStudent(student)))
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [confirmClearPhoto, setConfirmClearPhoto] = useState(false)
 
   useEffect(() => {
     const n = pickName(student)
@@ -82,6 +83,32 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
       setBusy(false)
     }
   }
+
+  async function handleClearPhoto() {
+    setFormError(null)
+    setBusy(true)
+    try {
+      const sb = getSupabase()
+      const patch: Record<string, unknown> = {
+        face_photo_url: null,
+        registration_photo_path: null,
+        face_embedding: null,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { error } = await sb.from('students').update(patch).eq('id', student.id)
+      if (error) throw error
+      setConfirmClearPhoto(false)
+      onSaved()
+      onClose()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const hasPhoto = !!(student.face_photo_url || student.registration_photo_path)
 
   const roll =
     String(student.sr_no ?? student.user_id ?? student.roll_no ?? '').trim() || '—'
@@ -186,6 +213,53 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
               </button>
             </div>
           </form>
+
+          {hasPhoto && (
+            <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '1rem', paddingTop: '1rem' }}>
+              <div style={{ marginBottom: '0.75rem' }}>
+                <strong>Photo Registration</strong>
+                <p className="muted small" style={{ margin: '0.5rem 0 0' }}>
+                  Clear photo and face embedding to allow student to retake registration
+                </p>
+              </div>
+              {!confirmClearPhoto ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  disabled={busy}
+                  onClick={() => setConfirmClearPhoto(true)}
+                  style={{ color: 'var(--color-warn)' }}
+                >
+                  🗑️ Clear photo &amp; retake registration
+                </button>
+              ) : (
+                <div style={{ padding: '0.75rem', background: 'var(--bg-subtle)', borderRadius: '0.375rem' }}>
+                  <p className="small" style={{ margin: '0 0 0.5rem' }}>
+                    Clear all photos and face embedding? Student can retake from the mobile app.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      style={{ background: 'var(--color-danger)', color: 'white', border: 'none' }}
+                      disabled={busy}
+                      onClick={() => void handleClearPhoto()}
+                    >
+                      {busy ? 'Clearing…' : 'Yes, clear photo'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={busy}
+                      onClick={() => setConfirmClearPhoto(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </ModalPortal>

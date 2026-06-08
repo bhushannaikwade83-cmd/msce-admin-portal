@@ -1,4 +1,5 @@
 import { getSupabase } from './supabase'
+import { instituteRowMatchesPrefixes } from './portalDistricts'
 import { fetchAllPaged } from './supabasePaged'
 
 export type PortalInstructorRow = {
@@ -26,6 +27,14 @@ type InstituteRow = {
 }
 
 function parseRpcRows(raw: unknown): PortalInstructorRow[] {
+  if (raw == null) return []
+  if (typeof raw === 'string') {
+    try {
+      return parseRpcRows(JSON.parse(raw) as unknown)
+    } catch {
+      return []
+    }
+  }
   if (!Array.isArray(raw)) return []
   return raw.map((r) => {
     const row = r as Record<string, unknown>
@@ -132,21 +141,81 @@ export async function fetchPortalInstructorsDirect(): Promise<{
   return { institutes, instructors }
 }
 
-export async function fetchAllPortalInstructors(): Promise<{
+function scopePortalInstructorRows(
+  rows: PortalInstructorRow[],
+  institutes: InstituteRow[],
+  institutePrefixes: readonly string[],
+): { rows: PortalInstructorRow[]; institutes: InstituteRow[] } {
+  if (!institutePrefixes.length) return { rows, institutes }
+  const scopedInstitutes = institutes.filter((i) =>
+    instituteRowMatchesPrefixes(i, institutePrefixes),
+  )
+  const allowedIds = new Set(scopedInstitutes.map((i) => i.id))
+  const allowedCodes = new Set(
+    scopedInstitutes.map((i) => (i.institute_code ?? '').trim()).filter(Boolean),
+  )
+  const scopedRows = rows.filter((r) => {
+    const uuid = (r.institute_uuid ?? '').trim()
+    const code = (r.institute_code ?? r.institute_id ?? '').trim()
+    if (uuid && allowedIds.has(uuid)) return true
+    if (code && allowedCodes.has(code)) return true
+    if (uuid && instituteRowMatchesPrefixes({ id: uuid, institute_code: code }, institutePrefixes)) {
+      return true
+    }
+    return instituteRowMatchesPrefixes({ id: code || uuid, institute_code: code }, institutePrefixes)
+  })
+  return { rows: scopedRows, institutes: scopedInstitutes }
+}
+
+function institutesFromInstructorRows(rows: PortalInstructorRow[]): InstituteRow[] {
+  const byId = new Map<string, InstituteRow>()
+  for (const r of rows) {
+    const id = (r.institute_uuid ?? r.institute_id ?? '').trim()
+    if (!id || byId.has(id)) continue
+    byId.set(id, {
+      id,
+      name: r.institute_name,
+      institute_code: r.institute_code,
+      is_active: r.institute_active,
+    })
+  }
+  return [...byId.values()]
+}
+
+function mergeInstituteLists(a: InstituteRow[], b: InstituteRow[]): InstituteRow[] {
+  const byId = new Map<string, InstituteRow>()
+  for (const row of [...a, ...b]) {
+    if (!row.id) continue
+    byId.set(row.id, row)
+  }
+  return [...byId.values()]
+}
+
+export async function fetchAllPortalInstructors(options?: {
+  institutePrefixes?: readonly string[]
+}): Promise<{
   rows: PortalInstructorRow[]
   institutes: InstituteRow[]
   source: 'rpc' | 'direct'
+  districtRpcLikelyUnpatched: boolean
 }> {
+  const prefixes = options?.institutePrefixes ?? []
+  const isDistrictScope = prefixes.length > 0
+
   try {
     const rows = await fetchPortalInstructorsRpc()
-    const institutes = await fetchAllPaged<InstituteRow>((from, to) =>
+    const institutesFromDb = await fetchAllPaged<InstituteRow>((from, to) =>
       getSupabase()
         .from('institutes')
         .select('id,name,institute_code,is_active')
         .order('institute_code', { ascending: true })
         .range(from, to),
     )
-    return { rows, institutes, source: 'rpc' }
+    const institutes = mergeInstituteLists(institutesFromDb, institutesFromInstructorRows(rows))
+    const scoped = scopePortalInstructorRows(rows, institutes, prefixes)
+    const districtRpcLikelyUnpatched =
+      isDistrictScope && scoped.rows.length === 0 && scoped.institutes.length > 0
+    return { ...scoped, source: 'rpc', districtRpcLikelyUnpatched }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     if (
@@ -157,6 +226,11 @@ export async function fetchAllPortalInstructors(): Promise<{
       throw e
     }
     const { instructors, institutes } = await fetchPortalInstructorsDirect()
-    return { rows: instructors, institutes, source: 'direct' }
+    const scoped = scopePortalInstructorRows(instructors, institutes, prefixes)
+    return {
+      ...scoped,
+      source: 'direct',
+      districtRpcLikelyUnpatched: isDistrictScope && scoped.rows.length === 0,
+    }
   }
 }

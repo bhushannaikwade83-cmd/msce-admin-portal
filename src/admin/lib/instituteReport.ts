@@ -17,6 +17,7 @@ export type InstituteReportStudentRecord = {
   attendancePercent: number
   statusText: string
   statusEmoji: string
+  faceRegistered: boolean
 }
 
 export type InstituteReportResult = {
@@ -130,7 +131,7 @@ export async function fetchInstituteReport(
 
   const { data: studentsRaw, error: stErr } = await sb
     .from('students')
-    .select('id, user_id, sr_no, name, subjects')
+    .select('id, user_id, sr_no, name, subjects, face_photo_url')
     .eq('institute_id', institute.id)
   if (stErr) throw stErr
 
@@ -141,6 +142,7 @@ export async function fetchInstituteReport(
   const nameByRoll = new Map<string, string>()
   const srNoByRoll = new Map<string, string>()
   const subjectCountByRoll = new Map<string, number>()
+  const faceRegisteredByRoll = new Map<string, boolean>()
 
   for (const s of allStudents) {
     const sid = String(s.id)
@@ -150,6 +152,8 @@ export async function fetchInstituteReport(
     nameByRoll.set(roll, String(s.name ?? 'Unknown'))
     srNoByRoll.set(roll, String(s.sr_no ?? roll))
     subjectCountByRoll.set(roll, subjectCount(s))
+    const facePhotoUrl = String(s.face_photo_url ?? '').trim()
+    faceRegisteredByRoll.set(roll, facePhotoUrl.length > 0)
   }
 
   const presenceSelect = 'student_id, attendance_date, additional, type'
@@ -226,6 +230,7 @@ export async function fetchInstituteReport(
   let totalAllPresent = 0
   let totalAllAbsent = 0
   let totalAllSubjects = 0
+  let totalFaceRegistered = 0
 
   for (const roll of sortedRolls) {
     const name = nameByRoll.get(roll) ?? 'Unknown'
@@ -236,6 +241,7 @@ export async function fetchInstituteReport(
     const totalDaysForStudent = present + absent
     const percent = totalDaysForStudent > 0 ? (present / totalDaysForStudent) * 100 : 0
     const { text, emoji } = statusFromPercent(percent)
+    const faceRegistered = faceRegisteredByRoll.get(roll) ?? false
 
     studentRecords.push({
       roll,
@@ -249,12 +255,14 @@ export async function fetchInstituteReport(
       attendancePercent: percent,
       statusText: text,
       statusEmoji: emoji,
+      faceRegistered,
     })
 
     totalAllHours += hours
     totalAllPresent += present
     totalAllAbsent += absent
     totalAllSubjects += subjects
+    if (faceRegistered) totalFaceRegistered++
   }
 
   const totalDays = totalAllPresent + totalAllAbsent
@@ -308,15 +316,43 @@ export function instituteReportPdfFileName(
 export function downloadInstituteReportPdf(report: InstituteReportResult): void {
   const doc = new jsPDF({ orientation: 'landscape' })
   const margin = 12
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const centerX = pageWidth / 2
   const title = report.instituteName ?? 'Institute Attendance Report'
 
-  doc.setFontSize(16)
-  doc.text('INSTITUTE ATTENDANCE REPORT', margin, 14)
+  // Add professional header with background
+  doc.setFillColor(0, 48, 135)
+  doc.rect(0, 0, pageWidth, 28, 'F')
+
+  // Header text - white
+  doc.setTextColor(255, 255, 255)
   doc.setFontSize(10)
-  doc.text(title, margin, 22)
-  doc.text(`Institute ID: ${report.instituteId}`, margin, 28)
-  doc.text(`Period: ${report.periodText}`, margin, 34)
-  doc.text(`Generated: ${new Date().toLocaleString()}`, margin, 40)
+  doc.setFont('helvetica', 'bold')
+  doc.text('MSCE', margin, 10)
+
+  // Center heading
+  doc.setFontSize(16)
+  doc.text('MSCE INSTITUTE REPORT', centerX, 10, { align: 'center' })
+
+  // Right side text
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text('GOVERNMENT OF MAHARASHTRA', pageWidth - margin - 30, 8, { align: 'right', maxWidth: 30 })
+
+  // Reset to black text
+  doc.setTextColor(0, 0, 0)
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.text('ATTENDANCE APP REPORT OF INSTITUTES', margin, 35)
+
+  // Institute details
+  doc.setFontSize(10)
+  doc.text(`Institute: ${title}`, margin, 42)
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Institute ID: ${report.instituteId}`, margin, 48)
+  doc.text(`Date & Time: ${new Date().toLocaleString('en-IN')}`, margin, 53)
+  doc.text(`Period: ${report.periodText}`, margin, 58)
 
   const body = report.studentRecords.map((s, i) => [
     String(i + 1),
@@ -328,7 +364,11 @@ export function downloadInstituteReportPdf(report: InstituteReportResult): void 
     s.totalHours,
     `${s.attendancePercent.toFixed(0)}% ${s.statusEmoji}`,
     s.statusText,
+    s.faceRegistered ? '✓ Yes' : '✗ No',
   ])
+
+  const totalFaceReg = report.studentRecords.filter((s) => s.faceRegistered).length
+  const totalNotReg = report.studentRecords.length - totalFaceReg
 
   body.push([
     '',
@@ -339,7 +379,7 @@ export function downloadInstituteReportPdf(report: InstituteReportResult): void 
     String(report.totals.totalDays),
     report.totals.totalHours,
     `${report.totals.totalAttendancePercent.toFixed(1)}%`,
-    '',
+    `${totalFaceReg}/${report.studentRecords.length}`,
   ])
 
   body.push([
@@ -355,7 +395,7 @@ export function downloadInstituteReportPdf(report: InstituteReportResult): void 
   ])
 
   pdfAutoTable(doc, {
-    startY: 46,
+    startY: 62,
     margin,
     head: [
       [
@@ -368,23 +408,247 @@ export function downloadInstituteReportPdf(report: InstituteReportResult): void 
         'Total Hours',
         'Attendance %',
         'Status',
+        'Face Reg',
       ],
     ],
     body,
     theme: 'grid',
     headStyles: {
       fillColor: [0, 48, 135],
-      textColor: 255,
+      textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 8,
+      halign: 'center',
+      valign: 'middle',
     },
-    bodyStyles: { fontSize: 7 },
-    alternateRowStyles: { fillColor: [245, 245, 245] },
-    styles: { overflow: 'linebreak', cellWidth: 'wrap' },
+    bodyStyles: {
+      fontSize: 7,
+      textColor: [50, 50, 50],
+    },
+    alternateRowStyles: { fillColor: [237, 245, 255] },
+    styles: {
+      overflow: 'linebreak',
+      cellWidth: 'wrap',
+      cellPadding: 2,
+    },
+    columnStyles: {
+      0: { halign: 'center' },
+      3: { halign: 'center' },
+      4: { halign: 'center' },
+      5: { halign: 'center' },
+    },
   })
 
   downloadJsPdf(
     doc,
     instituteReportPdfFileName(report.instituteName, report.instituteId, report.startDate, report.endDate),
   )
+}
+
+/** District-wise report grouping institutes by their prefix */
+export type DistrictInstituteGroup = {
+  districtPrefix: string
+  districtName: string
+  institutes: Array<{
+    instituteId: string
+    instituteName: string | null
+    students: InstituteReportStudentRecord[]
+  }>
+}
+
+export type DistrictWiseReportResult = {
+  startDate: Date
+  endDate: Date
+  periodText: string
+  districtGroups: DistrictInstituteGroup[]
+}
+
+function getDistrictName(prefix: string): string {
+  const districtMap: Record<string, string> = {
+    '11': 'Mumbai', '14': 'Mumbai', '15': 'Mumbai',
+    '21': 'Pune', '22': 'Pune', '23': 'Pune',
+    '31': 'Nashik', '32': 'Nashik', '33': 'Nashik', '34': 'Nashik',
+    '41': 'Kolhapur', '42': 'Kolhapur', '43': 'Kolhapur', '44': 'Kolhapur', '45': 'Kolhapur',
+    '51': 'Sangli', '52': 'Sangli', '53': 'Sangli', '54': 'Sangli', '55': 'Sangli',
+    '61': 'Amrawati', '62': 'Amrawati', '63': 'Amrawati', '64': 'Amrawati', '65': 'Amrawati',
+    '71': 'Nagpur', '72': 'Nagpur', '73': 'Nagpur', '74': 'Nagpur', '75': 'Nagpur', '76': 'Nagpur',
+    '81': 'Latur', '82': 'Latur', '83': 'Latur',
+  }
+  return districtMap[prefix] || `District ${prefix}`
+}
+
+export async function fetchDistrictWiseReport(
+  institutes: Array<{ id: string; name?: string | null }>,
+  startDate: Date,
+  endDate: Date,
+): Promise<DistrictWiseReportResult> {
+  const groupMap = new Map<string, DistrictInstituteGroup>()
+
+  for (const institute of institutes) {
+    const prefix = institute.id.substring(0, 2)
+    const districtName = getDistrictName(prefix)
+
+    const report = await fetchInstituteReport(institute, startDate, endDate)
+
+    if (!groupMap.has(prefix)) {
+      groupMap.set(prefix, {
+        districtPrefix: prefix,
+        districtName,
+        institutes: [],
+      })
+    }
+
+    groupMap.get(prefix)!.institutes.push({
+      instituteId: report.instituteId,
+      instituteName: report.instituteName,
+      students: report.studentRecords,
+    })
+  }
+
+  const districtGroups = Array.from(groupMap.values()).sort(
+    (a, b) => a.districtPrefix.localeCompare(b.districtPrefix),
+  )
+
+  for (const group of districtGroups) {
+    group.institutes.sort((a, b) => a.instituteId.localeCompare(b.instituteId))
+  }
+
+  return {
+    startDate: dateOnly(startDate),
+    endDate: dateOnly(endDate),
+    periodText: formatPeriod(dateOnly(startDate), dateOnly(endDate)),
+    districtGroups,
+  }
+}
+
+export function districtWiseReportPdfFileName(startDate: Date, endDate: Date): string {
+  const from = toYmd(dateOnly(startDate)).replace(/-/g, '')
+  const to = toYmd(dateOnly(endDate)).replace(/-/g, '')
+  return `District_Wise_Report_${from}_${to}.pdf`
+}
+
+export function downloadDistrictWiseReportPdf(report: DistrictWiseReportResult): void {
+  const doc = new jsPDF({ orientation: 'landscape' })
+  const margin = 12
+  const pageHeight = 190
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const centerX = pageWidth / 2
+  let currentY = 14
+
+  // Add professional header with background
+  doc.setFillColor(0, 48, 135)
+  doc.rect(0, 0, pageWidth, 28, 'F')
+
+  // Header text - white
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.text('MSCE', margin, 10)
+
+  // Center heading
+  doc.setFontSize(16)
+  doc.text('MSCE INSTITUTE REPORT', centerX, 10, { align: 'center' })
+
+  // Right side text
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text('GOVERNMENT OF MAHARASHTRA', pageWidth - margin - 30, 8, { align: 'right', maxWidth: 30 })
+
+  // Reset to black text
+  doc.setTextColor(0, 0, 0)
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.text('ATTENDANCE APP REPORT OF INSTITUTES', margin, 35)
+
+  // Date and time on left
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Date & Time: ${new Date().toLocaleString('en-IN')}`, margin, 42)
+  doc.text(`Period: ${report.periodText}`, margin, 48)
+  currentY = 52
+
+  for (const district of report.districtGroups) {
+    if (currentY > pageHeight) {
+      doc.addPage()
+      currentY = 20
+    }
+
+    doc.setFontSize(11)
+    doc.setTextColor(0, 48, 135)
+    doc.text(`DISTRICT: ${district.districtName} (Prefix: ${district.districtPrefix})`, margin, currentY)
+    doc.setTextColor(0, 0, 0)
+    currentY += 6
+
+    for (const institute of district.institutes) {
+      if (currentY > pageHeight) {
+        doc.addPage()
+        currentY = 20
+      }
+
+      doc.setFontSize(9)
+      doc.text(
+        `Institute ${institute.instituteId}: ${institute.instituteName || 'Unknown'}`,
+        margin + 4,
+        currentY,
+      )
+      currentY += 5
+
+      const body = institute.students.map((s, i) => [
+        String(i + 1),
+        s.name,
+        String(s.subjects),
+        String(s.present),
+        String(s.absent),
+        String(s.totalDays),
+        s.totalHours,
+        `${s.attendancePercent.toFixed(0)}%`,
+        s.statusText,
+        s.faceRegistered ? '✓' : '✗',
+      ])
+
+      if (body.length === 0) {
+        doc.setFontSize(8)
+        doc.text('No students', margin + 8, currentY)
+        currentY += 4
+        continue
+      }
+
+      const tableStartY = currentY
+      pdfAutoTable(doc, {
+        startY: tableStartY,
+        margin: margin + 4,
+        head: [
+          ['Sr', 'Name', 'Subj', 'Pres', 'Abs', 'Days', 'Hrs', 'Att %', 'Status', 'Face'],
+        ],
+        body,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [0, 48, 135],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8,
+          halign: 'center',
+        },
+        bodyStyles: {
+          fontSize: 7,
+          textColor: [50, 50, 50],
+        },
+        alternateRowStyles: { fillColor: [237, 245, 255] },
+        styles: {
+          overflow: 'linebreak',
+          cellWidth: 'wrap',
+          cellPadding: 1.5,
+        },
+        columnStyles: {
+          0: { halign: 'center' },
+        },
+      })
+
+      currentY = (doc as any).lastAutoTable?.finalY + 6 || tableStartY + 30
+    }
+
+    currentY += 3
+  }
+
+  downloadJsPdf(doc, districtWiseReportPdfFileName(report.startDate, report.endDate))
 }

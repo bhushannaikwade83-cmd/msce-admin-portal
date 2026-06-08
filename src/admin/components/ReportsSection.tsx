@@ -5,7 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getSupabase } from '../lib/supabase'
 import { fetchAllPaged } from '../lib/supabasePaged'
 import { applyInstituteCodeFilter } from '../lib/attendanceInOut'
-import { downloadInstituteReportPdf, fetchInstituteReport } from '../lib/instituteReport'
+import {
+  downloadInstituteReportPdf,
+  fetchInstituteReport,
+  downloadDistrictWiseReportPdf,
+  fetchDistrictWiseReport,
+} from '../lib/instituteReport'
 import { discoverSchema, type SchemaConfig } from '../lib/schemaDiscovery'
 import { downloadStudentReportPdf, fetchStudentReport } from '../lib/studentReportPdf'
 import type { InstituteRow } from './InstituteList'
@@ -13,6 +18,7 @@ import { InstituteDistrictFilter } from './InstituteDistrictFilter'
 import { usePortalAccess } from '../context/portal-access-context'
 import { sortByInstituteId } from '../lib/instituteSort'
 import {
+  filterInstitutesByPortalPrefixes,
   findPortalDistrictByKey,
   findPortalDistrictForPrefixes,
   instituteRowMatchesPrefixes,
@@ -178,13 +184,18 @@ export function ReportsSection({
       const raw = await fetchAllPaged<InstituteRow>((rangeFrom, rangeTo) =>
         sb.from('institutes').select('*').order('name').range(rangeFrom, rangeTo),
       )
-      setInstitutes(sortByInstituteId(raw as InstituteRow[]))
+      const list = raw as InstituteRow[]
+      const scoped =
+        portal.mode === 'district_viewer' && portal.institutePrefixes.length > 0
+          ? filterInstitutesByPortalPrefixes(list, portal.institutePrefixes)
+          : list
+      setInstitutes(sortByInstituteId(scoped))
     } catch {
       setInstitutes([])
     } finally {
       setInstLoading(false)
     }
-  }, [])
+  }, [portal.mode, portal.institutePrefixes])
 
   useEffect(() => {
     void loadInstitutes()
@@ -409,6 +420,44 @@ export function ReportsSection({
     }
   }
 
+  async function downloadDistrictWiseReport() {
+    setBusy(true)
+    setError(null)
+    setInfo(null)
+    try {
+      const { from, to } = monthRange(month)
+      const [y, m, d] = from.split('-').map(Number)
+      const start = new Date(y, (m ?? 1) - 1, d ?? 1)
+      const [y2, m2, d2] = to.split('-').map(Number)
+      const end = new Date(y2, (m2 ?? 1) - 1, d2 ?? 1)
+
+      const instList = institutes.map((inst) => ({
+        id: inst.id,
+        institute_code: inst.institute_code,
+        name: inst.name,
+      }))
+
+      if (instList.length === 0) {
+        setError('No institutes found.')
+        return
+      }
+
+      const report = await fetchDistrictWiseReport(instList, start, end)
+      if (report.districtGroups.length === 0) {
+        setError('No data available for the selected period.')
+        return
+      }
+
+      downloadDistrictWiseReportPdf(report)
+      const totalInstitutes = report.districtGroups.reduce((sum, dg) => sum + dg.institutes.length, 0)
+      setInfo(`Downloaded district-wise PDF (${totalInstitutes} institutes, ${report.periodText}).`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function downloadStudentReport() {
     if (!institute || !selectedStudent) return
     setBusy(true)
@@ -482,6 +531,16 @@ export function ReportsSection({
               onClick={() => void downloadStudentReport()}
             >
               {busy ? 'Working…' : '📄 Student PDF'}
+            </button>
+          ) : null}
+          {!embedded && institutes.length > 0 ? (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={busy || instLoading}
+              onClick={() => void downloadDistrictWiseReport()}
+            >
+              {busy ? 'Working…' : '🗂️ District PDF'}
             </button>
           ) : null}
           <button

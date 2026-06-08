@@ -31,6 +31,7 @@ import type { InstituteRow } from './InstituteList'
 import { InstituteDistrictFilter } from './InstituteDistrictFilter'
 import { usePortalAccess } from '../context/portal-access-context'
 import {
+  filterInstitutesByPortalPrefixes,
   findPortalDistrictByKey,
   findPortalDistrictForPrefixes,
   instituteRowMatchesPrefixes,
@@ -549,17 +550,13 @@ function AddStudentPanel({
       const payload: Record<string, unknown> = {
         id: docId,
         institute_id: institute.id,
-        uid: docId,
         user_id: nextSr,
         sr_no: nextSr,
         name: fullName,
         first_name: fn,
-        middle_name: mn,
+        middle_name: mn || null,
         last_name: ln,
         year: year.trim() || `Year ${new Date().getFullYear()}`,
-        role: 'student',
-        status: 'approved',
-        has_device: false,
         created_at: new Date().toISOString(),
       }
       if (subjList.length) {
@@ -1808,14 +1805,18 @@ function InstitutePicker({
           .order('id', { ascending: true })
           .range(rangeFrom, rangeTo),
       )
-      setInstitutes(sortByInstituteId(raw))
+      const scoped =
+        portal.mode === 'district_viewer' && portal.institutePrefixes.length > 0
+          ? filterInstitutesByPortalPrefixes(raw, portal.institutePrefixes)
+          : raw
+      setInstitutes(sortByInstituteId(scoped))
     } catch (e) {
       setInstitutes([])
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [portal.mode, portal.institutePrefixes])
 
   useEffect(() => {
     void load()

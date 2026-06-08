@@ -37,26 +37,66 @@ export function instituteDirectoryCsvRows(
     pincode?: string | null
     state?: string | null
     is_active?: boolean | null
+    studentCount?: number | null
   }>,
+  invites?: Record<string, { full_name?: string | null; phone?: string | null; email?: string | null; claimed?: boolean | null } | null | undefined>,
+  districtLookup?: (id: string) => string | null,
 ): { header: string[]; data: string[][] } {
   const header = [
-    'institute_id',
-    'institute_code',
-    'name',
-    'city',
-    'pincode',
-    'state',
-    'active',
+    'Sr No',
+    'Institute ID',
+    'Institute Code',
+    'Name',
+    'District',
+    'City',
+    'Pincode',
+    'State',
+    'Status',
+    'Total Students',
+    'Admin Name',
+    'Phone',
+    'Email',
   ]
-  const data = rows.map((r) => [
-    r.id,
-    r.institute_code ?? '',
-    r.name ?? '',
-    r.city ?? '',
-    r.pincode ?? '',
-    r.state ?? '',
-    r.is_active !== false ? 'yes' : 'no',
-  ])
+
+  function createRows(filteredRows: typeof rows, title: string): string[][] {
+    return filteredRows.map((r, index) => [
+      String(index + 1),
+      r.id,
+      r.institute_code ?? '',
+      r.name ?? '',
+      districtLookup?.(r.id) ?? 'Unassigned',
+      r.city ?? '',
+      r.pincode ?? '',
+      r.state ?? '',
+      r.is_active !== false ? 'Active' : 'Inactive',
+      String(r.studentCount ?? 0),
+      invites?.[r.id]?.full_name?.trim() || '',
+      invites?.[r.id]?.phone?.trim() || '',
+      invites?.[r.id]?.email?.trim() || '',
+    ])
+  }
+
+  // Separate into two groups
+  const passwordSet = rows.filter((r) => invites?.[r.id]?.claimed === true)
+  const passwordNotSet = rows.filter((r) => invites?.[r.id]?.claimed !== true)
+
+  const data: string[][] = []
+
+  // Add "Password Set in App" section
+  if (passwordSet.length > 0) {
+    data.push(['PASSWORD SET IN APP', '', '', '', '', '', '', '', '', '', '', '', ''])
+    data.push(header)
+    data.push(...createRows(passwordSet, 'Password Set'))
+    data.push(['', '', '', '', '', '', '', '', '', '', '', '', ''])
+  }
+
+  // Add "Password Not Set in App" section
+  if (passwordNotSet.length > 0) {
+    data.push(['PASSWORD NOT SET IN APP', '', '', '', '', '', '', '', '', '', '', '', ''])
+    data.push(header)
+    data.push(...createRows(passwordNotSet, 'Password Not Set'))
+  }
+
   return { header, data }
 }
 

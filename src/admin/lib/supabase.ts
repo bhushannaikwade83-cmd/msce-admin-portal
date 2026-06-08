@@ -59,11 +59,10 @@ export function getSupabase(): SupabaseClient {
   }
 
   /**
-   * sessionStorage = session is bound to this tab only. Pasting the same URL in a new tab
-   * does not copy the login (unlike localStorage). Closing the tab ends this copy of the session.
-   * Duplicating a logged-in tab may still copy sessionStorage in some browsers.
+   * localStorage = session persists across browser closes and tab navigation.
+   * User stays logged in until they explicitly sign out.
    */
-  const tabStorage = typeof window !== 'undefined' ? window.sessionStorage : undefined
+  const persistentStorage = typeof window !== 'undefined' ? window.localStorage : undefined
 
   cached = createClient(url, anonKey, {
     auth: {
@@ -72,7 +71,7 @@ export function getSupabase(): SupabaseClient {
       detectSessionInUrl: true,
       flowType: 'pkce',
       storageKey: 'msce-admin-portal.auth',
-      ...(tabStorage ? { storage: tabStorage } : {}),
+      ...(persistentStorage ? { storage: persistentStorage } : {}),
     },
   })
   ;(cached as unknown as Record<string, string>)[URL_MARK] = url

@@ -15,6 +15,7 @@ export type DirectoryInstituteRow = {
   pincode?: string | null
   state?: string | null
   is_active?: boolean | null
+  studentCount?: number | null
 }
 
 export type DirectoryAdminInvite = {
@@ -92,6 +93,7 @@ function instituteDetailRow(
     r.pincode ?? '—',
     r.state ?? '—',
     r.is_active !== false ? 'Active' : 'Inactive',
+    String(r.studentCount ?? 0),
     adminAccessLabel(kind),
     inv?.full_name?.trim() || '—',
     inv?.phone?.trim() || '—',
@@ -109,6 +111,7 @@ const DETAIL_HEAD = [
   'Pincode',
   'State',
   'Status',
+  'Total Students',
   'Admin access',
   'Admin name',
   'Phone',
@@ -119,13 +122,39 @@ const TABLE_THEME = {
   theme: 'grid' as const,
   headStyles: {
     fillColor: [0, 48, 135] as [number, number, number],
-    textColor: 255,
+    textColor: [255, 255, 255] as [number, number, number],
     fontStyle: 'bold' as const,
     fontSize: 7,
+    halign: 'center' as const,
+    valign: 'middle' as const,
   },
-  bodyStyles: { fontSize: 6 },
-  alternateRowStyles: { fillColor: [245, 247, 250] as [number, number, number] },
-  styles: { overflow: 'linebreak' as const, cellPadding: 1.5 },
+  bodyStyles: {
+    fontSize: 6,
+    textColor: [50, 50, 50] as [number, number, number],
+  },
+  alternateRowStyles: {
+    fillColor: [237, 245, 255] as [number, number, number],
+  },
+  styles: {
+    overflow: 'linebreak' as const,
+    cellPadding: 1.2,
+    halign: 'left' as const,
+  },
+  columnStyles: {
+    0: { halign: 'center' as const, cellWidth: 8 },
+    1: { cellWidth: 15 },
+    2: { cellWidth: 12 },
+    3: { cellWidth: 35 },
+    4: { cellWidth: 18 },
+    5: { cellWidth: 10 },
+    6: { cellWidth: 12 },
+    7: { cellWidth: 12 },
+    8: { cellWidth: 10 },
+    9: { cellWidth: 12 },
+    10: { cellWidth: 14 },
+    11: { cellWidth: 14 },
+    12: { cellWidth: 20 },
+  },
 }
 
 function addSectionTable(
@@ -163,13 +192,40 @@ function addSummarySection(
   stats: DirectorySummaryStats,
   generatedAt: Date,
 ): number {
-  doc.setFontSize(16)
-  doc.setFont('helvetica', 'bold')
-  doc.text('MSCE INSTITUTE DIRECTORY REPORT', margin, 14)
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const centerX = pageWidth / 2
+  const logoSize = 12
+
+  // Add subtle header background
+  doc.setFillColor(0, 48, 135)
+  doc.rect(0, 0, pageWidth, 30, 'F')
+
+  // Add logo placeholder on left (you can replace with actual image path)
+  doc.setTextColor(255, 255, 255)
   doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.text('MSCE', margin, 12)
+
+  // Center heading
+  doc.setFontSize(16)
+  doc.text('MSCE INSTITUTE REPORT', centerX, 12, { align: 'center' })
+
+  // Right side text
+  doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
-  doc.text(`Scope: ${scopeLabel}`, margin, 22)
-  doc.text(`Generated: ${generatedAt.toLocaleString('en-IN')}`, margin, 28)
+  doc.text('GOVERNMENT OF MAHARASHTRA', pageWidth - margin - 30, 10, { align: 'right', maxWidth: 30 })
+
+  // Reset to black text
+  doc.setTextColor(0, 0, 0)
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.text('ATTENDANCE APP REPORT OF INSTITUTES', margin, 35)
+
+  // Date and time on left
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Date & Time: ${generatedAt.toLocaleString('en-IN')}`, margin, 42)
+  doc.text(`Scope: ${scopeLabel}`, margin, 48)
 
   const summaryBody = [
     ['Total institutes', String(stats.total)],
@@ -187,18 +243,18 @@ function addSummarySection(
   ]
 
   pdfAutoTable(doc, {
-    startY: 34,
+    startY: 54,
     margin: { left: margin, right: margin },
     head: [['Metric', 'Count']],
     body: summaryBody,
     ...TABLE_THEME,
     columnStyles: {
-      0: { cellWidth: 95 },
-      1: { cellWidth: 40, halign: 'right' },
+      0: { cellWidth: 85, halign: 'left' },
+      1: { cellWidth: 35, halign: 'right' },
     },
   })
 
-  return (pdfLastAutoTableFinalY(doc) ?? 34) + 10
+  return (pdfLastAutoTableFinalY(doc) ?? 54) + 10
 }
 
 function districtStatsBody(rows: DistrictAdminStats[]): string[][] {

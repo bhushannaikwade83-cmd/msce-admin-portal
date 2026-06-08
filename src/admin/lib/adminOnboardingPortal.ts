@@ -36,6 +36,7 @@ export type InviteDisplayRow = {
   profileName: string | null
   profileEmail: string | null
   profileStatus: string | null
+  studentCount: number
 }
 
 export type AdminAccessRow = {
@@ -63,7 +64,7 @@ function normalizeStatus(status: string | null | undefined): string {
   return s || 'unknown'
 }
 
-function portalToInviteDisplay(r: PortalOnboardingRow): InviteDisplayRow {
+function portalToInviteDisplay(r: PortalOnboardingRow, studentCount: number = 0): InviteDisplayRow {
   return {
     id: r.invite_id ?? `profile:${r.profile_id ?? r.institute_id}`,
     institute_id: r.institute_id,
@@ -78,14 +79,38 @@ function portalToInviteDisplay(r: PortalOnboardingRow): InviteDisplayRow {
     profileName: r.profile_name,
     profileEmail: r.profile_email,
     profileStatus: r.profile_status,
+    studentCount,
   }
 }
 
-export function splitPortalOnboardingRows(rows: PortalOnboardingRow[]): {
+export async function splitPortalOnboardingRows(rows: PortalOnboardingRow[]): Promise<{
   pendingInvites: InviteDisplayRow[]
   completedInvites: InviteDisplayRow[]
   accessRows: AdminAccessRow[]
-} {
+}> {
+  // Fetch student counts from admin_invites table (auto-updated by triggers)
+  const studentCountMap = new Map<string, number>()
+
+  try {
+    const sb = getSupabase()
+    const { data: invites } = await sb
+      .from('admin_invites')
+      .select('institute_id, total_students')
+
+    if (invites) {
+      for (const inv of invites) {
+        const record = inv as unknown as Record<string, unknown>
+        const instId = record.institute_id as string | undefined
+        const count = record.total_students as number | undefined
+        if (instId && count !== undefined) {
+          studentCountMap.set(instId, count)
+        }
+      }
+    }
+  } catch {
+    // Silently fail — if fetch fails, just use 0
+  }
+
   const pendingInvites: InviteDisplayRow[] = []
   const completedInvites: InviteDisplayRow[] = []
   const accessRows: AdminAccessRow[] = []
@@ -93,12 +118,13 @@ export function splitPortalOnboardingRows(rows: PortalOnboardingRow[]): {
   for (const r of rows) {
     const completed = r.setup_complete || r.invite_claimed
     const hasInvite = r.invite_id != null
+    const studentCount = studentCountMap.get(r.institute_id) ?? 0
 
     if (hasInvite && !completed) {
-      pendingInvites.push(portalToInviteDisplay(r))
+      pendingInvites.push(portalToInviteDisplay(r, studentCount))
     }
     if (completed && (hasInvite || r.profile_id)) {
-      completedInvites.push(portalToInviteDisplay(r))
+      completedInvites.push(portalToInviteDisplay(r, studentCount))
     }
 
     if (r.profile_id) {
@@ -204,6 +230,13 @@ export async function updatePendingAdminInvite(params: {
     throw new Error(result.message ?? 'Could not update invite')
   }
   return result
+}
+
+/** Super admin onboarding list, or district viewer instructors directory (read-only). */
+export function canListPortalInstructors(info: PortalSessionInfo | null): boolean {
+  if (!info?.authenticated) return false
+  if (info.is_super_admin_fn || info.can_list_onboarding) return true
+  return info.is_portal_district_viewer === true || info.portal_mode === 'district_viewer'
 }
 
 export function isEditablePendingInvite(inv: InviteDisplayRow): boolean {

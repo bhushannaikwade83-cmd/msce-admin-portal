@@ -36,7 +36,18 @@ const ALL_TABS: DashboardTab[] = [
   'reports',
 ]
 
-const DISTRICT_TABS: DashboardTab[] = ['institutes', 'students', 'reports']
+const DISTRICT_TABS: DashboardTab[] = ['institutes', 'instructors', 'students', 'reports']
+
+const VALID_TABS = new Set<DashboardTab>(ALL_TABS)
+
+function parseAllowedTabs(
+  raw: string[] | null | undefined,
+  fallback: DashboardTab[],
+): DashboardTab[] {
+  if (!Array.isArray(raw) || raw.length === 0) return fallback
+  const parsed = raw.filter((t): t is DashboardTab => VALID_TABS.has(t as DashboardTab))
+  return parsed.length > 0 ? parsed : fallback
+}
 
 const PortalAccessContext = createContext<PortalAccess | null>(null)
 
@@ -59,7 +70,10 @@ function resolvePortalAccess(info: PortalSessionInfo | null): PortalAccess {
       readOnly: false,
       districtName: null,
       institutePrefixes: [],
-      allowedTabs: ALL_TABS,
+      allowedTabs: parseAllowedTabs(
+        Array.isArray(info.allowed_tabs) ? info.allowed_tabs.map(String) : null,
+        ALL_TABS,
+      ),
       message: info.message ?? null,
     }
   }
@@ -68,12 +82,16 @@ function resolvePortalAccess(info: PortalSessionInfo | null): PortalAccess {
     const prefixes = Array.isArray(info.institute_prefixes)
       ? info.institute_prefixes.map(String)
       : []
+    const readOnly = info.read_only !== false
     return {
       mode: 'district_viewer',
-      readOnly: true,
+      readOnly,
       districtName: info.district_name ?? null,
       institutePrefixes: prefixes,
-      allowedTabs: DISTRICT_TABS,
+      allowedTabs: parseAllowedTabs(
+        Array.isArray(info.allowed_tabs) ? info.allowed_tabs.map(String) : null,
+        DISTRICT_TABS,
+      ),
       message: info.message ?? null,
     }
   }
@@ -90,38 +108,68 @@ function resolvePortalAccess(info: PortalSessionInfo | null): PortalAccess {
   }
 }
 
+const PORTAL_CACHE_KEY = 'msce-admin-portal-access-cache'
+
+function getCachedPortalAccess(): PortalAccess | null {
+  try {
+    const cached = localStorage.getItem(PORTAL_CACHE_KEY)
+    return cached ? JSON.parse(cached) : null
+  } catch {
+    return null
+  }
+}
+
+function setCachedPortalAccess(access: PortalAccess): void {
+  try {
+    localStorage.setItem(PORTAL_CACHE_KEY, JSON.stringify(access))
+  } catch {
+    // Ignore cache write errors
+  }
+}
+
 export function PortalAccessProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth()
-  const [access, setAccess] = useState<PortalAccess>({
-    mode: 'loading',
-    readOnly: true,
-    districtName: null,
-    institutePrefixes: [],
-    allowedTabs: [],
-    message: null,
+  const [access, setAccess] = useState<PortalAccess>(() => {
+    // Try to use cached value first
+    const cached = getCachedPortalAccess()
+    return cached ?? {
+      mode: 'loading',
+      readOnly: true,
+      districtName: null,
+      institutePrefixes: [],
+      allowedTabs: [],
+      message: null,
+    }
   })
 
   const reload = useCallback(async () => {
     if (!user) {
-      setAccess({
-        mode: 'unauthorized',
+      const unauthorized = {
+        mode: 'unauthorized' as const,
         readOnly: true,
         districtName: null,
         institutePrefixes: [],
         allowedTabs: [],
         message: null,
-      })
+      }
+      setAccess(unauthorized)
+      localStorage.removeItem(PORTAL_CACHE_KEY)
       return
     }
-    setAccess((prev) => ({ ...prev, mode: 'loading', message: null }))
+
     const info = await fetchPortalSessionInfo()
-    setAccess(resolvePortalAccess(info))
+    const resolved = resolvePortalAccess(info)
+    setAccess(resolved)
+    setCachedPortalAccess(resolved)
   }, [user])
 
   useEffect(() => {
     if (authLoading) return
-    void reload()
-  }, [authLoading, reload])
+    // Only reload if user exists and we don't have valid cached data
+    if (user && access.mode !== 'super_admin' && access.mode !== 'district_viewer') {
+      void reload()
+    }
+  }, [authLoading, user])
 
   const value = useMemo(() => access, [access])
 

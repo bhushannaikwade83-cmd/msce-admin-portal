@@ -22,7 +22,7 @@ export type AuthState = {
 export const AuthContext = createContext<AuthState | null>(null)
 
 /** No user input for this long → sign out (reduces risk from unattended unlocked screens). */
-const IDLE_SIGN_OUT_MS = 30 * 60 * 1000
+const IDLE_SIGN_OUT_MS = 8 * 60 * 60 * 1000 // 8 hours instead of 30 minutes
 
 /** Auth + config banner live here so children always see a valid context (HMR-safe). */
 export function AuthProvider({ children }: { children: ReactNode }) {

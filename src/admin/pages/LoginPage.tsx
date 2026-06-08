@@ -48,7 +48,8 @@ export function LoginPage() {
               <div className="login-card-emblem" aria-hidden>🔐</div>
               <h2 className="login-heading">Authorised Sign In</h2>
               <p className="login-lead">
-                Sign in with your MSCE portal credentials (super admin or district viewer).
+                Sign in with your MSCE portal credentials. District logins see only their
+                region&apos;s institutes (view-only: Institutes, Instructors, Students, Reports).
               </p>
             </div>
 

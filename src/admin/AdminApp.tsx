@@ -74,7 +74,7 @@ function TabPanel({
 
 function loadStoredAdminTab(): DashboardTab {
   if (typeof window === 'undefined') return 'overview'
-  const raw = window.sessionStorage.getItem(ACTIVE_TAB_STORAGE_KEY)
+  const raw = window.localStorage.getItem(ACTIVE_TAB_STORAGE_KEY)
   switch (raw) {
     case 'overview':
     case 'admins':

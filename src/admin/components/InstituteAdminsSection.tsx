@@ -283,7 +283,7 @@ function InviteTable({
 }) {
   const showClaimedAt = variant === 'completed'
   const showActions = variant === 'pending' && onEdit != null
-  const colCount = showActions ? 5 : 4
+  const colCount = showActions ? 6 : 5
 
   return (
     <div className="table-wrap">
@@ -293,6 +293,7 @@ function InviteTable({
             <th>Institute</th>
             <th>Admin</th>
             <th>Contact</th>
+            <th>Total Students</th>
             <th>{showClaimedAt ? 'Password set' : 'Invited'}</th>
             {showActions ? <th>Actions</th> : null}
           </tr>
@@ -341,6 +342,9 @@ function InviteTable({
                 <td>
                   <div>{inv.email?.trim() || '—'}</div>
                   <div className="muted small">{inv.phone?.trim() || '—'}</div>
+                </td>
+                <td>
+                  <strong>{inv.studentCount.toLocaleString('en-IN')}</strong>
                 </td>
                 <td className="muted small">
                   <div>{showClaimedAt ? fmtWhen(inv.claimed_at) : fmtWhen(inv.created_at)}</div>
@@ -407,7 +411,7 @@ export function InstituteAdminsSection({ embedded = false }: { embedded?: boolea
       const info = await fetchPortalSessionInfo()
       setSessionInfo(info)
       const portalRows = await fetchPortalOnboardingRows()
-      const split = splitPortalOnboardingRows(portalRows)
+      const split = await splitPortalOnboardingRows(portalRows)
       setPendingInvites(split.pendingInvites)
       setCompletedInvites(split.completedInvites)
     } catch (e) {

@@ -6,7 +6,11 @@ import {
   useState,
   type FormEvent,
 } from 'react'
-import { fetchPortalSessionInfo, type PortalSessionInfo } from '../lib/adminOnboardingPortal'
+import {
+  canListPortalInstructors,
+  fetchPortalSessionInfo,
+  type PortalSessionInfo,
+} from '../lib/adminOnboardingPortal'
 import { compareInstituteId } from '../lib/instituteSort'
 import {
   createPortalInstructor,
@@ -16,7 +20,7 @@ import {
   updatePortalInstructor,
 } from '../lib/portalInstructorManage'
 import { fetchAllPortalInstructors, type PortalInstructorRow } from '../lib/portalInstructors'
-import { usePortalReadOnly } from '../context/portal-access-context'
+import { usePortalAccess, usePortalReadOnly } from '../context/portal-access-context'
 import { getSupabase } from '../lib/supabase'
 import { ModalPortal } from './ModalPortal'
 
@@ -543,6 +547,7 @@ function DeleteInstructorModal({
 }
 
 export function InstituteInstructorsSection({ embedded = false }: { embedded?: boolean }) {
+  const portal = usePortalAccess()
   const readOnly = usePortalReadOnly()
   const [groups, setGroups] = useState<InstituteGroup[]>([])
   const [loading, setLoading] = useState(false)
@@ -574,19 +579,37 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
       const info = await fetchPortalSessionInfo()
       setSessionInfo(info)
 
-      if (info && info.can_list_onboarding === false) {
+      if (info && !canListPortalInstructors(info)) {
         setGroups([])
         setLoadSource(null)
         if (!silent) setLoading(false)
         return
       }
 
-      const { rows: instructorRows, institutes, source } = await fetchAllPortalInstructors()
+      const {
+        rows: instructorRows,
+        institutes,
+        source,
+        districtRpcLikelyUnpatched,
+      } = await fetchAllPortalInstructors({
+        institutePrefixes: portal.institutePrefixes,
+      })
       setLoadSource(source)
-      if (source === 'direct') {
+
+      if (districtRpcLikelyUnpatched) {
+        setError(
+          'Instructors list is empty for your district. In Supabase SQL Editor, run the full file sql/manual_portal_district_viewers.sql (especially list_portal_instructors_all and profiles_portal_district_attendance_select), then click Refresh.',
+        )
+      } else if (source === 'direct' && portal.mode === 'district_viewer') {
+        setError(
+          'Could not load instructors via portal RPC. Run sql/manual_portal_district_viewers.sql in Supabase, then Refresh.',
+        )
+      } else if (source === 'direct') {
         setError(
           'Run migration 075_list_portal_instructors_all.sql in Supabase SQL Editor for the most reliable all-institute list.',
         )
+      } else {
+        setError(null)
       }
 
       setGroups(buildGroups(institutes, instructorRows))
@@ -597,7 +620,7 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [])
+  }, [portal.institutePrefixes, portal.mode])
 
   useEffect(() => {
     void load()
@@ -746,13 +769,27 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
       <div className="card-head">
         <div>
           {embedded ? (
-            <span className="section-kicker">Instructors (all institutes)</span>
+            <span className="section-kicker">
+              {portal.districtName
+                ? `Instructors — ${portal.districtName}`
+                : 'Instructors (all institutes)'}
+            </span>
           ) : (
             <h2>Institute instructors</h2>
           )}
           <p className="muted small">
-            All institutes — staff / instructor accounts (<code>attendance_user</code>). Super admins can add, edit,
-            or remove instructors here (same rules as the mobile app: max 4 per institute, Institute ID + PIN login).
+            {portal.mode === 'district_viewer' && portal.districtName ? (
+              <>
+                View-only list for <strong>{portal.districtName}</strong> institutes (by institute ID prefix). Editing
+                is disabled for district logins.
+              </>
+            ) : (
+              <>
+                All institutes — staff / instructor accounts (<code>attendance_user</code>). Super admins can add,
+                edit, or remove instructors here (same rules as the mobile app: max 4 per institute, Institute ID +
+                PIN login).
+              </>
+            )}{' '}
             PIN column shows whether login PIN was saved (not the 4-digit number).
             {loadSource === 'rpc' ? (
               <>
@@ -779,13 +816,14 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
         </div>
       </div>
 
-      {sessionInfo && !sessionInfo.can_list_onboarding ? (
+      {sessionInfo && !canListPortalInstructors(sessionInfo) ? (
         <p className="error" role="alert">
-          Portal access: {sessionInfo.message ?? 'super_admin required'} — signed in as{' '}
-          <strong>{sessionInfo.email ?? 'unknown'}</strong> (role:{' '}
-          <code>{sessionInfo.profile_role ?? 'missing'}</code>). Sign in with{' '}
-          <code>gcctbcsupport@gmail.com</code> or run migration <code>058</code> /{' '}
-          <code>059</code> in Supabase, then sign out and sign in again.
+          Portal access: {sessionInfo.message ?? 'super_admin or district viewer required'} — signed in
+          as <strong>{sessionInfo.email ?? 'unknown'}</strong> (role:{' '}
+          <code>{sessionInfo.profile_role ?? 'missing'}</code>). For super admin, sign in with{' '}
+          <code>gcctbcsupport@gmail.com</code> or run migration <code>058</code> / <code>059</code> in
+          Supabase. For district viewers, run <code>sql/manual_portal_district_viewers.sql</code> and ensure{' '}
+          <code>portal_district_key</code> is set on your profile.
         </p>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
@@ -862,11 +900,14 @@ export function InstituteInstructorsSection({ embedded = false }: { embedded?: b
         </p>
       </div>
 
-      {loading && groups.length === 0 ? (
-        <p className="muted">Loading instructors…</p>
-      ) : filteredGroups.length === 0 && !loading ? (
+      {loading ? (
+        <p className="muted" role="status">
+          Loading instructors{portal.districtName ? ` for ${portal.districtName}` : ''}…
+        </p>
+      ) : null}
+      {!loading && filteredGroups.length === 0 ? (
         <p className="muted">
-          {sessionInfo?.can_list_onboarding === false
+          {!canListPortalInstructors(sessionInfo)
             ? 'No data — fix portal login (see message above).'
             : canManage
               ? 'No instructors found. Use Add instructor on an institute below, or add from the mobile app.'

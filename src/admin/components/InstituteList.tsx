@@ -10,10 +10,12 @@ import {
 } from '../lib/instituteGpsPortal'
 import { sortByInstituteId } from '../lib/instituteSort'
 import {
+  filterInstitutesByPortalPrefixes,
   findPortalDistrictByKey,
   findPortalDistrictForPrefixes,
   instituteRowMatchesPrefixes,
 } from '../lib/portalDistricts'
+import { fetchPortalInstituteAdminInvites } from '../lib/portalInstituteAdminInvites'
 import { downloadInstituteDirectoryPdf } from '../lib/instituteDirectoryPdf'
 import { downloadCsv, instituteDirectoryCsvRows } from '../lib/reportCsv'
 import { usePortalAccess } from '../context/portal-access-context'
@@ -651,22 +653,240 @@ export function InstituteList({
     }
   }, [tablePage, tablePageCount])
 
-  function exportDirectoryCsv() {
-    const { header, data } = instituteDirectoryCsvRows(adminAccessFilteredRows)
-    const stamp = new Date().toISOString().slice(0, 10)
-    downloadCsv(`institutes_directory_${stamp}.csv`, header, data)
+  async function exportPasswordSetCsv() {
+    try {
+      const sb = getSupabase()
+      setError(null)
+      setInfo('📊 Fetching ALL password SET institutes...')
+
+      // Step 1: Fetch ALL admin_invites with claimed=true
+      const allInvites: Array<{ institute_id: string; total_students: number }> = []
+      let offset = 0
+      const pageSize = 1000
+
+      while (true) {
+        const { data, error } = await sb
+          .from('admin_invites')
+          .select('institute_id, total_students')
+          .eq('claimed', true)
+          .order('institute_id', { ascending: true })
+          .range(offset, offset + pageSize - 1)
+
+        if (error) throw error
+        if (!data || data.length === 0) break
+
+        allInvites.push(
+          ...data.map((row) => ({
+            institute_id: (row as unknown as Record<string, string>).institute_id,
+            total_students: (row as unknown as Record<string, number>).total_students ?? 0,
+          })),
+        )
+
+        if (data.length < pageSize) break
+        offset += pageSize
+      }
+
+      // Step 2: Fetch ALL institutes with matching IDs
+      const instituteIds = allInvites.map((inv) => inv.institute_id)
+      const instituteMap = new Map<string, Record<string, string>>()
+
+      if (instituteIds.length > 0) {
+        offset = 0
+        while (offset < instituteIds.length) {
+          const batch = instituteIds.slice(offset, offset + 1000)
+          const { data: insts, error: instError } = await sb
+            .from('institutes')
+            .select('id, name, city, pincode, state')
+            .in('id', batch)
+
+          if (instError) throw instError
+          if (insts) {
+            for (const inst of insts) {
+              instituteMap.set((inst as unknown as Record<string, string>).id, inst as unknown as Record<string, string>)
+            }
+          }
+          offset += 1000
+        }
+      }
+
+      // Step 3: Build CSV
+      const lines: string[] = ['Sr No,Institute ID,Name,City,Pincode,State,Total Students']
+      allInvites.forEach((inv, idx) => {
+        const inst = instituteMap.get(inv.institute_id)
+        const name = inst?.name ?? 'Unknown'
+        const city = inst?.city ?? '—'
+        const pincode = inst?.pincode ?? '—'
+        const state = inst?.state ?? '—'
+        lines.push(`${idx + 1},"${inv.institute_id}","${name}","${city}","${pincode}","${state}",${inv.total_students}`)
+      })
+
+      const csvContent = lines.join('\n')
+      const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `password_set_institutes_${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      setInfo(`✅ Downloaded ${allInvites.length} password SET institutes`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
   }
 
-  function exportDirectoryPdf() {
+  async function exportPasswordNotSetCsv() {
+    try {
+      const sb = getSupabase()
+      setError(null)
+      setInfo('📊 Fetching ALL password NOT SET institutes...')
+
+      // Step 1: Fetch ALL admin_invites with claimed=false
+      const allInvites: Array<{ institute_id: string; total_students: number }> = []
+      let offset = 0
+      const pageSize = 1000
+
+      while (true) {
+        const { data, error } = await sb
+          .from('admin_invites')
+          .select('institute_id, total_students')
+          .eq('claimed', false)
+          .order('institute_id', { ascending: true })
+          .range(offset, offset + pageSize - 1)
+
+        if (error) throw error
+        if (!data || data.length === 0) break
+
+        allInvites.push(
+          ...data.map((row) => ({
+            institute_id: (row as unknown as Record<string, string>).institute_id,
+            total_students: (row as unknown as Record<string, number>).total_students ?? 0,
+          })),
+        )
+
+        if (data.length < pageSize) break
+        offset += pageSize
+      }
+
+      // Step 2: Fetch ALL institutes with matching IDs
+      const instituteIds = allInvites.map((inv) => inv.institute_id)
+      const instituteMap = new Map<string, Record<string, string>>()
+
+      if (instituteIds.length > 0) {
+        offset = 0
+        while (offset < instituteIds.length) {
+          const batch = instituteIds.slice(offset, offset + 1000)
+          const { data: insts, error: instError } = await sb
+            .from('institutes')
+            .select('id, name, city, pincode, state')
+            .in('id', batch)
+
+          if (instError) throw instError
+          if (insts) {
+            for (const inst of insts) {
+              instituteMap.set((inst as unknown as Record<string, string>).id, inst as unknown as Record<string, string>)
+            }
+          }
+          offset += 1000
+        }
+      }
+
+      // Step 3: Build CSV
+      const lines: string[] = ['Sr No,Institute ID,Name,City,Pincode,State,Total Students']
+      allInvites.forEach((inv, idx) => {
+        const inst = instituteMap.get(inv.institute_id)
+        const name = inst?.name ?? 'Unknown'
+        const city = inst?.city ?? '—'
+        const pincode = inst?.pincode ?? '—'
+        const state = inst?.state ?? '—'
+        lines.push(`${idx + 1},"${inv.institute_id}","${name}","${city}","${pincode}","${state}",${inv.total_students}`)
+      })
+
+      const csvContent = lines.join('\n')
+      const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `password_not_set_institutes_${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      setInfo(`✅ Downloaded ${allInvites.length} password NOT SET institutes`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function exportDirectoryCsv() {
+    try {
+      await Promise.all([exportPasswordSetCsv(), exportPasswordNotSetCsv()])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function exportDirectoryPdf() {
     if (districtFilteredRows.length === 0) return
     setPdfExporting(true)
     setError(null)
     try {
+      const sb = getSupabase()
+
+      // Fetch student counts for all institutes (optimized single query)
+      const allInstIds = rows.map((r) => r.id)
+      const studentCountMap = new Map<string, number>()
+
+      // Initialize all with 0
+      allInstIds.forEach((id) => studentCountMap.set(id, 0))
+
+      // Query student counts from institute_student_counts view
+      setError(null)
+      setInfo('📊 Fetching student counts from view...')
+
+      try {
+        // Get counts directly from the view
+        const { data: counts, error: countError } = await sb
+          .from('institute_student_counts')
+          .select('id, student_count')
+
+        if (countError) {
+          throw countError
+        }
+
+        // Map counts by institute_id
+        if (counts && counts.length > 0) {
+          for (const row of counts) {
+            studentCountMap.set(row.id, row.student_count)
+          }
+
+          const filledCount = Array.from(studentCountMap.values()).filter(c => c > 0).length
+          const totalStudents = Array.from(studentCountMap.values()).reduce((a, b) => a + b, 0)
+
+          setInfo(`✅ Total: ${totalStudents} students | ${filledCount} institutes have students`)
+        } else {
+          setError('No student count data found')
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+        throw e
+      }
+
+      // Add student counts to rows
+      const rowsWithCounts = rows.map((r) => ({
+        ...r,
+        studentCount: studentCountMap.get(r.id) ?? 0,
+      }))
+
       const scopeLabel = selectedDistrict?.name ?? 'All districts'
+      const scopeWithCounts = districtFilteredRows.map((r) => ({
+        ...r,
+        studentCount: studentCountMap.get(r.id) ?? 0,
+      }))
+
       downloadInstituteDirectoryPdf({
         scopeLabel,
-        scopeInstitutes: districtFilteredRows,
-        allInstitutes: rows,
+        scopeInstitutes: scopeWithCounts,
+        allInstitutes: rowsWithCounts,
         invitesByInstituteId: adminInvitesByInstitute,
       })
       setInfo(`PDF exported for ${scopeLabel} (${districtFilteredRows.length.toLocaleString('en-IN')} institutes).`)
@@ -691,19 +911,13 @@ export function InstituteList({
           .order('id', { ascending: true })
           .range(rangeFrom, rangeTo),
       )
-      const fetched = sortByInstituteId(raw)
-      setRows(fetched)
-      const inviteData = await fetchAllPaged<AdminInviteRow>((rangeFrom, rangeTo) =>
-        sb
-          .from('admin_invites')
-          .select('institute_id, full_name, phone, email, claimed')
-          .order('institute_id', { ascending: true })
-          .range(rangeFrom, rangeTo),
+      const fetched = sortByInstituteId(
+        portal.mode === 'district_viewer' && portal.institutePrefixes.length > 0
+          ? filterInstitutesByPortalPrefixes(raw, portal.institutePrefixes)
+          : raw,
       )
-      const inviteMap: Record<string, AdminInviteRow | null> = {}
-      for (const row of inviteData) {
-        inviteMap[row.institute_id] = row
-      }
+      setRows(fetched)
+      const inviteMap = await fetchPortalInstituteAdminInvites()
       setAdminInvitesByInstitute(inviteMap)
       // Detect whether gps_locked column exists in this schema
       if (fetched.length > 0) {
@@ -772,7 +986,7 @@ export function InstituteList({
     } finally {
       setLoading(false)
     }
-  }, [user?.id])
+  }, [user?.id, portal.mode, portal.institutePrefixes])
 
   useEffect(() => {
     try {
@@ -814,11 +1028,20 @@ export function InstituteList({
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={exportDirectoryCsv}
+            onClick={exportPasswordSetCsv}
             disabled={loading || rows.length === 0}
-            title="Download filtered institutes as CSV"
+            title="Download password SET institutes as CSV"
           >
-            📥 Directory CSV
+            ✅ Password Set CSV
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={exportPasswordNotSetCsv}
+            disabled={loading || rows.length === 0}
+            title="Download password NOT SET institutes as CSV"
+          >
+            ❌ Password Not Set CSV
           </button>
           <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
             {loading ? 'Loading…' : 'Refresh'}
