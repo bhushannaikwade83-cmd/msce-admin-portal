@@ -194,7 +194,6 @@ function addSummarySection(
 ): number {
   const pageWidth = doc.internal.pageSize.getWidth()
   const centerX = pageWidth / 2
-  const logoSize = 12
 
   // Add subtle header background
   doc.setFillColor(0, 48, 135)

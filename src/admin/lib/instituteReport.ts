@@ -368,7 +368,6 @@ export function downloadInstituteReportPdf(report: InstituteReportResult): void 
   ])
 
   const totalFaceReg = report.studentRecords.filter((s) => s.faceRegistered).length
-  const totalNotReg = report.studentRecords.length - totalFaceReg
 
   body.push([
     '',
@@ -488,7 +487,11 @@ export async function fetchDistrictWiseReport(
     const prefix = institute.id.substring(0, 2)
     const districtName = getDistrictName(prefix)
 
-    const report = await fetchInstituteReport(institute, startDate, endDate)
+    const report = await fetchInstituteReport(
+      { ...institute, institute_code: null },
+      startDate,
+      endDate,
+    )
 
     if (!groupMap.has(prefix)) {
       groupMap.set(prefix, {

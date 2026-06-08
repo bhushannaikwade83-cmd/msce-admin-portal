@@ -58,7 +58,7 @@ export function instituteDirectoryCsvRows(
     'Email',
   ]
 
-  function createRows(filteredRows: typeof rows, title: string): string[][] {
+  function createRows(filteredRows: typeof rows): string[][] {
     return filteredRows.map((r, index) => [
       String(index + 1),
       r.id,
@@ -86,7 +86,7 @@ export function instituteDirectoryCsvRows(
   if (passwordSet.length > 0) {
     data.push(['PASSWORD SET IN APP', '', '', '', '', '', '', '', '', '', '', '', ''])
     data.push(header)
-    data.push(...createRows(passwordSet, 'Password Set'))
+    data.push(...createRows(passwordSet))
     data.push(['', '', '', '', '', '', '', '', '', '', '', '', ''])
   }
 
@@ -94,7 +94,7 @@ export function instituteDirectoryCsvRows(
   if (passwordNotSet.length > 0) {
     data.push(['PASSWORD NOT SET IN APP', '', '', '', '', '', '', '', '', '', '', '', ''])
     data.push(header)
-    data.push(...createRows(passwordNotSet, 'Password Not Set'))
+    data.push(...createRows(passwordNotSet))
   }
 
   return { header, data }

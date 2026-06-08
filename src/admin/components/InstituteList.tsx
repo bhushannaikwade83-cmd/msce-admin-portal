@@ -17,7 +17,6 @@ import {
 } from '../lib/portalDistricts'
 import { fetchPortalInstituteAdminInvites } from '../lib/portalInstituteAdminInvites'
 import { downloadInstituteDirectoryPdf } from '../lib/instituteDirectoryPdf'
-import { downloadCsv, instituteDirectoryCsvRows } from '../lib/reportCsv'
 import { usePortalAccess } from '../context/portal-access-context'
 import { InstituteDistrictFilter } from './InstituteDistrictFilter'
 import { fetchAllPaged } from '../lib/supabasePaged'
@@ -812,14 +811,6 @@ export function InstituteList({
       URL.revokeObjectURL(url)
 
       setInfo(`✅ Downloaded ${allInvites.length} password NOT SET institutes`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }
-
-  async function exportDirectoryCsv() {
-    try {
-      await Promise.all([exportPasswordSetCsv(), exportPasswordNotSetCsv()])
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
