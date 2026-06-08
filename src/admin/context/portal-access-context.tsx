@@ -157,10 +157,33 @@ export function PortalAccessProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const info = await fetchPortalSessionInfo()
-    const resolved = resolvePortalAccess(info)
-    setAccess(resolved)
-    setCachedPortalAccess(resolved)
+    try {
+      const info = await Promise.race([
+        fetchPortalSessionInfo(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Portal session check timeout')), 10000),
+        ),
+      ])
+      const resolved = resolvePortalAccess(info as any)
+      setAccess(resolved)
+      setCachedPortalAccess(resolved)
+    } catch (err) {
+      console.error('Portal access check failed:', err)
+      // Use cached data if available, otherwise show unauthorized
+      const cached = getCachedPortalAccess()
+      if (cached) {
+        setAccess(cached)
+      } else {
+        setAccess({
+          mode: 'unauthorized',
+          readOnly: true,
+          districtName: null,
+          institutePrefixes: [],
+          allowedTabs: [],
+          message: `Portal access check failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        })
+      }
+    }
   }, [user])
 
   useEffect(() => {
@@ -169,7 +192,7 @@ export function PortalAccessProvider({ children }: { children: ReactNode }) {
     if (user && access.mode !== 'super_admin' && access.mode !== 'district_viewer') {
       void reload()
     }
-  }, [authLoading, user])
+  }, [authLoading, user, reload])
 
   const value = useMemo(() => access, [access])
 

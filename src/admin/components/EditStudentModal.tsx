@@ -89,10 +89,15 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
     setBusy(true)
     try {
       const sb = getSupabase()
+      // Move current photo to backup columns before clearing
       const patch: Record<string, unknown> = {
+        original_face_photo_url: student.face_photo_url || null,
+        original_registration_photo_path: student.registration_photo_path || null,
         face_photo_url: null,
         registration_photo_path: null,
         face_embedding: null,
+        face_photo_changed_once: true,
+        face_photo_changed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
 
