@@ -188,6 +188,12 @@ export function PortalAccessProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (authLoading) return
+    // If we have cached data, use it immediately and don't check again
+    const cached = getCachedPortalAccess()
+    if (cached) {
+      setAccess(cached)
+      return
+    }
     // Only reload if user exists and we don't have valid cached data
     if (user && access.mode !== 'super_admin' && access.mode !== 'district_viewer') {
       void reload()

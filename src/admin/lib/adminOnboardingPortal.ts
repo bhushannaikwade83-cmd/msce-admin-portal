@@ -199,9 +199,25 @@ export async function syncAllowlistedPortalSuperAdmin(): Promise<void> {
 
 export async function fetchPortalSessionInfo(): Promise<PortalSessionInfo | null> {
   const sb = getSupabase()
-  const { data, error } = await sb.rpc('portal_session_info')
-  if (error) return null
-  return (data ?? null) as PortalSessionInfo | null
+  try {
+    // Add 8-second timeout for RPC call
+    const result = await Promise.race([
+      sb.rpc('portal_session_info'),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('RPC timeout')), 8000),
+      ),
+    ])
+    const { data, error } = result as any
+    if (error) {
+      console.warn('portal_session_info RPC failed, falling back to auth user:', error)
+      return null
+    }
+    return (data ?? null) as PortalSessionInfo | null
+  } catch (err) {
+    console.warn('fetchPortalSessionInfo failed:', err)
+    // Fallback: just return null and let context use cached data
+    return null
+  }
 }
 
 export type UpdatePendingInviteResult = {
