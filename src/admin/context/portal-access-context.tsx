@@ -188,16 +188,16 @@ export function PortalAccessProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (authLoading) return
-    // If we have cached data, use it immediately and don't check again
+    // If we have cached data, use it immediately
     const cached = getCachedPortalAccess()
     if (cached) {
       setAccess(cached)
-      return
+      // If we have a user, we're done (using cache).
+      // If we DON'T have a user, we should still run reload() to clear the cache/state.
+      if (user) return
     }
-    // Only reload if user exists and we don't have valid cached data
-    if (user && access.mode !== 'super_admin' && access.mode !== 'district_viewer') {
-      void reload()
-    }
+    // Run reload() to either fetch access info or set unauthorized state if !user
+    void reload()
   }, [authLoading, user, reload])
 
   const value = useMemo(() => access, [access])

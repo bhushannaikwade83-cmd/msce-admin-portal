@@ -545,25 +545,22 @@ function AddStudentPanel({
       const peak = (peakRaw ?? {}) as { sr_max?: number; roll_max?: number }
       const base = Math.max(Number(peak.sr_max ?? 0), Number(peak.roll_max ?? 0))
       const nextSr = String(base + 1)
-      const docId = `MANUAL_${Date.now()}`
       const subjList = subjectsCsv.split(',').map((s) => s.trim()).filter(Boolean)
-      const payload: Record<string, unknown> = {
-        id: docId,
-        institute_id: institute.id,
-        user_id: nextSr,
-        sr_no: nextSr,
-        name: fullName,
-        first_name: fn,
-        middle_name: mn || null,
-        last_name: ln,
-        year: year.trim() || `Year ${new Date().getFullYear()}`,
-        created_at: new Date().toISOString(),
-      }
-      if (subjList.length) {
-        payload.subjects = subjList
-        payload.subject = subjList.join(', ')
-      }
-      const { error: insErr } = await sb.from('students').insert(payload)
+      // Use basic insert without ON CONFLICT
+      const { error: insErr } = await sb
+        .from('students')
+        .insert({
+          institute_id: institute.id,
+          user_id: nextSr,
+          sr_no: nextSr,
+          name: fullName,
+          first_name: fn,
+          middle_name: mn || null,
+          last_name: ln,
+          year: year.trim() || `Year ${new Date().getFullYear()}`,
+          subjects: subjList.length > 0 ? subjList : null,
+          subject: subjList.length > 0 ? subjList.join(', ') : null,
+        }, { count: 'estimated' })
       if (insErr) throw insErr
       try {
         const { data: instRow } = await sb.from('institutes').select('student_count').eq('id', institute.id).maybeSingle()
