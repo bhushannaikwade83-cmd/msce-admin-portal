@@ -3355,3 +3355,55 @@ tbody tr:hover { background: var(--surface-hover); }
   max-width: 11.5rem;
   text-align: center;
 }
+
+/* Quick Search keeps photo rows compact and clipped inside table cells while scrolling. */
+.quick-search-selected-institute {
+  scroll-margin-top: calc(var(--header-h) + var(--topnav-h) + 1rem);
+}
+
+.quick-search-table-wrap {
+  overflow: auto;
+}
+
+.quick-search-table-wrap table {
+  table-layout: fixed;
+}
+
+.quick-search-table-wrap th:nth-child(1),
+.quick-search-table-wrap td:nth-child(1),
+.quick-search-table-wrap th:nth-child(2),
+.quick-search-table-wrap td:nth-child(2) {
+  width: 9rem;
+  min-width: 9rem;
+  max-width: 9rem;
+}
+
+.quick-search-table-wrap td {
+  overflow: hidden;
+}
+
+.quick-search-table-wrap .students-photo-cell {
+  width: 9rem;
+  min-width: 9rem;
+  max-width: 9rem;
+  padding: 0.65rem;
+}
+
+.quick-search-table-wrap .student-table-avatar {
+  width: 7.5rem !important;
+  height: 7.5rem !important;
+  max-width: 7.5rem !important;
+  max-height: 7.5rem !important;
+  margin: 0 auto !important;
+  transform: none !important;
+}
+
+.quick-search-table-wrap .student-table-avatar.photo-clickable:hover {
+  transform: none !important;
+}
+
+.quick-search-table-wrap .student-avatar-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}

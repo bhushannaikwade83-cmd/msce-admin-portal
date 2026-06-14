@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePortalAccess } from '../context/portal-access-context'
 import { sortByInstituteId } from '../lib/instituteSort'
 import {
@@ -89,6 +89,7 @@ function sortStudents(rows: QuickStudent[]): QuickStudent[] {
 
 export function QuickSearchSection({ embedded: _embedded = false }: { embedded?: boolean }) {
   const portal = usePortalAccess()
+  const resultsRef = useRef<HTMLDivElement | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [institutes, setInstitutes] = useState<InstituteRow[]>([])
   const [selectedPrefix, setSelectedPrefix] = useState('')
@@ -238,6 +239,13 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
     }
   }, [selectedInstituteId])
 
+  useEffect(() => {
+    if (!selectedInstituteId || studentsLoading) return
+    window.requestAnimationFrame(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [selectedInstituteId, studentsLoading])
+
   return (
     <div style={{ padding: '1.5rem' }}>
       <h2 style={{ marginBottom: '0.5rem' }}>Quick Search</h2>
@@ -332,7 +340,7 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
       )}
 
       {selectedInstitute ? (
-        <div className="card-elevated" style={{ padding: '1rem', marginBottom: '1rem' }}>
+        <div ref={resultsRef} className="card-elevated quick-search-selected-institute" style={{ padding: '1rem', marginBottom: '1rem' }}>
           <strong>{selectedInstitute.name ?? selectedInstitute.id}</strong>
           <div className="muted small">
             ID: <code>{selectedInstitute.id}</code>
@@ -351,7 +359,7 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
       ) : null}
 
       {selectedInstituteId ? (
-        <div className="table-wrap institutes-table-wrap students-table-wrap">
+        <div className="table-wrap institutes-table-wrap students-table-wrap quick-search-table-wrap">
           <table>
             <thead>
               <tr>
