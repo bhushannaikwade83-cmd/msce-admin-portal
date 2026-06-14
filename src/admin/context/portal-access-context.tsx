@@ -32,11 +32,12 @@ const ALL_TABS: DashboardTab[] = [
   'institutes',
   'add',
   'students',
+  'quicksearch',
   'integrity',
   'reports',
 ]
 
-const DISTRICT_TABS: DashboardTab[] = ['institutes', 'instructors', 'students', 'reports']
+const DISTRICT_TABS: DashboardTab[] = ['institutes', 'instructors', 'students', 'quicksearch', 'integrity', 'reports']
 
 const VALID_TABS = new Set<DashboardTab>(ALL_TABS)
 
@@ -46,7 +47,13 @@ function parseAllowedTabs(
 ): DashboardTab[] {
   if (!Array.isArray(raw) || raw.length === 0) return fallback
   const parsed = raw.filter((t): t is DashboardTab => VALID_TABS.has(t as DashboardTab))
-  return parsed.length > 0 ? parsed : fallback
+  if (parsed.length === 0) return fallback
+
+  const merged = [...parsed]
+  for (const tab of fallback) {
+    if (!merged.includes(tab)) merged.push(tab)
+  }
+  return merged
 }
 
 const PortalAccessContext = createContext<PortalAccess | null>(null)
@@ -110,10 +117,18 @@ function resolvePortalAccess(info: PortalSessionInfo | null): PortalAccess {
 
 const PORTAL_CACHE_KEY = 'msce-admin-portal-access-cache'
 
+function normalizePortalAccessTabs(access: PortalAccess): PortalAccess {
+  const fallback = access.mode === 'district_viewer' ? DISTRICT_TABS : ALL_TABS
+  return {
+    ...access,
+    allowedTabs: parseAllowedTabs(access.allowedTabs, fallback),
+  }
+}
+
 function getCachedPortalAccess(): PortalAccess | null {
   try {
     const cached = localStorage.getItem(PORTAL_CACHE_KEY)
-    return cached ? JSON.parse(cached) : null
+    return cached ? normalizePortalAccessTabs(JSON.parse(cached) as PortalAccess) : null
   } catch {
     return null
   }

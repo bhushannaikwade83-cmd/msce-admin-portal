@@ -1,0 +1,2 @@
+[functions.detect-device-photos]
+verify_jwt = false

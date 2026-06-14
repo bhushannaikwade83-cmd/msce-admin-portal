@@ -88,6 +88,15 @@ export function OverviewPanel() {
         </div>
 
         <div className="overview-tile card-elevated">
+          <div className="overview-tile-icon" aria-hidden>🔍</div>
+          <h3>Quick Search</h3>
+          <p>
+            Open a fast search screen for finding students, institutes, or IDs from one
+            place without moving through each directory view.
+          </p>
+        </div>
+
+        <div className="overview-tile card-elevated">
           <div className="overview-tile-icon" aria-hidden>🛡️</div>
           <h3>Cheat watch (all institutes)</h3>
           <p>

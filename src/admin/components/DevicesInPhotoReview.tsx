@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
+import { getSupabase } from '../lib/supabase'
 
 type Student = Record<string, unknown> & {
   id: string
@@ -8,14 +9,28 @@ type Student = Record<string, unknown> & {
   class_name?: string | null
   photo_url?: string | null
   face_photo_url?: string | null
+  original_face_photo_url?: string | null
+  original_registration_photo_path?: string | null
+  face_photo_changed_once?: boolean | null
   subjects?: string[] | string | null
 }
 
 type Institute = Record<string, unknown> & {
+  id?: string | null
   name?: string | null
   institute_code?: string | null
   city?: string | null
   state?: string | null
+}
+
+type BackendDetection = {
+  student_id: string
+  photo_kind: 'current' | 'original'
+  suspected: boolean
+  confidence: 'high' | 'medium' | 'low'
+  score: number
+  reason: string
+  student?: Student
 }
 
 function pick(row: Record<string, unknown>, ...keys: string[]): string | null {
@@ -36,6 +51,35 @@ function initials(name: string | null | undefined): string {
     .slice(0, 2)
 }
 
+function hasPhoto(student: Student, ...keys: string[]): boolean {
+  return Boolean(pick(student, ...keys))
+}
+
+function OriginalStudentPhoto({ student, name }: { student: Student; name: string }) {
+  if (!hasPhoto(student, 'original_face_photo_url', 'original_registration_photo_path')) {
+    return <span style={{ fontSize: '0.75rem', color: '#999' }}>No old photo</span>
+  }
+  return (
+    <StudentDisplayPhoto
+      student={{
+        ...student,
+        face_photo_url: student.original_face_photo_url,
+        registration_photo_path: student.original_registration_photo_path,
+      }}
+      displayName={`${name} original`}
+      size="sm"
+      clickable
+    />
+  )
+}
+
+function CurrentStudentPhoto({ student, name }: { student: Student; name: string }) {
+  if (!hasPhoto(student, 'face_photo_url', 'registration_photo_path', 'photo_url', 'student_photo_url')) {
+    return <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#003087' }}>{initials(name)}</span>
+  }
+  return <StudentDisplayPhoto student={student} displayName={name} size="sm" clickable />
+}
+
 export function DevicesInPhotoReview({
   institute,
   students,
@@ -46,6 +90,9 @@ export function DevicesInPhotoReview({
   onBack: () => void
 }) {
   const [viewMode, setViewMode] = useState<'review' | 'report'>('review')
+  const [detecting, setDetecting] = useState(false)
+  const [detectError, setDetectError] = useState<string | null>(null)
+  const [backendDetections, setBackendDetections] = useState<BackendDetection[]>([])
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(() => {
     const saved = localStorage.getItem(`flagged_devices_${pick(institute, 'id') || 'unknown'}`)
     return saved ? new Set(JSON.parse(saved)) : new Set()
@@ -72,19 +119,57 @@ export function DevicesInPhotoReview({
 
   const flaggedStudents = students.filter((s) => flaggedIds.has(s.id))
 
+  async function runBackendDetection() {
+    const instituteId = pick(institute, 'id')
+    if (!instituteId) {
+      setDetectError('Institute ID missing.')
+      return
+    }
+    setDetecting(true)
+    setDetectError(null)
+    try {
+      const sb = getSupabase()
+      const { data, error } = await sb.functions.invoke('detect-device-photos', {
+        body: {
+          instituteId,
+          limit: 120,
+          includeOriginal: true,
+          onlySuspected: true,
+        },
+      })
+      if (error) throw new Error(error.message)
+      const payload = (data ?? {}) as { detections?: BackendDetection[]; error?: string }
+      if (payload.error) throw new Error(payload.error)
+      const detections = Array.isArray(payload.detections) ? payload.detections : []
+      setBackendDetections(detections)
+      setFlaggedIds((prev) => {
+        const next = new Set(prev)
+        for (const row of detections) {
+          if (row.suspected) next.add(row.student_id)
+        }
+        return next
+      })
+      setViewMode('report')
+    } catch (e) {
+      setDetectError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDetecting(false)
+    }
+  }
+
   return (
     <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ margin: '0 0 0.5rem', fontSize: '1.8rem', color: '#003087' }}>
             📱 DEVICES IN PHOTO REVIEW
           </h1>
           <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem', color: '#666' }}>
-            {pick(institute, 'name') || 'Institute'} • {pick(institute, 'institute_code')} • {flaggedStudents.length} flagged
+            {pick(institute, 'name') || 'Institute'} • ID {pick(institute, 'id') || '—'} • Code {pick(institute, 'institute_code') || '—'} • {flaggedStudents.length} flagged
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button
             onClick={() => setViewMode('review')}
             style={{
@@ -131,8 +216,63 @@ export function DevicesInPhotoReview({
         </div>
       </div>
 
+      <div
+        style={{
+          marginBottom: '1.25rem',
+          padding: '1rem',
+          borderRadius: '8px',
+          background: '#ecfdf5',
+          border: '2px solid #0f766e',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <strong style={{ color: '#065f46' }}>Backend AI Detection</strong>
+          <div className="muted small">
+            Scan this institute's photos for visible phone, laptop, monitor, or screen capture.
+          </div>
+        </div>
+        <button
+          onClick={() => void runBackendDetection()}
+          disabled={detecting}
+          style={{
+            padding: '0.75rem 1.25rem',
+            background: detecting ? '#999' : '#0f766e',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: detecting ? 'wait' : 'pointer',
+            fontSize: '1rem',
+            fontWeight: 'bold',
+            minWidth: '230px',
+          }}
+        >
+          {detecting ? 'Scanning photos...' : '🤖 Run backend detection'}
+        </button>
+      </div>
+
       {viewMode === 'review' ? (
         <>
+          {detectError ? <p className="error">{detectError}</p> : null}
+          {backendDetections.length > 0 ? (
+            <div
+              style={{
+                background: '#ecfeff',
+                border: '1px solid #0891b2',
+                borderRadius: '6px',
+                padding: '1rem',
+                marginBottom: '1rem',
+                color: '#155e75',
+              }}
+            >
+              Backend detection found <strong>{backendDetections.length}</strong> suspected photo(s). They were added
+              to the flagged report.
+            </div>
+          ) : null}
           {/* Instructions */}
           <div
             style={{
@@ -145,7 +285,7 @@ export function DevicesInPhotoReview({
               color: '#e65100',
             }}
           >
-            👆 <strong>Click photo to flag</strong> - Students who took photo with phone/computer visible
+            👆 <strong>Click card to flag</strong> - Mark students whose current/original photo shows a phone, computer, or another screen
           </div>
 
           {/* Two Column Layout */}
@@ -177,34 +317,38 @@ export function DevicesInPhotoReview({
                     transition: 'all 0.2s',
                   }}
                 >
-                  {/* Photo */}
-                  <div
-                    style={{
-                      width: '100%',
-                      aspectRatio: '1',
-                      borderRadius: '6px',
-                      overflow: 'hidden',
-                      background: '#e8eef7',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginBottom: '0.75rem',
-                      border: '2px solid #ddd',
-                      position: 'relative',
-                    }}
-                  >
-                    <StudentDisplayPhoto student={student} displayName={name} size="sm" />
-                    {!pick(student, 'face_photo_url', 'photo_url') && (
-                      <span
-                        style={{
-                          fontSize: '2rem',
-                          fontWeight: 'bold',
-                          color: '#003087',
-                        }}
-                      >
-                        {initials(name)}
-                      </span>
-                    )}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.7rem', color: '#666', marginBottom: '0.25rem' }}>Old</div>
+                      <div style={{
+                        aspectRatio: '1',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        background: '#e8eef7',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px solid #ddd',
+                      }}>
+                        <OriginalStudentPhoto student={student} name={name} />
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'center', position: 'relative' }}>
+                      <div style={{ fontSize: '0.7rem', color: '#666', marginBottom: '0.25rem' }}>Current</div>
+                      <div style={{
+                        aspectRatio: '1',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        background: '#e8eef7',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px solid #ddd',
+                        position: 'relative',
+                      }}>
+                        <CurrentStudentPhoto student={student} name={name} />
+                      </div>
+                    </div>
                     {isFlagged && (
                       <div
                         style={{
@@ -231,6 +375,9 @@ export function DevicesInPhotoReview({
                   {/* Name */}
                   <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', fontWeight: 'bold', color: '#333' }}>
                     {name}
+                  </p>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: '#666' }}>
+                    ID: <code>{student.id}</code>
                   </p>
                 </div>
               )
@@ -289,18 +436,7 @@ export function DevicesInPhotoReview({
                         position: 'relative',
                       }}
                     >
-                      <StudentDisplayPhoto student={student} displayName={name} size="sm" />
-                      {!pick(student, 'face_photo_url', 'photo_url') && (
-                        <span
-                          style={{
-                            fontSize: '1.5rem',
-                            fontWeight: 'bold',
-                            color: '#003087',
-                          }}
-                        >
-                          {initials(name)}
-                        </span>
-                      )}
+                      <CurrentStudentPhoto student={student} name={name} />
                     </div>
 
                     {/* Details */}
@@ -311,8 +447,11 @@ export function DevicesInPhotoReview({
                       <p style={{ margin: '0.2rem 0', fontSize: '0.8rem', color: '#666' }}>
                         Roll: <strong>{roll}</strong> | Class: <strong>{cls}</strong>
                       </p>
+                      <p style={{ margin: '0.2rem 0', fontSize: '0.75rem', color: '#999' }}>
+                        Student ID: <code>{student.id}</code>
+                      </p>
                       <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: '#999' }}>
-                        {pick(institute, 'name')} • {pick(institute, 'institute_code')}
+                        Institute ID: <code>{pick(institute, 'id') || '—'}</code> • Code {pick(institute, 'institute_code') || '—'}
                       </p>
                       <button
                         onClick={() => toggleFlag(student.id)}
@@ -342,6 +481,59 @@ export function DevicesInPhotoReview({
       ) : (
         /* FLAGGED REPORT VIEW */
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          {detectError ? <p className="error">{detectError}</p> : null}
+          {backendDetections.length > 0 ? (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: '0 0 1rem', fontSize: '1.1rem', color: '#0f766e' }}>
+                🤖 Backend suspected device photos ({backendDetections.length})
+              </h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {backendDetections.map((row, idx) => {
+                  const student = students.find((s) => s.id === row.student_id) ?? row.student
+                  const name = student ? pick(student, 'name', 'student_name', 'full_name') || '—' : row.student_id
+                  return (
+                    <div
+                      key={`${row.student_id}-${row.photo_kind}-${idx}`}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '72px 1fr',
+                        gap: '1rem',
+                        padding: '0.85rem',
+                        border: '1px solid #14b8a6',
+                        borderRadius: '6px',
+                        background: '#f0fdfa',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '72px',
+                          height: '72px',
+                          borderRadius: '6px',
+                          overflow: 'hidden',
+                          background: '#e8eef7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {student ? <CurrentStudentPhoto student={student} name={name} /> : null}
+                      </div>
+                      <div>
+                        <strong>{name}</strong>
+                        <div className="muted small">
+                          Student ID: <code>{row.student_id}</code> · Photo: {row.photo_kind} · Confidence:{' '}
+                          <strong>{row.confidence}</strong> · Score: {Math.round(row.score * 100)}%
+                        </div>
+                        <div style={{ marginTop: '0.25rem', fontSize: '0.82rem', color: '#0f766e' }}>
+                          {row.reason}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
           {flaggedStudents.length === 0 ? (
             <div
               style={{
@@ -399,18 +591,7 @@ export function DevicesInPhotoReview({
                         gridRow: '1 / 3',
                       }}
                     >
-                      <StudentDisplayPhoto student={student} displayName={name} size="sm" />
-                      {!pick(student, 'face_photo_url', 'photo_url') && (
-                        <span
-                          style={{
-                            fontSize: '2.5rem',
-                            fontWeight: 'bold',
-                            color: '#ff6600',
-                          }}
-                        >
-                          {initials(name)}
-                        </span>
-                      )}
+                      <CurrentStudentPhoto student={student} name={name} />
                       <span
                         style={{
                           position: 'absolute',
@@ -443,7 +624,10 @@ export function DevicesInPhotoReview({
                           {pick(institute, 'name')}
                         </p>
                         <p style={{ margin: '0', fontSize: '0.8rem', color: '#666' }}>
-                          Code: <strong>{pick(institute, 'institute_code')}</strong>
+                          Institute ID: <strong>{pick(institute, 'id') || '—'}</strong>
+                        </p>
+                        <p style={{ margin: '0', fontSize: '0.8rem', color: '#666' }}>
+                          Code: <strong>{pick(institute, 'institute_code') || '—'}</strong>
                         </p>
                       </div>
                     </div>

@@ -13,7 +13,6 @@ import { StudentsSection } from './components/StudentsSection'
 import { QuickSearchSection } from './components/QuickSearchSection'
 import { ReportsSection } from './components/ReportsSection'
 import { AttendanceIntegritySection } from './components/AttendanceIntegritySection'
-import { DevicesInPhotoTab } from './components/DevicesInPhotoTab'
 import { STRINGS } from './constants/strings'
 import './index.css'
 import './App.css'
@@ -86,7 +85,6 @@ function loadStoredAdminTab(): DashboardTab {
     case 'students':
     case 'quicksearch':
     case 'integrity':
-    case 'devices':
     case 'reports':
       return raw
     default:
@@ -101,12 +99,9 @@ function AuthenticatedApp() {
   const [instituteReload, setInstituteReload] = useState(0)
   const [studentsJumpInstituteId, setStudentsJumpInstituteId] = useState<string | null>(null)
   const [reportsJumpInstituteId, setReportsJumpInstituteId] = useState<string | null>(null)
-  const [devicesJumpInstituteId, setDevicesJumpInstituteId] = useState<string | null>(null)
-  const [mountedTabs, setMountedTabs] = useState<DashboardTab[]>(['overview'])
 
   const handleStudentsJumpHandled = useCallback(() => setStudentsJumpInstituteId(null), [])
   const handleReportsJumpHandled = useCallback(() => setReportsJumpInstituteId(null), [])
-  const handleDevicesJumpHandled = useCallback(() => setDevicesJumpInstituteId(null), [])
 
   const readOnly = portal.readOnly
   const allowedTabs = portal.allowedTabs
@@ -114,22 +109,12 @@ function AuthenticatedApp() {
     () => allowedTabs,
     [allowedTabs],
   )
-
-  useEffect(() => {
-    if (portal.mode === 'district_viewer' && !allowedTabs.includes(tab)) {
-      setTab('institutes')
-    }
-  }, [portal.mode, allowedTabs, tab])
-
-  useEffect(() => {
-    if (!visibleTabs.includes(tab)) return
-    setMountedTabs((prev) => (prev.includes(tab) ? prev : [...prev, tab]))
-  }, [tab, visibleTabs])
+  const activeTab = visibleTabs.includes(tab) ? tab : visibleTabs[0] ?? 'overview'
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    window.sessionStorage.setItem(ACTIVE_TAB_STORAGE_KEY, tab)
-  }, [tab])
+    window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab)
+  }, [activeTab])
 
   if (configError) {
     return <ConfigErrorScreen message={configError} />
@@ -158,27 +143,27 @@ function AuthenticatedApp() {
       districtLabel={portal.districtName}
       readOnly={readOnly}
       allowedTabs={allowedTabs}
-      activeTab={tab}
+      activeTab={activeTab}
       onTab={setTab}
       onSignOut={signOut}
     >
-      {visibleTabs.includes('overview') && mountedTabs.includes('overview') ? (
-        <TabPanel active={tab === 'overview'}>
+      {visibleTabs.includes('overview') && activeTab === 'overview' ? (
+        <TabPanel active>
           <OverviewPanel />
         </TabPanel>
       ) : null}
-      {visibleTabs.includes('admins') && mountedTabs.includes('admins') ? (
-        <TabPanel active={tab === 'admins'}>
+      {visibleTabs.includes('admins') && activeTab === 'admins' ? (
+        <TabPanel active>
           <InstituteAdminsSection embedded />
         </TabPanel>
       ) : null}
-      {visibleTabs.includes('instructors') && mountedTabs.includes('instructors') ? (
-        <TabPanel active={tab === 'instructors'}>
+      {visibleTabs.includes('instructors') && activeTab === 'instructors' ? (
+        <TabPanel active>
           <InstituteInstructorsSection embedded />
         </TabPanel>
       ) : null}
-      {visibleTabs.includes('institutes') && mountedTabs.includes('institutes') ? (
-        <TabPanel active={tab === 'institutes'}>
+      {visibleTabs.includes('institutes') && activeTab === 'institutes' ? (
+        <TabPanel active>
           <InstituteList
             reloadToken={instituteReload}
             embedded
@@ -187,13 +172,13 @@ function AuthenticatedApp() {
           />
         </TabPanel>
       ) : null}
-      {visibleTabs.includes('add') && mountedTabs.includes('add') ? (
-        <TabPanel active={tab === 'add'}>
+      {visibleTabs.includes('add') && activeTab === 'add' ? (
+        <TabPanel active>
           <AddInstituteForm onCreated={() => setInstituteReload((n) => n + 1)} embedded />
         </TabPanel>
       ) : null}
-      {visibleTabs.includes('students') && mountedTabs.includes('students') ? (
-        <TabPanel active={tab === 'students'}>
+      {visibleTabs.includes('students') && activeTab === 'students' ? (
+        <TabPanel active>
           <StudentsSection
             embedded
             readOnly={readOnly}
@@ -202,13 +187,8 @@ function AuthenticatedApp() {
           />
         </TabPanel>
       ) : null}
-      {visibleTabs.includes('quicksearch') && mountedTabs.includes('quicksearch') ? (
-        <TabPanel active={tab === 'quicksearch'}>
-          <QuickSearchSection embedded />
-        </TabPanel>
-      ) : null}
-      {visibleTabs.includes('integrity') && mountedTabs.includes('integrity') ? (
-        <TabPanel active={tab === 'integrity'}>
+      {visibleTabs.includes('integrity') && activeTab === 'integrity' ? (
+        <TabPanel active>
           <AttendanceIntegritySection
             embedded
             onOpenInstitute={(instituteId) => {
@@ -218,23 +198,19 @@ function AuthenticatedApp() {
           />
         </TabPanel>
       ) : null}
-      {visibleTabs.includes('devices') && mountedTabs.includes('devices') ? (
-        <TabPanel active={tab === 'devices'}>
-          <DevicesInPhotoTab
-            embedded
-            jumpToInstituteId={devicesJumpInstituteId}
-            onJumpToInstituteHandled={handleDevicesJumpHandled}
-          />
-        </TabPanel>
-      ) : null}
-      {visibleTabs.includes('reports') && mountedTabs.includes('reports') ? (
-        <TabPanel active={tab === 'reports'}>
+      {visibleTabs.includes('reports') && activeTab === 'reports' ? (
+        <TabPanel active>
           <ReportsSection
             embedded
             readOnly={readOnly}
             jumpToInstituteId={reportsJumpInstituteId}
             onJumpToInstituteHandled={handleReportsJumpHandled}
           />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('quicksearch') && activeTab === 'quicksearch' ? (
+        <TabPanel active>
+          <QuickSearchSection embedded />
         </TabPanel>
       ) : null}
     </DashboardLayout>
