@@ -11,6 +11,7 @@ export type DashboardTab =
   | 'students'
   | 'integrity'
   | 'reports'
+  | 'devices'
 
 type Props = {
   userEmail: string | null
@@ -37,6 +38,7 @@ const tabs: TabDef[] = [
   { id: 'add', label: 'Add Institute', icon: '➕' },
   { id: 'students', label: 'Students', icon: '👨‍🎓' },
   { id: 'integrity', label: 'Cheat watch', icon: '🛡️' },
+  { id: 'devices', label: 'Devices in Photo', icon: '📱' },
   { id: 'reports', label: 'Reports', icon: '📑' },
 ]
 

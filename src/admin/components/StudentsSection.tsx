@@ -27,6 +27,7 @@ import {
   instituteStudentRosterRows,
 } from '../lib/reportCsv'
 import { downloadStudentReportPdf, fetchStudentReport } from '../lib/studentReportPdf'
+import { generateStudentPhotoDirectoryPdf } from '../lib/studentPhotoDirectoryPdf'
 import type { InstituteRow } from './InstituteList'
 import { InstituteDistrictFilter } from './InstituteDistrictFilter'
 import { usePortalAccess } from '../context/portal-access-context'
@@ -38,6 +39,8 @@ import {
 } from '../lib/portalDistricts'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
 import { EditStudentModal } from './EditStudentModal'
+import { StudentPhotoPrintPreview } from './StudentPhotoPrintPreview'
+import { DevicesInPhotoReview } from './DevicesInPhotoReview'
 import { formatSubjectsDisplay, subjectsFromStudent } from '../lib/studentSubjects'
 import {
   ATTENDANCE_CANDIDATES,
@@ -1304,6 +1307,8 @@ function StudentsList({
   const [attLoading, setAttLoading] = useState(false)
   const [attError, setAttError] = useState<string | null>(null)
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
+  const [showPrintPreview, setShowPrintPreview] = useState(false)
+  const [showDevicesReview, setShowDevicesReview] = useState(false)
 
   const showDayAttendance =
     attendanceTables.includes('attendance_in_out') || attendanceTables.includes('teacher_attendance')
@@ -1590,6 +1595,35 @@ function StudentsList({
         >
           📥 Roster CSV
         </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          disabled={loading || students.length === 0}
+          title="Generate photo directory PDF with all student photos and details"
+          onClick={() => {
+            void generateStudentPhotoDirectoryPdf(institute, students)
+          }}
+        >
+          📄 Photo Directory PDF
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          disabled={loading || students.length === 0}
+          title="Preview all students for printing - press Cmd+P to save as PDF"
+          onClick={() => setShowPrintPreview(true)}
+        >
+          🖨️ Print Preview
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          disabled={loading || students.length === 0}
+          title="Review students with devices (phone/computer) in photos"
+          onClick={() => setShowDevicesReview(true)}
+        >
+          📱 Devices in Photo
+        </button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => void load()} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>
@@ -1761,6 +1795,22 @@ function StudentsList({
         />
       ) : null}
 
+      {showPrintPreview ? (
+        <StudentPhotoPrintPreview
+          institute={institute}
+          students={students}
+          onClose={() => setShowPrintPreview(false)}
+        />
+      ) : null}
+
+      {showDevicesReview ? (
+        <DevicesInPhotoReview
+          institute={institute}
+          students={students}
+          onBack={() => setShowDevicesReview(false)}
+        />
+      ) : null}
+
     </div>
   )
 }
@@ -1781,7 +1831,16 @@ function InstitutePicker({
     () => findPortalDistrictForPrefixes(portal.institutePrefixes),
     [portal.institutePrefixes],
   )
-  const [districtKey, setDistrictKey] = useState('')
+  const [districtKey, setDistrictKey] = useState(() => {
+    // Restore district selection from localStorage
+    if (typeof window === 'undefined') return ''
+    try {
+      const saved = localStorage.getItem('msce_students_selected_district')
+      return saved || ''
+    } catch {
+      return ''
+    }
+  })
   const [institutes, setInstitutes] = useState<InstituteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1819,6 +1878,16 @@ function InstitutePicker({
     void load()
     setTimeout(() => searchRef.current?.focus(), 100)
   }, [load, reloadToken])
+
+  // Persist district selection to localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem('msce_students_selected_district', districtKey)
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [districtKey])
 
   const effectiveDistrictKey =
     portal.mode === 'district_viewer' && lockedDistrict ? lockedDistrict.key : districtKey

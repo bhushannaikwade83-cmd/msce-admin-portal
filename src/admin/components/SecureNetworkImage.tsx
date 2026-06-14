@@ -103,6 +103,8 @@ export function SecureNetworkImage({
       src={src}
       alt={alt}
       className={className}
+      decoding="async"
+      loading="lazy"
       onError={() => {
         if (retryCount < MAX_RETRIES) {
           setRetryCount((n) => n + 1)

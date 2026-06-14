@@ -12,6 +12,7 @@ import { OverviewPanel } from './components/OverviewPanel'
 import { StudentsSection } from './components/StudentsSection'
 import { ReportsSection } from './components/ReportsSection'
 import { AttendanceIntegritySection } from './components/AttendanceIntegritySection'
+import { DevicesInPhotoTab } from './components/DevicesInPhotoTab'
 import { STRINGS } from './constants/strings'
 import './index.css'
 import './App.css'
@@ -83,6 +84,7 @@ function loadStoredAdminTab(): DashboardTab {
     case 'add':
     case 'students':
     case 'integrity':
+    case 'devices':
     case 'reports':
       return raw
     default:
@@ -97,10 +99,12 @@ function AuthenticatedApp() {
   const [instituteReload, setInstituteReload] = useState(0)
   const [studentsJumpInstituteId, setStudentsJumpInstituteId] = useState<string | null>(null)
   const [reportsJumpInstituteId, setReportsJumpInstituteId] = useState<string | null>(null)
+  const [devicesJumpInstituteId, setDevicesJumpInstituteId] = useState<string | null>(null)
   const [mountedTabs, setMountedTabs] = useState<DashboardTab[]>(['overview'])
 
   const handleStudentsJumpHandled = useCallback(() => setStudentsJumpInstituteId(null), [])
   const handleReportsJumpHandled = useCallback(() => setReportsJumpInstituteId(null), [])
+  const handleDevicesJumpHandled = useCallback(() => setDevicesJumpInstituteId(null), [])
 
   const readOnly = portal.readOnly
   const allowedTabs = portal.allowedTabs
@@ -204,6 +208,15 @@ function AuthenticatedApp() {
               setStudentsJumpInstituteId(instituteId)
               setTab('students')
             }}
+          />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('devices') && mountedTabs.includes('devices') ? (
+        <TabPanel active={tab === 'devices'}>
+          <DevicesInPhotoTab
+            embedded
+            jumpToInstituteId={devicesJumpInstituteId}
+            onJumpToInstituteHandled={handleDevicesJumpHandled}
           />
         </TabPanel>
       ) : null}

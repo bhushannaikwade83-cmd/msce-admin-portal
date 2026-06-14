@@ -8,6 +8,47 @@ import { getSupabase, storageBucketName } from './supabase'
 declare const __EDUSETU_B2_SIGN_API__: string
 declare const __EDUSETU_B2_SIGN_ENABLED__: boolean
 
+// Cache for signed URLs to avoid duplicate API calls
+const signedUrlCache = new Map<string, Promise<string | null>>()
+const signedUrlMemoryCache = new Map<string, string>()
+
+// Load persisted cache from localStorage on startup
+function loadPersistedCache() {
+  if (typeof window === 'undefined') return
+  try {
+    const cached = localStorage.getItem('msce_photo_url_cache')
+    if (cached) {
+      const data = JSON.parse(cached) as Record<string, { url: string; timestamp: number }>
+      const now = Date.now()
+      for (const [key, value] of Object.entries(data)) {
+        // Keep cached URLs for 1 hour (3600000ms)
+        if (now - value.timestamp < 3600000) {
+          signedUrlMemoryCache.set(key, value.url)
+        }
+      }
+    }
+  } catch {
+    // Ignore cache load errors
+  }
+}
+
+// Save cache to localStorage periodically
+function persistCache() {
+  if (typeof window === 'undefined') return
+  try {
+    const data: Record<string, { url: string; timestamp: number }> = {}
+    for (const [key, url] of signedUrlMemoryCache.entries()) {
+      data[key] = { url, timestamp: Date.now() }
+    }
+    localStorage.setItem('msce_photo_url_cache', JSON.stringify(data))
+  } catch {
+    // Ignore cache save errors (quota exceeded, etc)
+  }
+}
+
+// Load cache on module load
+loadPersistedCache()
+
 function str(v: unknown): string | null {
   if (v == null) return null
   const s = String(v).trim()
@@ -83,9 +124,15 @@ async function requestB2SignedUrlViaEdge(objectPath: string): Promise<string | n
   if (!clean) return null
   try {
     const sb = getSupabase()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 2000) // 2s timeout
+
     const { data, error } = await sb.functions.invoke('b2-storage-proxy', {
       body: { action: 'download_auth', objectPath: clean, validSeconds: 3600 },
     })
+
+    clearTimeout(timeout)
+
     if (error) return null
     const d = (data ?? {}) as Record<string, unknown>
     if (d.success === false) return null
@@ -108,12 +155,19 @@ async function requestB2SignedUrl(objectPath: string): Promise<string | null> {
   if (!api && !__EDUSETU_B2_SIGN_ENABLED__) return null
   const endpoint = api || '/api/b2-sign-photo'
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 3000) // 3s timeout
+
     const r = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ objectPath }),
       credentials: 'same-origin',
+      signal: controller.signal,
     })
+
+    clearTimeout(timeout)
+
     if (!r.ok) return null
     const j = (await r.json()) as { url?: string }
     return str(j.url)
@@ -128,7 +182,7 @@ export async function getPhotoUrl(objectPath: string): Promise<string | null> {
   if (!clean) return null
   const first = await requestB2SignedUrl(clean)
   if (first) return first
-  await new Promise((r) => setTimeout(r, 500))
+  await new Promise((r) => setTimeout(r, 50)) // Fast retry - 50ms
   return requestB2SignedUrl(clean)
 }
 
@@ -154,6 +208,7 @@ export async function ensureSignedUrl(url: string): Promise<string> {
 /**
  * Flutter `StorageService.getTemporaryPhotoUrl` — priority: storagePath, then photoUrl
  * (raw path, B2 URL, or other HTTP).
+ * Cached + deduplicated + persisted to avoid redundant API calls.
  */
 export async function getTemporaryPhotoUrl(opts: {
   photoUrl?: string | null
@@ -162,32 +217,74 @@ export async function getTemporaryPhotoUrl(opts: {
   const storagePath = str(opts.storagePath)
   const photoUrl = str(opts.photoUrl)
 
-  if (storagePath) {
-    const fromPath = await getPhotoUrl(storagePath)
-    if (fromPath) return fromPath
-    const su = await supabaseSignedOrPublicUrl(storagePath)
-    if (su) return su
+  // Use storagePath or photoUrl as cache key
+  const cacheKey = storagePath || photoUrl
+
+  // Check memory cache first (fastest)
+  if (cacheKey && signedUrlMemoryCache.has(cacheKey)) {
+    return signedUrlMemoryCache.get(cacheKey)!
   }
 
-  if (!photoUrl) return null
-
-  if (!isHttpUrl(photoUrl)) {
-    const fromPath = await getPhotoUrl(photoUrl)
-    if (fromPath) return fromPath
-    return supabaseSignedOrPublicUrl(photoUrl)
+  // Check request deduplication cache
+  if (cacheKey && signedUrlCache.has(cacheKey)) {
+    return signedUrlCache.get(cacheKey)!
   }
 
-  const fast = immediateImgSrc(photoUrl)
-  if (fast) return fast
+  // Create the promise and cache it immediately for deduplication
+  const promise = (async () => {
+    if (storagePath) {
+      const fromPath = await getPhotoUrl(storagePath)
+      if (fromPath) {
+        if (cacheKey) signedUrlMemoryCache.set(cacheKey, fromPath)
+        return fromPath
+      }
+      const su = await supabaseSignedOrPublicUrl(storagePath)
+      if (su) {
+        if (cacheKey) signedUrlMemoryCache.set(cacheKey, su)
+        return su
+      }
+    }
 
-  const b2Path = b2ObjectPathFromUrl(photoUrl)
-  if (b2Path) {
-    const signed = await getPhotoUrl(b2Path)
-    if (signed) return signed
-    return null
+    if (!photoUrl) return null
+
+    if (!isHttpUrl(photoUrl)) {
+      const fromPath = await getPhotoUrl(photoUrl)
+      if (fromPath) {
+        if (cacheKey) signedUrlMemoryCache.set(cacheKey, fromPath)
+        return fromPath
+      }
+      const result = await supabaseSignedOrPublicUrl(photoUrl)
+      if (result && cacheKey) signedUrlMemoryCache.set(cacheKey, result)
+      return result
+    }
+
+    const fast = immediateImgSrc(photoUrl)
+    if (fast) return fast
+
+    const b2Path = b2ObjectPathFromUrl(photoUrl)
+    if (b2Path) {
+      const signed = await getPhotoUrl(b2Path)
+      if (signed) {
+        if (cacheKey) signedUrlMemoryCache.set(cacheKey, signed)
+        return signed
+      }
+      return null
+    }
+
+    const result = await ensureSignedUrl(photoUrl)
+    if (result && cacheKey) signedUrlMemoryCache.set(cacheKey, result)
+    return result
+  })()
+
+  if (cacheKey) {
+    signedUrlCache.set(cacheKey, promise)
+    // Persist cache after short delay
+    promise.then(() => {
+      setTimeout(() => persistCache(), 1000)
+    })
   }
 
-  return ensureSignedUrl(photoUrl)
+  return promise
 }
 
 /** Map a `students` row to Flutter SecureNetworkImage inputs. */
