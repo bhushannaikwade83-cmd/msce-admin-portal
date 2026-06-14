@@ -90,10 +90,12 @@ function sortStudents(rows: QuickStudent[]): QuickStudent[] {
 export function QuickSearchSection({ embedded: _embedded = false }: { embedded?: boolean }) {
   const portal = usePortalAccess()
   const resultsRef = useRef<HTMLDivElement | null>(null)
+  const instituteOptionsRef = useRef<HTMLDivElement | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [institutes, setInstitutes] = useState<InstituteRow[]>([])
   const [selectedPrefix, setSelectedPrefix] = useState('')
   const [selectedInstituteId, setSelectedInstituteId] = useState('')
+  const [institutePickerOpen, setInstitutePickerOpen] = useState(false)
   const [students, setStudents] = useState<QuickStudent[]>([])
   const [studentsLoading, setStudentsLoading] = useState(false)
   const [studentsError, setStudentsError] = useState<string | null>(null)
@@ -178,6 +180,10 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
     [institutes, selectedInstituteId],
   )
 
+  const visibleInstituteOptions = useMemo(() => {
+    return prefixFilteredInstitutes
+  }, [prefixFilteredInstitutes])
+
   const filteredStudents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return students
@@ -246,6 +252,16 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
     })
   }, [selectedInstituteId, studentsLoading])
 
+  useEffect(() => {
+    if (!institutePickerOpen || !selectedInstituteId) return
+    window.requestAnimationFrame(() => {
+      const optionsEl = instituteOptionsRef.current
+      const selectedEl = optionsEl?.querySelector<HTMLElement>('[data-selected="true"]')
+      if (!optionsEl || !selectedEl) return
+      optionsEl.scrollTop = Math.max(0, selectedEl.offsetTop - optionsEl.clientHeight / 2)
+    })
+  }, [institutePickerOpen, selectedInstituteId])
+
   return (
     <div style={{ padding: '1.5rem' }}>
       <h2 style={{ marginBottom: '0.5rem' }}>Quick Search</h2>
@@ -288,6 +304,7 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
                 onChange={(e) => {
                   setSelectedPrefix(e.target.value)
                   setSelectedInstituteId('')
+                  setInstitutePickerOpen(false)
                   setStudents([])
                 }}
               >
@@ -302,25 +319,55 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
               </select>
             </label>
 
-            <label className="field">
+            <div className="field quick-search-institute-picker">
               <span>Institute ID</span>
-              <select
-                value={selectedInstituteId}
+              <button
+                type="button"
+                className="quick-search-institute-trigger"
                 disabled={loading || prefixFilteredInstitutes.length === 0}
-                onChange={(e) => setSelectedInstituteId(e.target.value)}
+                onClick={() => setInstitutePickerOpen((open) => !open)}
               >
-                <option value="">
-                  Select institute ({prefixFilteredInstitutes.length.toLocaleString('en-IN')})
-                </option>
-                {prefixFilteredInstitutes.map((institute) => (
-                  <option key={institute.id} value={institute.id}>
-                    {institute.id}
-                    {institute.institute_code ? ` / ${institute.institute_code}` : ''}
-                    {institute.name ? ` - ${institute.name}` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {selectedInstitute
+                  ? `${selectedInstitute.id}${selectedInstitute.institute_code ? ` / ${selectedInstitute.institute_code}` : ''}${selectedInstitute.name ? ` - ${selectedInstitute.name}` : ''}`
+                  : `Select institute (${prefixFilteredInstitutes.length.toLocaleString('en-IN')})`}
+                <span aria-hidden>▾</span>
+              </button>
+              {institutePickerOpen ? (
+                <div className="quick-search-institute-menu">
+                  <div className="quick-search-institute-options" role="listbox" aria-label="Institute ID">
+                    <div ref={instituteOptionsRef} className="quick-search-institute-options-scroll">
+                    {visibleInstituteOptions.length === 0 ? (
+                      <div className="quick-search-institute-empty">No institute found</div>
+                    ) : (
+                      visibleInstituteOptions.map((institute) => (
+                        <button
+                          key={institute.id}
+                          type="button"
+                          className={`quick-search-institute-option${selectedInstituteId === institute.id ? ' is-selected' : ''}`}
+                          data-selected={selectedInstituteId === institute.id ? 'true' : undefined}
+                          onClick={() => {
+                            setSelectedInstituteId(institute.id)
+                            setInstitutePickerOpen(false)
+                          }}
+                          role="option"
+                          aria-selected={selectedInstituteId === institute.id}
+                        >
+                          <span className="quick-search-institute-check" aria-hidden>
+                            {selectedInstituteId === institute.id ? '✓' : ''}
+                          </span>
+                          <span>
+                            <strong>{institute.id}</strong>
+                            {institute.institute_code ? <span> / {institute.institute_code}</span> : null}
+                            {institute.name ? <span> - {institute.name}</span> : null}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
