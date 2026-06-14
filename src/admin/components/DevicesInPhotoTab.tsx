@@ -20,9 +20,11 @@ type Student = Record<string, unknown> & {
 }
 
 export function DevicesInPhotoTab({
+  embedded: _embedded,
   jumpToInstituteId,
   onJumpToInstituteHandled,
 }: {
+  embedded?: boolean
   jumpToInstituteId?: string | null
   onJumpToInstituteHandled?: () => void
 }) {
