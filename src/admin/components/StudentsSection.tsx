@@ -1656,9 +1656,9 @@ function StudentsList({
                 return (
                   <tr key={s.id} className={!active ? 'student-row-inactive' : undefined}>
                     <td className="students-photo-cell">
-                      <div className="student-table-avatar">
-                        <StudentDisplayPhoto student={s} displayName={name} size="sm" />
-                        <span>{initials(name)}</span>
+                      <div className="student-table-avatar student-table-avatar-large">
+                        <StudentDisplayPhoto student={s} displayName={name} size="sm" clickable={hasFacePhoto(s)} />
+                        <span className="student-avatar-initials">{initials(name)}</span>
                       </div>
                     </td>
                     <td className="student-name-cell">
