@@ -60,7 +60,7 @@ export function StudentDisplayPhoto({ student, displayName, size, clickable = fa
     <>
       {wrapper}
       {showModal && clickable && (
-        <ModalPortal onClose={() => setShowModal(false)}>
+        <ModalPortal>
           <div className="photo-modal" style={{
             position: 'fixed',
             inset: 0,
