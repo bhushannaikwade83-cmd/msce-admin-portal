@@ -3269,9 +3269,9 @@ tbody tr:hover { background: var(--surface-hover); }
    ============================================================ */
 .student-table-avatar {
   position: relative;
-  width: 8rem;
-  height: 8rem;
-  border-radius: 50%;
+  width: 9.5rem;
+  height: 9.5rem;
+  border-radius: 6px;
   overflow: hidden;
   background: var(--accent-muted, #e8eef7);
   display: flex;
@@ -3282,8 +3282,8 @@ tbody tr:hover { background: var(--surface-hover); }
 }
 
 .student-table-avatar-large {
-  width: 8.5rem;
-  height: 8.5rem;
+  width: 10rem;
+  height: 10rem;
   border: 4px solid var(--border);
   transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
 }
@@ -3326,7 +3326,7 @@ tbody tr:hover { background: var(--surface-hover); }
 /* Larger row height for students table to accommodate bigger photos */
 .dash-content-full .students-table-wrap table tbody tr {
   height: auto;
-  min-height: 9.5rem;
+  min-height: 11rem;
 }
 
 .dash-content-full .students-table-wrap table td {
@@ -3335,7 +3335,7 @@ tbody tr:hover { background: var(--surface-hover); }
 }
 
 .students-photo-cell {
-  min-width: 9.5rem;
-  max-width: 10rem;
+  min-width: 11rem;
+  max-width: 11.5rem;
   text-align: center;
 }
