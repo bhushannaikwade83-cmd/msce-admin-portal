@@ -10,6 +10,7 @@ import { InstituteInstructorsSection } from './components/InstituteInstructorsSe
 import { InstituteList } from './components/InstituteList'
 import { OverviewPanel } from './components/OverviewPanel'
 import { StudentsSection } from './components/StudentsSection'
+import { QuickSearchSection } from './components/QuickSearchSection'
 import { ReportsSection } from './components/ReportsSection'
 import { AttendanceIntegritySection } from './components/AttendanceIntegritySection'
 import { DevicesInPhotoTab } from './components/DevicesInPhotoTab'
@@ -83,6 +84,7 @@ function loadStoredAdminTab(): DashboardTab {
     case 'institutes':
     case 'add':
     case 'students':
+    case 'quicksearch':
     case 'integrity':
     case 'devices':
     case 'reports':
@@ -198,6 +200,11 @@ function AuthenticatedApp() {
             jumpToInstituteId={studentsJumpInstituteId}
             onJumpToInstituteHandled={handleStudentsJumpHandled}
           />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('quicksearch') && mountedTabs.includes('quicksearch') ? (
+        <TabPanel active={tab === 'quicksearch'}>
+          <QuickSearchSection embedded />
         </TabPanel>
       ) : null}
       {visibleTabs.includes('integrity') && mountedTabs.includes('integrity') ? (
