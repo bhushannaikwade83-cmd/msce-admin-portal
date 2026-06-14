@@ -20,18 +20,15 @@ type Student = Record<string, unknown> & {
 }
 
 export function DevicesInPhotoTab({
-  embedded = false,
   jumpToInstituteId,
   onJumpToInstituteHandled,
 }: {
-  embedded?: boolean
   jumpToInstituteId?: string | null
   onJumpToInstituteHandled?: () => void
 }) {
   const [institutes, setInstitutes] = useState<Institute[]>([])
   const [selectedInstitute, setSelectedInstitute] = useState<Institute | null>(null)
   const [students, setStudents] = useState<Student[]>([])
-  const [loading, setLoading] = useState(false)
 
   // Load institutes on mount
   useEffect(() => {
@@ -69,7 +66,6 @@ export function DevicesInPhotoTab({
   useEffect(() => {
     const loadStudents = async () => {
       if (!selectedInstitute) return
-      setLoading(true)
       try {
         const supabase = getSupabase()
         const { data, error } = await supabase
@@ -83,8 +79,6 @@ export function DevicesInPhotoTab({
         }
       } catch (err) {
         console.error('Error loading students:', err)
-      } finally {
-        setLoading(false)
       }
     }
 
