@@ -13,6 +13,7 @@ import { StudentsSection } from './components/StudentsSection'
 import { QuickSearchSection } from './components/QuickSearchSection'
 import { ReportsSection } from './components/ReportsSection'
 import { AttendanceIntegritySection } from './components/AttendanceIntegritySection'
+import { ExamsSection } from './components/ExamsSection'
 import { STRINGS } from './constants/strings'
 import './index.css'
 import './App.css'
@@ -82,6 +83,7 @@ function loadStoredAdminTab(): DashboardTab {
     case 'instructors':
     case 'institutes':
     case 'add':
+    case 'exams':
     case 'students':
     case 'quicksearch':
     case 'integrity':
@@ -175,6 +177,11 @@ function AuthenticatedApp() {
       {visibleTabs.includes('add') && activeTab === 'add' ? (
         <TabPanel active>
           <AddInstituteForm onCreated={() => setInstituteReload((n) => n + 1)} embedded />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('exams') && activeTab === 'exams' ? (
+        <TabPanel active>
+          <ExamsSection embedded readOnly={readOnly} />
         </TabPanel>
       ) : null}
       {visibleTabs.includes('students') && activeTab === 'students' ? (

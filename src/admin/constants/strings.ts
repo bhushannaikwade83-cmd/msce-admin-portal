@@ -13,4 +13,5 @@ export const STRINGS = {
     signOut: 'Sign out',
     unauthorizedPortal: 'This account cannot use the MSCE admin portal.',
   },
+  noData: 'No records found',
 } as const

@@ -31,6 +31,7 @@ const ALL_TABS: DashboardTab[] = [
   'instructors',
   'institutes',
   'add',
+  'exams',
   'students',
   'quicksearch',
   'integrity',
