@@ -13,7 +13,7 @@ import { StudentsSection } from './components/StudentsSection'
 import { QuickSearchSection } from './components/QuickSearchSection'
 import { ReportsSection } from './components/ReportsSection'
 import { AttendanceIntegritySection } from './components/AttendanceIntegritySection'
-import { ExamsSection } from './components/ExamsSection'
+import ExamsPage from './pages/ExamsPage'
 import { STRINGS } from './constants/strings'
 import './index.css'
 import './App.css'
@@ -181,7 +181,7 @@ function AuthenticatedApp() {
       ) : null}
       {visibleTabs.includes('exams') && activeTab === 'exams' ? (
         <TabPanel active>
-          <ExamsSection embedded readOnly={readOnly} />
+          <ExamsPage />
         </TabPanel>
       ) : null}
       {visibleTabs.includes('students') && activeTab === 'students' ? (

@@ -15,16 +15,41 @@ interface Exam {
   created_at: string
 }
 
+interface Centre {
+  id: string
+  code: string
+  name: string
+  address: string
+  contact: string
+}
+
+interface ExamStudent {
+  id: string
+  exam_student_id: string
+  student_name: string
+  seat_no: string
+  subject_name: string
+  exam_date: string
+  start_time: string
+  centre_code: string
+}
+
 type Props = {
   embedded?: boolean
   readOnly?: boolean
 }
 
+type TabType = 'exams' | 'centres' | 'students'
+
 export function ExamsSection({ embedded = false, readOnly = false }: Props) {
   const [exams, setExams] = useState<Exam[]>([])
+  const [centres, setCentres] = useState<Centre[]>([])
+  const [students, setStudents] = useState<ExamStudent[]>([])
+  const [activeTab, setActiveTab] = useState<TabType>('exams')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [studentSearch, setStudentSearch] = useState('')
   const [formData, setFormData] = useState({
     exam_code: '',
     exam_name: '',
@@ -34,6 +59,8 @@ export function ExamsSection({ embedded = false, readOnly = false }: Props) {
 
   useEffect(() => {
     loadExams()
+    loadCentres()
+    loadStudents()
   }, [])
 
   async function loadExams() {
@@ -97,6 +124,36 @@ export function ExamsSection({ embedded = false, readOnly = false }: Props) {
     }
   }
 
+  async function loadCentres() {
+    try {
+      const sb = getSupabase()
+      const { data, error: fetchError } = await sb
+        .from('exam_centres')
+        .select('*')
+        .order('code', { ascending: true })
+
+      if (fetchError) throw fetchError
+      setCentres(data || [])
+    } catch (err) {
+      console.error('Error loading centres:', err)
+    }
+  }
+
+  async function loadStudents() {
+    try {
+      const sb = getSupabase()
+      const { data, error: fetchError } = await sb
+        .from('exam_students')
+        .select('*')
+        .order('exam_date', { ascending: false })
+
+      if (fetchError) throw fetchError
+      setStudents(data || [])
+    } catch (err) {
+      console.error('Error loading students:', err)
+    }
+  }
+
   async function handleAddExam(e: React.FormEvent) {
     e.preventDefault()
     if (!formData.exam_code || !formData.exam_name) {
@@ -136,19 +193,65 @@ export function ExamsSection({ embedded = false, readOnly = false }: Props) {
     return `${Math.round((attended / total) * 100)}%`
   }
 
+  const filteredStudents = students.filter(student =>
+    student.student_name.toLowerCase().includes(studentSearch.toLowerCase()) ||
+    student.seat_no.includes(studentSearch) ||
+    student.subject_name.toLowerCase().includes(studentSearch.toLowerCase())
+  )
+
   return (
     <div className="section-container">
       <div className="section-header">
         <h2>📝 Exam Management</h2>
-        {!readOnly && (
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => setShowForm(!showForm)}
-          >
-            {showForm ? '✕ Cancel' : '➕ New Exam'}
-          </button>
-        )}
+      </div>
+
+      {/* ✅ Tabs */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #ddd', paddingBottom: '0' }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('exams')}
+          style={{
+            padding: '12px 20px',
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            fontWeight: activeTab === 'exams' ? '600' : '500',
+            color: activeTab === 'exams' ? '#0066cc' : '#666',
+            borderBottom: activeTab === 'exams' ? '3px solid #0066cc' : '3px solid transparent',
+          }}
+        >
+          📋 Exams
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('centres')}
+          style={{
+            padding: '12px 20px',
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            fontWeight: activeTab === 'centres' ? '600' : '500',
+            color: activeTab === 'centres' ? '#0066cc' : '#666',
+            borderBottom: activeTab === 'centres' ? '3px solid #0066cc' : '3px solid transparent',
+          }}
+        >
+          📍 Centres
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('students')}
+          style={{
+            padding: '12px 20px',
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            fontWeight: activeTab === 'students' ? '600' : '500',
+            color: activeTab === 'students' ? '#0066cc' : '#666',
+            borderBottom: activeTab === 'students' ? '3px solid #0066cc' : '3px solid transparent',
+          }}
+        >
+          👥 Exam Students
+        </button>
       </div>
 
       {error && (
@@ -164,7 +267,21 @@ export function ExamsSection({ embedded = false, readOnly = false }: Props) {
         </div>
       )}
 
-      {showForm && !readOnly && (
+      {/* ✅ EXAMS TAB */}
+      {activeTab === 'exams' && (
+        <>
+          {!readOnly && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              style={{ marginBottom: '20px' }}
+              onClick={() => setShowForm(!showForm)}
+            >
+              {showForm ? '✕ Cancel' : '➕ New Exam'}
+            </button>
+          )}
+
+          {showForm && !readOnly && (
         <div className="card card-elevated">
           <form onSubmit={handleAddExam}>
             <div className="form-grid">
@@ -276,6 +393,112 @@ export function ExamsSection({ embedded = false, readOnly = false }: Props) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+        </>
+      )}
+
+      {/* ✅ CENTRES TAB */}
+      {activeTab === 'centres' && (
+        <div>
+          <h3>Exam Centres</h3>
+          {loading ? (
+            <div className="state-screen state-compact">
+              <div className="loading-spinner" />
+            </div>
+          ) : centres.length === 0 ? (
+            <div className="state-screen state-compact">
+              <p>{STRINGS.noData}</p>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Address</th>
+                    <th>Contact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {centres.map((centre) => (
+                    <tr key={centre.id}>
+                      <td className="monospace">{centre.code}</td>
+                      <td>{centre.name}</td>
+                      <td>{centre.address}</td>
+                      <td>{centre.contact}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ✅ EXAM STUDENTS TAB */}
+      {activeTab === 'students' && (
+        <div>
+          <h3>Exam Students</h3>
+          <div style={{ marginBottom: '20px' }}>
+            <input
+              type="text"
+              placeholder="Search by name, seat no, or subject..."
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+              }}
+            />
+            <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+              {filteredStudents.length} result{filteredStudents.length !== 1 ? 's' : ''}
+            </small>
+          </div>
+          {loading ? (
+            <div className="state-screen state-compact">
+              <div className="loading-spinner" />
+            </div>
+          ) : students.length === 0 ? (
+            <div className="state-screen state-compact">
+              <p>{STRINGS.noData}</p>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Student Name</th>
+                    <th>Seat No</th>
+                    <th>Subject</th>
+                    <th>Exam Date</th>
+                    <th>Start Time</th>
+                    <th>Centre Code</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.map((student) => (
+                    <tr key={student.id}>
+                      <td>{student.student_name}</td>
+                      <td className="monospace">{student.seat_no}</td>
+                      <td>{student.subject_name}</td>
+                      <td>
+                        {student.exam_date
+                          ? new Date(student.exam_date).toLocaleDateString()
+                          : '—'}
+                      </td>
+                      <td>{student.start_time || '—'}</td>
+                      <td className="monospace">{student.centre_code}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>
