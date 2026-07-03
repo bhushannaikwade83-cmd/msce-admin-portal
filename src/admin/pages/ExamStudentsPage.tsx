@@ -160,8 +160,7 @@ export default function ExamStudentsPage({ onBack }: Props) {
           entry_at: null,
           entry_history: JSON.stringify(entryHistory),  // Save to history JSON
         })
-        .eq('id', studentId)
-        .eq('subject_name', subject.subject);
+        .eq('id', studentId);
 
       if (error) {
         console.error('❌ Error resetting entry photo:', error);
