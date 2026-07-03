@@ -36,13 +36,34 @@ const photoBoxStyles = `
 
 interface ExamStudent {
   id: string;
-  exam_student_id: string;
+  exam_student_id?: string;
   student_name: string;
   seat_no: string;
-  subject_name: string;
-  exam_date: string;
-  start_time: string;
+  subject_name?: string;
+  exam_date?: string;
+  start_time?: string;
   centre_code: string;
+  photo_url?: string;
+  institute_id?: string;
+  batch?: string;
+  entry_photo_url?: string;
+  entry_photo_at?: string;
+  entry_latitude?: string;
+  entry_longitude?: string;
+  entry_at?: string;
+  entry_history?: string;
+  subjectDetails?: Array<{
+    subject: string;
+    date: string;
+    time: string;
+    batch: string;
+    entry_photo_url?: string;
+    entry_photo_at?: string;
+    entry_latitude?: string;
+    entry_longitude?: string;
+    entry_at?: string;
+    entry_history?: string;
+  }>;
 }
 
 interface Props {
@@ -52,7 +73,7 @@ interface Props {
 export default function ExamStudentsPage({ onBack }: Props) {
   const [students, setStudents] = useState<ExamStudent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search] = useState('');
   const [selectedCentre, setSelectedCentre] = useState<string>('');  // ✅ Centre filter
   const [centres, setCentres] = useState<string[]>([]);  // ✅ All centre codes
   const [resettingId, setResettingId] = useState<string | null>(null);  // ✅ Track resetting state
@@ -438,14 +459,17 @@ export default function ExamStudentsPage({ onBack }: Props) {
       {/* ✅ Students Table - Only shows when centre is selected */}
       {selectedCentre && (
         <div style={{ padding: '30px' }}>
-          {console.log(`%c🔍 TABLE RENDERING`, 'color: #6c5ce7; font-weight: bold;', {
-            selectedCentre,
-            loading,
-            totalStudents: students.length,
-            filteredStudents: filteredStudents.length,
-            search: search || '(no filter)',
-            timestamp: new Date().toLocaleTimeString(),
-          })}
+          {(() => {
+            console.log(`%c🔍 TABLE RENDERING`, 'color: #6c5ce7; font-weight: bold;', {
+              selectedCentre,
+              loading,
+              totalStudents: students.length,
+              filteredStudents: filteredStudents.length,
+              search: search || '(no filter)',
+              timestamp: new Date().toLocaleTimeString(),
+            });
+            return null;
+          })()}
           {loading ? (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <div style={{

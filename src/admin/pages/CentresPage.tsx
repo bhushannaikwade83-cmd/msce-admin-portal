@@ -244,7 +244,7 @@ export default function CentresPage({ onBack }: Props) {
       const newEntry: LocationHistory = {
         latitude: lat,
         longitude: lon,
-        timestamp: new Date().toIso8601String(),
+        timestamp: new Date().toISOString(),
       };
       history.push(newEntry);
 
@@ -254,7 +254,7 @@ export default function CentresPage({ onBack }: Props) {
         .update({
           login_latitude: lat,
           login_longitude: lon,
-          login_at: new Date().toIso8601String(),
+          login_at: new Date().toISOString(),
           login_history: JSON.stringify(history),
           is_active: true,
         })
@@ -404,13 +404,6 @@ export default function CentresPage({ onBack }: Props) {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
           {filteredCentres.map((centre: any) => {
-            const handleOpenMap = () => {
-              if (centre.login_latitude && centre.login_longitude) {
-                const mapsUrl = `https://www.google.com/maps?q=${centre.login_latitude},${centre.login_longitude}`;
-                window.open(mapsUrl, '_blank');
-              }
-            };
-
             return (
             <div
               key={centre.id}
