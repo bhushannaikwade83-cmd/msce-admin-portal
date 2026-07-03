@@ -41,7 +41,7 @@ type Props = {
 
 type TabType = 'exams' | 'centres' | 'students'
 
-export function ExamsSection({ embedded = false, readOnly = false }: Props) {
+export function ExamsSection({ readOnly = false }: Props) {
   const [exams, setExams] = useState<Exam[]>([])
   const [centres, setCentres] = useState<Centre[]>([])
   const [students, setStudents] = useState<ExamStudent[]>([])

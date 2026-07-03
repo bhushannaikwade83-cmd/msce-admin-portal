@@ -116,7 +116,7 @@ export default function ExamStudentsPage({ onBack }: Props) {
     try {
       const sb = getSupabase();
       const student = students.find((s: any) => s.id === studentId);
-      if (!student) return;
+      if (!student || !student.subjectDetails) return;
 
       const subject = student.subjectDetails[subjectIndex];
       if (!subject) return;
@@ -373,7 +373,7 @@ export default function ExamStudentsPage({ onBack }: Props) {
   const filteredStudents = students.filter(student => {
     const matchSearch = student.student_name.toLowerCase().includes(search.toLowerCase()) ||
       student.seat_no.includes(search) ||
-      student.subjectDetails.some((s: any) => s.subject.toLowerCase().includes(search.toLowerCase())) ||
+      (student.subjectDetails?.some((s: any) => s.subject.toLowerCase().includes(search.toLowerCase())) ?? false) ||
       student.centre_code.includes(search);
 
     const matchCentre = !selectedCentre || student.centre_code === selectedCentre;
