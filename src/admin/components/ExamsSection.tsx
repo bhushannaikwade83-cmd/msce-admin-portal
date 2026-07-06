@@ -50,6 +50,7 @@ export function ExamsSection({ readOnly = false }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [studentSearch, setStudentSearch] = useState('')
+  const [centreSearch, setCentreSearch] = useState('')
   const [formData, setFormData] = useState({
     exam_code: '',
     exam_name: '',
@@ -196,7 +197,15 @@ export function ExamsSection({ readOnly = false }: Props) {
   const filteredStudents = students.filter(student =>
     student.student_name.toLowerCase().includes(studentSearch.toLowerCase()) ||
     student.seat_no.includes(studentSearch) ||
-    student.subject_name.toLowerCase().includes(studentSearch.toLowerCase())
+    student.subject_name.toLowerCase().includes(studentSearch.toLowerCase()) ||
+    student.centre_code.includes(studentSearch) ||
+    (student.exam_date && student.exam_date.includes(studentSearch))
+  )
+
+  const filteredCentres = centres.filter(centre =>
+    centre.code.toLowerCase().includes(centreSearch.toLowerCase()) ||
+    centre.name.toLowerCase().includes(centreSearch.toLowerCase()) ||
+    centre.address.toLowerCase().includes(centreSearch.toLowerCase())
   )
 
   return (
@@ -402,11 +411,29 @@ export function ExamsSection({ readOnly = false }: Props) {
       {activeTab === 'centres' && (
         <div>
           <h3>Exam Centres</h3>
+          <div style={{ marginBottom: '20px' }}>
+            <input
+              type="text"
+              placeholder="Search by code, name, or address..."
+              value={centreSearch}
+              onChange={(e) => setCentreSearch(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px',
+              }}
+            />
+            <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+              {filteredCentres.length} result{filteredCentres.length !== 1 ? 's' : ''}
+            </small>
+          </div>
           {loading ? (
             <div className="state-screen state-compact">
               <div className="loading-spinner" />
             </div>
-          ) : centres.length === 0 ? (
+          ) : filteredCentres.length === 0 ? (
             <div className="state-screen state-compact">
               <p>{STRINGS.noData}</p>
             </div>
@@ -422,7 +449,7 @@ export function ExamsSection({ readOnly = false }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {centres.map((centre) => (
+                  {filteredCentres.map((centre) => (
                     <tr key={centre.id}>
                       <td className="monospace">{centre.code}</td>
                       <td>{centre.name}</td>
@@ -442,21 +469,37 @@ export function ExamsSection({ readOnly = false }: Props) {
         <div>
           <h3>Exam Students</h3>
           <div style={{ marginBottom: '20px' }}>
-            <input
-              type="text"
-              placeholder="Search by name, seat no, or subject..."
-              value={studentSearch}
-              onChange={(e) => setStudentSearch(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '6px',
-                fontSize: '14px',
-              }}
-            />
-            <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
-              {filteredStudents.length} result{filteredStudents.length !== 1 ? 's' : ''}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <input
+                type="text"
+                placeholder="Search by name, seat no, centre code, subject, or date..."
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setStudentSearch('')}
+                style={{
+                  padding: '10px 16px',
+                  backgroundColor: '#f0f0f0',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                ✕ Clear
+              </button>
+            </div>
+            <small style={{ color: '#666', display: 'block' }}>
+              {filteredStudents.length} result{filteredStudents.length !== 1 ? 's' : ''} found
             </small>
           </div>
           {loading ? (

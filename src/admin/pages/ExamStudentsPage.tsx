@@ -73,7 +73,7 @@ interface Props {
 export default function ExamStudentsPage({ onBack }: Props) {
   const [students, setStudents] = useState<ExamStudent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search] = useState('');
+  const [search, setSearch] = useState('');
   const [selectedCentre, setSelectedCentre] = useState<string>('');  // ✅ Centre filter
   const [centres, setCentres] = useState<string[]>([]);  // ✅ All centre codes
   const [resettingId, setResettingId] = useState<string | null>(null);  // ✅ Track resetting state
@@ -458,6 +458,52 @@ export default function ExamStudentsPage({ onBack }: Props) {
       {/* ✅ Students Table - Only shows when centre is selected */}
       {selectedCentre && (
         <div style={{ padding: '30px' }}>
+          {/* ✅ Search Box */}
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', gap: '8px', background: 'white', padding: '12px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+              <input
+                type="text"
+                placeholder="🔍 Search by name, seat no, subject, date..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '12px 14px',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  backgroundColor: '#ffffff',
+                  color: '#333',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                style={{
+                  padding: '12px 18px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#666',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f5f5f5';
+                  e.currentTarget.style.borderColor = '#d0d0d0';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#ffffff';
+                  e.currentTarget.style.borderColor = '#e0e0e0';
+                }}
+              >
+                ✕ Clear
+              </button>
+            </div>
+          </div>
+
           {(() => {
             console.log(`%c🔍 TABLE RENDERING`, 'color: #6c5ce7; font-weight: bold;', {
               selectedCentre,
