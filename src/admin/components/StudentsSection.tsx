@@ -98,7 +98,7 @@ type AttendanceRecord = Record<string, unknown> & {
   status?: string | null
 }
 
-type DrillLevel = 'institutes' | 'students' | 'subjects' | 'attendance'
+type DrillLevel = 'institutes' | 'students' | 'subjects' | 'attendance' | 'multi-students'
 
 const TABLE_PAGE_SIZE_DEFAULT = 50
 const TABLE_PAGE_SIZE_OPTIONS = [25, 50, 100] as const
@@ -1286,6 +1286,9 @@ function StudentsList({
   readOnly = false,
   onBack,
   onSelectStudent,
+  selectedStudents: externalSelectedStudents,
+  setSelectedStudents: externalSetSelectedStudents,
+  onStudentsLoaded,
 }: {
   institute: InstituteRow
   reloadToken?: number
@@ -1293,6 +1296,9 @@ function StudentsList({
   readOnly?: boolean
   onBack: () => void
   onSelectStudent: (s: Student) => void
+  selectedStudents?: Set<string>
+  setSelectedStudents?: (set: Set<string>) => void
+  onStudentsLoaded?: (students: Student[]) => void
 }) {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
@@ -1302,6 +1308,7 @@ function StudentsList({
   const [tablePage, setTablePage] = useState(0)
   const [tablePageSize, setTablePageSize] = useState(TABLE_PAGE_SIZE_DEFAULT)
   const searchRef = useRef<HTMLInputElement>(null)
+  const selectAllCheckboxRef = useRef<HTMLInputElement>(null)
   const [attDate, setAttDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [dayAtt, setDayAtt] = useState<Record<string, DayInOutMerge>>({})
   const [attLoading, setAttLoading] = useState(false)
@@ -1309,6 +1316,11 @@ function StudentsList({
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [showPrintPreview, setShowPrintPreview] = useState(false)
   const [showDevicesReview, setShowDevicesReview] = useState(false)
+  const [internalSelectedStudents, setInternalSelectedStudents] = useState<Set<string>>(new Set())
+  const [exporting, setExporting] = useState(false)
+
+  const selectedStudents = externalSelectedStudents ?? internalSelectedStudents
+  const setSelectedStudentsImpl = externalSetSelectedStudents ?? setInternalSelectedStudents
 
   const showDayAttendance =
     attendanceTables.includes('attendance_in_out') || attendanceTables.includes('teacher_attendance')
@@ -1341,6 +1353,10 @@ function StudentsList({
     setTimeout(() => searchRef.current?.focus(), 100)
   }, [load, reloadTick, reloadToken])
 
+  useEffect(() => {
+    onStudentsLoaded?.(students)
+  }, [students, onStudentsLoaded])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return students
@@ -1353,6 +1369,12 @@ function StudentsList({
       return [name, roll, cls, email, subs, s.id].some((v) => v.toLowerCase().includes(q))
     })
   }, [students, search])
+
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = selectedStudents.size > 0 && selectedStudents.size < filtered.length
+    }
+  }, [selectedStudents.size, filtered.length])
 
   const photoMismatchStudents = useMemo(
     () => sortStudents(students.filter(isFacePhotoUpdatedForAttendance)),
@@ -1479,6 +1501,108 @@ function StudentsList({
   useEffect(() => {
     void loadDayAttendance()
   }, [loadDayAttendance])
+
+  const handleToggleStudent = (studentId: string) => {
+    const next = new Set(selectedStudents)
+    if (next.has(studentId)) {
+      next.delete(studentId)
+    } else {
+      next.add(studentId)
+    }
+    setSelectedStudentsImpl(next)
+  }
+
+  const handleSelectAll = () => {
+    const studentsWithPhotos = filtered.filter(s => hasFacePhoto(s))
+    if (selectedStudents.size === studentsWithPhotos.length) {
+      setSelectedStudentsImpl(new Set())
+    } else {
+      setSelectedStudentsImpl(new Set(studentsWithPhotos.map(s => s.id)))
+    }
+  }
+
+  const exportSelectedAsCSV = async () => {
+    if (selectedStudents.size === 0) {
+      alert('Please select at least one student')
+      return
+    }
+
+    setExporting(true)
+    try {
+      const selectedList = Array.from(selectedStudents)
+      const selectedRows = students.filter(s => selectedList.includes(s.id))
+
+      const rows: string[][] = []
+      const instCode = institute.institute_code ?? institute.id.slice(0, 8)
+      const instName = institute.name ?? ''
+
+      let srCount = 1
+      for (const student of selectedRows) {
+        const studentId = student.id ?? ''
+        const studentName = pick(student, 'name', 'student_name', 'full_name') ?? ''
+        const firstName = student.first_name ?? ''
+        const lastName = student.last_name ?? ''
+        const srNo = pick(student, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no') ?? ''
+        const year = student.year ?? ''
+        const subjects = Array.isArray(student.subjects)
+          ? (student.subjects as string[]).join(', ')
+          : (typeof student.subjects === 'string' ? student.subjects : (student.subject ?? ''))
+        const photoUrl = student.face_photo_url ?? ''
+
+        rows.push([
+          String(srCount),
+          instCode,
+          instName,
+          studentId,
+          studentName,
+          firstName,
+          lastName,
+          srNo,
+          year,
+          subjects,
+          photoUrl,
+        ])
+        srCount += 1
+      }
+
+      const headers = [
+        'sr_count',
+        'institute_code',
+        'institute_name',
+        'student_id',
+        'student_name',
+        'first_name',
+        'last_name',
+        'sr_no',
+        'year',
+        'subjects',
+        'face_photo_url',
+      ]
+
+      const timestamp = new Date().toISOString().slice(0, 10)
+      const exportTime = new Date().toLocaleTimeString('en-IN')
+
+      const csvContent = [
+        headers.map(h => `"${h}"`).join(','),
+        ...rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+      ].join('\n')
+
+      const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `institute_${safeFilePart(instCode)}_students_selected_${timestamp}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      const alertMsg = `✅ Downloaded ${selectedRows.length} student(s) as CSV\n\nInstitute: ${instName} (${instCode})\nDate: ${timestamp} at ${exportTime}`
+      alert(alertMsg)
+    } catch (err) {
+      alert(`❌ Export failed: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="students-panel">
@@ -1627,6 +1751,22 @@ function StudentsList({
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => void load()} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>
+        {selectedStudents.size > 0 && (
+          <>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+              {selectedStudents.size} selected
+            </span>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => void exportSelectedAsCSV()}
+              disabled={exporting}
+              title="Export selected students as CSV with institute details"
+            >
+              {exporting ? '📥 Exporting…' : '📥 Export CSV'}
+            </button>
+          </>
+        )}
       </div>
 
       {attError ? <p className="error">{attError}</p> : null}
@@ -1650,6 +1790,16 @@ function StudentsList({
         <table>
           <thead>
             <tr>
+              <th style={{ width: '32px' }}>
+                <input
+                  ref={selectAllCheckboxRef}
+                  type="checkbox"
+                  checked={selectedStudents.size > 0 && selectedStudents.size === filtered.length}
+                  onChange={handleSelectAll}
+                  title="Select all visible students"
+                  aria-label="Select all"
+                />
+              </th>
               <th>Photo</th>
               <th>Name</th>
               <th>Roll</th>
@@ -1672,7 +1822,7 @@ function StudentsList({
             ) : filtered.length === 0 && !loading ? (
               <tr>
                 <td colSpan={10} className="muted">
-                  No students match “{search}”. Clear the search to see all {students.length} row(s).
+                  No students match "{search}". Clear the search to see all {students.length} row(s).
                 </td>
               </tr>
             ) : (
@@ -1686,9 +1836,18 @@ function StudentsList({
                 const classLabel = cls ? `${cls}${sec ? ` — ${sec}` : ''}` : studentFolderLabel(s)
                 const rowAtt = dayAtt[s.id]
                 const enrolledSubjects = subjectsFromStudent(s)
+                const isSelected = selectedStudents.has(s.id)
 
                 return (
-                  <tr key={s.id} className={!active ? 'student-row-inactive' : undefined}>
+                  <tr key={s.id} className={!active ? 'student-row-inactive' : undefined} style={{ backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.08)' : undefined }}>
+                    <td style={{ width: '32px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleStudent(s.id)}
+                        aria-label={`Select ${name}`}
+                      />
+                    </td>
                     <td className="students-photo-cell">
                       <div className="student-table-avatar student-table-avatar-large">
                         <StudentDisplayPhoto student={s} displayName={name} size="sm" clickable={hasFacePhoto(s)} />
@@ -1821,10 +1980,14 @@ function StudentsList({
 
 function InstitutePicker({
   reloadToken = 0,
-  onSelectInstitute,
+  selectedInstitutes,
+  onToggleInstitute,
+  onOpenSelected,
 }: {
   reloadToken?: number
-  onSelectInstitute: (i: InstituteRow) => void
+  selectedInstitutes: Set<string>
+  onToggleInstitute: (id: string) => void
+  onOpenSelected: (institutes: InstituteRow[]) => void
 }) {
   const portal = usePortalAccess()
   const lockedDistrict = useMemo(
@@ -1848,6 +2011,7 @@ function InstitutePicker({
   const [tablePage, setTablePage] = useState(0)
   const [tablePageSize, setTablePageSize] = useState(TABLE_PAGE_SIZE_DEFAULT)
   const searchRef = useRef<HTMLInputElement>(null)
+  const selectAllCheckboxRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1900,14 +2064,27 @@ function InstitutePicker({
   }, [institutes, effectiveDistrictKey])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim()
     if (!q) return districtFiltered
+
+    if (q.includes(',')) {
+      const ids = q.split(',').map(id => id.trim().toLowerCase()).filter(Boolean)
+      return districtFiltered.filter((i) => ids.includes((i.id ?? '').toLowerCase()))
+    }
+
+    const qLower = q.toLowerCase()
     return districtFiltered.filter((i) =>
       [i.name, i.institute_code, i.id, i.city, i.state, i.pincode]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
+        .some((v) => String(v).toLowerCase().includes(qLower)),
     )
   }, [districtFiltered, search])
+
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = selectedInstitutes.size > 0 && selectedInstitutes.size < filtered.length
+    }
+  }, [selectedInstitutes.size, filtered.length])
 
   const stats = useMemo(() => {
     let active = 0
@@ -2000,6 +2177,24 @@ function InstitutePicker({
               ? `${filtered.length} of ${districtFiltered.length} in district · ${institutes.length} total loaded`
               : `${filtered.length} of ${institutes.length} shown`}
         </span>
+        {selectedInstitutes.size > 0 && (
+          <>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+              {selectedInstitutes.size} selected
+            </span>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                const selected = institutes.filter(i => selectedInstitutes.has(i.id))
+                onOpenSelected(selected)
+              }}
+              title="Open students from selected institutes"
+            >
+              🔓 Open Selected
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="btn btn-ghost btn-sm"
@@ -2030,6 +2225,26 @@ function InstitutePicker({
         <table>
           <thead>
             <tr>
+              <th style={{ width: '32px' }}>
+                <input
+                  ref={selectAllCheckboxRef}
+                  type="checkbox"
+                  checked={selectedInstitutes.size > 0 && selectedInstitutes.size === filtered.length}
+                  onChange={() => {
+                    if (selectedInstitutes.size === filtered.length) {
+                      filtered.forEach(i => onToggleInstitute(i.id))
+                    } else {
+                      filtered.forEach(i => {
+                        if (!selectedInstitutes.has(i.id)) {
+                          onToggleInstitute(i.id)
+                        }
+                      })
+                    }
+                  }}
+                  title="Select all visible institutes"
+                  aria-label="Select all"
+                />
+              </th>
               <th>Name</th>
               <th>Code</th>
               <th>ID</th>
@@ -2042,19 +2257,35 @@ function InstitutePicker({
           <tbody>
             {institutes.length === 0 && !loading ? (
               <tr>
-                <td colSpan={7} className="muted">
+                <td colSpan={8} className="muted">
                   No institutes found. Add institutes from the Institutes tab.
                 </td>
               </tr>
             ) : filtered.length === 0 && !loading ? (
               <tr>
-                <td colSpan={7} className="muted">
-                  No institutes match “{search}”. Clear the search to see all {institutes.length} row(s).
+                <td colSpan={8} className="muted">
+                  No institutes match "{search}". Clear the search to see all {institutes.length} row(s).
                 </td>
               </tr>
             ) : (
               paginatedRows.map((i) => (
-                <tr key={i.id} className={i.is_active === false ? 'inst-row-inactive' : undefined}>
+                <tr key={i.id} className={i.is_active === false ? 'inst-row-inactive' : undefined} style={{ backgroundColor: selectedInstitutes.has(i.id) ? 'rgba(59, 130, 246, 0.08)' : undefined }}>
+                  <td style={{ width: '32px', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedInstitutes.has(i.id)}
+                      onChange={() => {
+                        const next = new Set(selectedInstitutes)
+                        if (next.has(i.id)) {
+                          next.delete(i.id)
+                        } else {
+                          next.add(i.id)
+                        }
+                        onToggleInstitute(i.id)
+                      }}
+                      aria-label={`Select ${i.name}`}
+                    />
+                  </td>
                   <td className="inst-name-cell">
                     <strong>{i.name ?? '—'}</strong>
                   </td>
@@ -2075,7 +2306,7 @@ function InstitutePicker({
                     <button
                       type="button"
                       className="btn btn-primary btn-sm institutes-action-btn"
-                      onClick={() => onSelectInstitute(i)}
+                      onClick={() => onOpenSelected([i])}
                     >
                       Open
                     </button>
@@ -2124,6 +2355,11 @@ export function StudentsSection({
   const [institute, setInstitute] = useState<InstituteRow | null>(() => loadPersistedStudentsView()?.institute ?? null)
   const [student, setStudent]     = useState<Student | null>(() => loadPersistedStudentsView()?.student ?? null)
   const [subject, setSubject]     = useState<Subject | null>(() => loadPersistedStudentsView()?.subject ?? null)
+  const [selectedInstitutes, setSelectedInstitutes] = useState<Set<string>>(new Set())
+  const [multiInstitutes, setMultiInstitutes] = useState<InstituteRow[]>([])
+  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set())
+  const [exporting, setExporting] = useState(false)
+  const [multiInstituteStudents, setMultiInstituteStudents] = useState<Record<string, Student[]>>({})
   const [schema, setSchema]       = useState<SchemaConfig>({
     subjectTable: null,
     attendanceTable: null,
@@ -2263,7 +2499,140 @@ export function StudentsSection({
         )}
 
         {level === 'institutes' && (
-          <InstitutePicker reloadToken={reloadToken} onSelectInstitute={(i) => { setInstitute(i); setStudent(null); setSubject(null); setLevel('students') }} />
+          <InstitutePicker
+            reloadToken={reloadToken}
+            selectedInstitutes={selectedInstitutes}
+            onToggleInstitute={(id) => {
+              const next = new Set(selectedInstitutes)
+              if (next.has(id)) next.delete(id)
+              else next.add(id)
+              setSelectedInstitutes(next)
+            }}
+            onOpenSelected={(institutes) => {
+              if (institutes.length === 1) {
+                setInstitute(institutes[0])
+                setStudent(null)
+                setSubject(null)
+                setMultiInstitutes([])
+                setLevel('students')
+              } else if (institutes.length > 1) {
+                setInstitute(null)
+                setStudent(null)
+                setSubject(null)
+                setMultiInstitutes(institutes)
+                setSelectedInstitutes(new Set())
+                setLevel('multi-students')
+              }
+            }}
+          />
+        )}
+        {level === 'multi-students' && multiInstitutes.length > 0 && (
+          <div className="students-panel">
+            <div className="drill-breadcrumb">
+              <button type="button" className="drill-back" onClick={() => { setLevel('institutes'); setMultiInstitutes([]) }}>
+                ← Back to Institutes
+              </button>
+              <span className="drill-sep">›</span>
+              <span className="drill-crumb active">Multiple Institutes ({multiInstitutes.length})</span>
+            </div>
+
+            {selectedStudents.size > 0 && (
+              <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                    {selectedStudents.size} students selected across all institutes
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={async () => {
+                      if (selectedStudents.size === 0) {
+                        alert('Please select at least one student')
+                        return
+                      }
+
+                      setExporting(true)
+                      try {
+                        const selectedList = Array.from(selectedStudents)
+                        const timestamp = new Date().toISOString().slice(0, 10)
+                        const csvLines: string[] = []
+                        const headers = ['sr_count', 'institute_code', 'institute_name', 'student_id', 'student_name', 'first_name', 'last_name', 'sr_no', 'year', 'subjects', 'face_photo_url']
+
+                        for (const inst of multiInstitutes) {
+                          const allInstStudents = multiInstituteStudents[inst.id] ?? []
+                          const instStudents = allInstStudents.filter(s => selectedList.includes(s.id))
+                          if (instStudents.length === 0) continue
+
+                          csvLines.push(headers.map(h => `"${h}"`).join(','))
+
+                          let srCount = 1
+                          for (const student of instStudents) {
+                            const instCode = inst.institute_code ?? inst.id.slice(0, 8)
+                            const instName = inst.name ?? ''
+                            const studentId = student.id ?? ''
+                            const studentName = pick(student, 'name', 'student_name', 'full_name') ?? ''
+                            const firstName = student.first_name ?? ''
+                            const lastName = student.last_name ?? ''
+                            const srNo = pick(student, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no') ?? ''
+                            const year = student.year ?? ''
+                            const subjects = Array.isArray(student.subjects)
+                              ? (student.subjects as string[]).join(', ')
+                              : (typeof student.subjects === 'string' ? student.subjects : (student.subject ?? ''))
+                            const photoUrl = student.face_photo_url ?? ''
+
+                            csvLines.push([String(srCount), instCode, instName, studentId, studentName, firstName, lastName, srNo, year, subjects, photoUrl].map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+                            srCount += 1
+                          }
+
+                          csvLines.push('')
+                        }
+
+                        const blob = new Blob(['﻿' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+                        const url = URL.createObjectURL(blob)
+                        const link = document.createElement('a')
+                        link.href = url
+                        link.download = `multi_institutes_students_${timestamp}.csv`
+                        link.click()
+                        URL.revokeObjectURL(url)
+
+                        const alertMsg = `✅ Downloaded ${selectedStudents.size} student(s) from ${multiInstitutes.length} institute(s) as CSV\n\nDate: ${timestamp}`
+                        alert(alertMsg)
+                      } catch (err) {
+                        alert(`❌ Export failed: ${err instanceof Error ? err.message : String(err)}`)
+                      } finally {
+                        setExporting(false)
+                      }
+                    }}
+                    disabled={exporting}
+                  >
+                    {exporting ? '📥 Exporting…' : '📥 Export CSV'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {multiInstitutes.map((inst) => (
+              <div key={inst.id} style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <span style={{ fontSize: '1.25rem' }}>🏫</span>
+                  <h3 style={{ margin: 0 }}>{inst.name} ({inst.institute_code})</h3>
+                </div>
+                <StudentsList
+                  institute={inst}
+                  reloadToken={reloadToken}
+                  attendanceTables={schema.attendanceTables}
+                  readOnly={readOnly}
+                  onBack={() => { setLevel('institutes'); setMultiInstitutes([]) }}
+                  onSelectStudent={(s) => { setStudent(s); setSubject(null); setLevel('subjects') }}
+                  selectedStudents={selectedStudents}
+                  setSelectedStudents={setSelectedStudents}
+                  onStudentsLoaded={(students) => {
+                    setMultiInstituteStudents(prev => ({ ...prev, [inst.id]: students }))
+                  }}
+                />
+              </div>
+            ))}
+          </div>
         )}
         {level === 'students' && institute && (
           <StudentsList
