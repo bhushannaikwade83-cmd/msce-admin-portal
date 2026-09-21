@@ -5,6 +5,7 @@ import { useAuth } from './hooks/useAuth'
 import { DashboardLayout, type DashboardTab } from './layouts/DashboardLayout'
 import { LoginPage } from './pages/LoginPage'
 import { AddInstituteForm } from './components/AddInstituteForm'
+import { AddStudentForm } from './components/AddStudentForm'
 import { InstituteAdminsSection } from './components/InstituteAdminsSection'
 import { InstituteInstructorsSection } from './components/InstituteInstructorsSection'
 import { InstituteList } from './components/InstituteList'
@@ -197,11 +198,7 @@ function AuthenticatedApp() {
       ) : null}
       {visibleTabs.includes('addstudent') && activeTab === 'addstudent' ? (
         <TabPanel active>
-          <StudentsSection
-            embedded
-            readOnly={readOnly}
-            openAddStudent
-          />
+          <AddStudentForm />
         </TabPanel>
       ) : null}
       {visibleTabs.includes('integrity') && activeTab === 'integrity' ? (
