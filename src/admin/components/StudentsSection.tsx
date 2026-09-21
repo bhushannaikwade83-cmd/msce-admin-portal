@@ -124,13 +124,26 @@ type Subject = Record<string, unknown> & {
 type AttendanceRecord = Record<string, unknown> & {
   id: string
   student_id?: string | null
+  institute_id?: string | null
+  sr_no?: string | number | null
+  student_name?: string | null
   subject_id?: string | null
+  attendance_date?: string | null
+  record_type?: 'entry' | 'exit' | null
+  marked_time?: string | null
+  photo_url?: string | null
+  similarity_score?: number | null
+  status?: string | null
+  is_verified?: boolean | null
+  allotted_target_hr?: string | null
+  attendance_alloted_hr?: string | null
+  remark?: string | null
+  embedding?: unknown
   date?: string | null
   in_time?: string | null
   out_time?: string | null
   in_photo_url?: string | null
   out_photo_url?: string | null
-  status?: string | null
 }
 
 type DrillLevel = 'institutes' | 'students' | 'subjects' | 'attendance' | 'multi-students'
@@ -368,7 +381,7 @@ function rowTimeKeyForInOut(
   raw: Record<string, unknown>,
   kind: 'entry' | 'exit',
 ): number | null {
-  const timeVal = kind === 'entry' ? flat.in_time : flat.out_time
+  const timeVal = kind === 'entry' ? (flat.in_time ?? flat.marked_time) : (flat.out_time ?? flat.marked_time)
   if (timeVal) {
     const s = String(timeVal).trim()
     if (s.includes('T')) {
@@ -395,15 +408,17 @@ function mergeAttendanceInOutDayForStudent(dateYmd: string, rawRows: Record<stri
 
   for (const raw of rawRows) {
     const flat = flattenAttendanceInOutRow(raw) as AttendanceRecord
-    const type = String(raw.type ?? '').toLowerCase()
+    const type = (String(raw.type ?? raw.record_type ?? '')).toLowerCase()
 
     if (type === 'entry') {
       const k = rowTimeKeyForInOut(dateYmd, flat, raw, 'entry')
       if (k != null && (!entryBest || k < entryBest.k)) {
         const at =
           (flat.in_time != null && String(flat.in_time) !== '' ? String(flat.in_time) : null) ??
+          (flat.marked_time != null && String(flat.marked_time) !== '' ? String(flat.marked_time) : null) ??
           (raw.created_at != null ? String(raw.created_at) : null)
-        entryBest = { k, at, photo: flat.in_photo_url != null ? String(flat.in_photo_url) : null }
+        const photo = flat.in_photo_url ?? flat.photo_url ?? null
+        entryBest = { k, at, photo: photo != null ? String(photo) : null }
       }
     }
     if (type === 'exit') {
@@ -411,8 +426,10 @@ function mergeAttendanceInOutDayForStudent(dateYmd: string, rawRows: Record<stri
       if (k != null && (!exitBest || k > exitBest.k)) {
         const at =
           (flat.out_time != null && String(flat.out_time) !== '' ? String(flat.out_time) : null) ??
+          (flat.marked_time != null && String(flat.marked_time) !== '' ? String(flat.marked_time) : null) ??
           (raw.created_at != null ? String(raw.created_at) : null)
-        exitBest = { k, at, photo: flat.out_photo_url != null ? String(flat.out_photo_url) : null }
+        const photo = flat.out_photo_url ?? flat.photo_url ?? null
+        exitBest = { k, at, photo: photo != null ? String(photo) : null }
       }
     }
   }
