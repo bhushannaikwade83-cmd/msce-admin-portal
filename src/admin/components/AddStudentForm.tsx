@@ -14,7 +14,9 @@ export function AddStudentForm() {
   const [middleName, setMiddleName] = useState('')
   const [lastName, setLastName] = useState('')
   const [year, setYear] = useState(`Year ${new Date().getFullYear()}`)
-  const [subjectsCsv, setSubjectsCsv] = useState('')
+  const [subjects, setSubjects] = useState<Record<number, string>>({
+    1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '',
+  })
   const [instituteNo, setInstituteNo] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -116,7 +118,6 @@ export function AddStudentForm() {
       const peak = (peakRaw ?? {}) as { sr_max?: number; roll_max?: number }
       const base = Math.max(Number(peak.sr_max ?? 0), Number(peak.roll_max ?? 0))
       const nextSr = String(base + 1)
-      const subjList = subjectsCsv.split(',').map((s) => s.trim()).filter(Boolean)
 
       const insertData: Record<string, unknown> = {
         institute_id: selectedInstitute.id,
@@ -134,7 +135,7 @@ export function AddStudentForm() {
       if (ln) insertData.lname = ln
 
       for (let i = 1; i <= 8; i++) {
-        insertData[`sub${i}`] = subjList[i - 1] ?? null
+        insertData[`sub${i}`] = subjects[i]?.trim() || null
       }
 
       const { error: insErr } = await sb
@@ -153,7 +154,7 @@ export function AddStudentForm() {
       setMiddleName('')
       setLastName('')
       setYear(`Year ${new Date().getFullYear()}`)
-      setSubjectsCsv('')
+      setSubjects({ 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' })
       setInstituteNo('')
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -256,16 +257,25 @@ export function AddStudentForm() {
           />
         </label>
 
-        <label className="span-2">
-          Subjects (comma-separated, optional)
-          <input
-            type="text"
-            value={subjectsCsv}
-            onChange={(e) => setSubjectsCsv(e.target.value)}
-            placeholder="e.g. English, Maths, Science"
-            autoComplete="off"
-          />
-        </label>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <div style={{ marginBottom: '0.5rem' }}>
+            <strong>Subjects (optional)</strong>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem' }}>
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <label key={i} style={{ marginBottom: 0 }}>
+                <span className="small" style={{ display: 'block', marginBottom: '0.25rem' }}>Subject {i}</span>
+                <input
+                  type="text"
+                  value={subjects[i] ?? ''}
+                  onChange={(e) => setSubjects({ ...subjects, [i]: e.target.value })}
+                  placeholder={`e.g. Subject ${i}`}
+                  autoComplete="off"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
 
         <div className="span-2" style={{ display: 'flex', gap: '0.5rem' }}>
           <button type="submit" className="btn btn-primary" disabled={busy || !selectedInstitute}>
