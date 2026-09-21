@@ -85,6 +85,7 @@ function loadStoredAdminTab(): DashboardTab {
     case 'add':
     case 'exams':
     case 'students':
+    case 'addstudent':
     case 'quicksearch':
     case 'integrity':
     case 'reports':
@@ -191,6 +192,15 @@ function AuthenticatedApp() {
             readOnly={readOnly}
             jumpToInstituteId={studentsJumpInstituteId}
             onJumpToInstituteHandled={handleStudentsJumpHandled}
+          />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('addstudent') && activeTab === 'addstudent' ? (
+        <TabPanel active>
+          <StudentsSection
+            embedded
+            readOnly={readOnly}
+            openAddStudent
           />
         </TabPanel>
       ) : null}

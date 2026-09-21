@@ -9,6 +9,7 @@ export type DashboardTab =
   | 'institutes'
   | 'add'
   | 'students'
+  | 'addstudent'
   | 'quicksearch'
   | 'integrity'
   | 'reports'
@@ -39,6 +40,7 @@ const tabs: TabDef[] = [
   { id: 'add', label: 'Add Institute', icon: '➕' },
   { id: 'exams', label: 'Exams', icon: '📝' },
   { id: 'students', label: 'Students', icon: '👨‍🎓' },
+  { id: 'addstudent', label: 'Add Student', icon: '➕' },
   { id: 'quicksearch', label: 'Quick Search', icon: '🔍' },
   { id: 'integrity', label: 'Cheat watch', icon: '🛡️' },
   { id: 'reports', label: 'Reports', icon: '📑' },

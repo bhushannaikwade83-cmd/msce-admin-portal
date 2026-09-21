@@ -515,12 +515,14 @@ function AddStudentPanel({
   institute,
   onAdded,
   hidden = false,
+  openByDefault = false,
 }: {
   institute: InstituteRow
   onAdded: () => void
   hidden?: boolean
+  openByDefault?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(openByDefault)
   const [firstName, setFirstName] = useState('')
   const [middleName, setMiddleName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -1356,6 +1358,7 @@ function StudentsList({
   selectedStudents: externalSelectedStudents,
   setSelectedStudents: externalSetSelectedStudents,
   onStudentsLoaded,
+  openAddStudent = false,
 }: {
   institute: InstituteRow
   reloadToken?: number
@@ -1366,6 +1369,7 @@ function StudentsList({
   selectedStudents?: Set<string>
   setSelectedStudents?: (set: Set<string>) => void
   onStudentsLoaded?: (students: Student[]) => void
+  openAddStudent?: boolean
 }) {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
@@ -1763,7 +1767,7 @@ function StudentsList({
         onSelectStudent={onSelectStudent}
       />
 
-      <AddStudentPanel institute={institute} onAdded={() => setReloadTick((t) => t + 1)} hidden={readOnly} />
+      <AddStudentPanel institute={institute} onAdded={() => setReloadTick((t) => t + 1)} hidden={readOnly} openByDefault={openAddStudent} />
 
       <div className="search-bar-row institutes-search-row students-att-toolbar">
         <div className="search-bar">
@@ -2440,11 +2444,13 @@ export function StudentsSection({
   readOnly = false,
   jumpToInstituteId = null,
   onJumpToInstituteHandled,
+  openAddStudent = false,
 }: {
   embedded?: boolean
   readOnly?: boolean
   jumpToInstituteId?: string | null
   onJumpToInstituteHandled?: () => void
+  openAddStudent?: boolean
 }) {
   const [level, setLevel]         = useState<DrillLevel>(() => loadPersistedStudentsView()?.level ?? 'institutes')
   const [institute, setInstitute] = useState<InstituteRow | null>(() => loadPersistedStudentsView()?.institute ?? null)
@@ -2740,6 +2746,7 @@ export function StudentsSection({
                   onStudentsLoaded={(students) => {
                     setMultiInstituteStudents(prev => ({ ...prev, [inst.id]: students }))
                   }}
+                  openAddStudent={false}
                 />
               </div>
             ))}
@@ -2753,6 +2760,7 @@ export function StudentsSection({
             readOnly={readOnly}
             onBack={() => { setLevel('institutes'); setInstitute(null) }}
             onSelectStudent={(s) => { setStudent(s); setSubject(null); setLevel('subjects') }}
+            openAddStudent={openAddStudent}
           />
         )}
         {level === 'subjects' && student && institute && (
