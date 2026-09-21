@@ -1496,10 +1496,13 @@ function StudentsList({
 
         for (const ch of chunks) {
           if (ch.length === 0) continue
-          const q = applyInstituteCodeFilter(
-            sb.from(tableName).select('*').eq('attendance_date', attDate).in('student_id', ch),
-            institute,
-          )
+          let q = sb.from(tableName).select('*').eq('attendance_date', attDate).in('student_id', ch)
+
+          if (prefersAttendance) {
+            q = q.eq('institute_id', institute.id)
+          } else {
+            q = applyInstituteCodeFilter(q, institute)
+          }
           const { data, error: qErr } = await q
           if (qErr) throw qErr
           for (const row of data ?? []) {
