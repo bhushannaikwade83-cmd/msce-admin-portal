@@ -2023,6 +2023,22 @@ tbody tr:hover { background: var(--surface-hover); }
   gap: 0.75rem;
 }
 
+@keyframes instCardFade {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cardLift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
 .inst-card {
   display: flex;
   align-items: center;
@@ -2034,14 +2050,16 @@ tbody tr:hover { background: var(--surface-hover); }
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
   box-shadow: var(--shadow-card);
+  animation: instCardFade 0.5s ease-out;
 }
 
 .inst-card:hover {
   border-color: var(--gov-navy);
   box-shadow: var(--shadow-elevated);
-  transform: translateY(-2px);
+  animation: cardLift 0.6s ease-in-out;
+  transform: translateY(-3px);
 }
 
 .inst-card.inst-card-inactive {
@@ -2146,6 +2164,22 @@ tbody tr:hover { background: var(--surface-hover); }
   gap: 0.5rem;
 }
 
+@keyframes studentCardFade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cardHoverGlow {
+  0%, 100% { box-shadow: 0 1px 3px rgba(0,48,135,0.08); }
+  50% { box-shadow: 0 4px 12px rgba(0,48,135,0.15); }
+}
+
 .student-card {
   display: flex;
   align-items: center;
@@ -2157,14 +2191,18 @@ tbody tr:hover { background: var(--surface-hover); }
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  transition: border-color 0.12s, background 0.12s, transform 0.1s;
+  transition: border-color 0.3s ease, background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
   position: relative;
+  animation: studentCardFade 0.4s ease-out;
+  box-shadow: 0 1px 3px rgba(0,48,135,0.08);
 }
 
 .student-card:hover {
   border-color: var(--gov-navy);
   background: #f7f9fc;
-  transform: translateX(3px);
+  transform: translateX(3px) translateY(-2px);
+  animation: cardHoverGlow 0.6s ease-in-out;
+  box-shadow: 0 4px 12px rgba(0,48,135,0.2);
 }
 
 .student-avatar {
