@@ -13,7 +13,8 @@ export function AddStudentForm() {
   const [firstName, setFirstName] = useState('')
   const [middleName, setMiddleName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [year, setYear] = useState(`Year ${new Date().getFullYear()}`)
+  const [motherName, setMotherName] = useState('')
+  const [year, setYear] = useState(String(new Date().getFullYear()))
   const [subjects, setSubjects] = useState<Record<number, string>>({
     1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '',
   })
@@ -89,8 +90,9 @@ export function AddStudentForm() {
     const fn = firstName.trim()
     const mn = middleName.trim()
     const ln = lastName.trim()
-    if (!fn || !ln) {
-      setErr('First and last name are required.')
+    const motherN = motherName.trim()
+    if (!fn || !ln || !motherN) {
+      setErr('First name, last name, and mother name are required.')
       return
     }
     const fullName = `${fn} ${mn} ${ln}`.replace(/\s+/g, ' ').trim()
@@ -100,7 +102,7 @@ export function AddStudentForm() {
       const nameCompare = `${fn.toLowerCase()} ${mn.toLowerCase()} ${ln.toLowerCase()}`.replace(/\s+/g, ' ').trim()
       const { data: dupRows, error: dupErr } = await sb
         .from('students')
-        .select('id,fname,mname,lname,student_name')
+        .select('id,fname,mname,lname,student_name,sr_no,form_serial_no')
         .eq('institute_id', selectedInstitute.id)
       if (dupErr) {
         console.error('❌ Duplicate check error:', dupErr)
@@ -120,6 +122,18 @@ export function AddStudentForm() {
           setBusy(false)
           return
         }
+        // Check for duplicate Application No (sr_no)
+        if (String(r.sr_no ?? '') === applicationNo.trim()) {
+          setErr(`Application No ${applicationNo} already exists in this institute.`)
+          setBusy(false)
+          return
+        }
+        // Check for duplicate Form Serial No
+        if (String(r.form_serial_no ?? '') === formSerialNo.trim()) {
+          setErr(`Form Serial No ${formSerialNo} already exists in this institute.`)
+          setBusy(false)
+          return
+        }
       }
       const yearNum = year.trim() ? parseInt(year.trim().replace(/\D/g, ''), 10) || new Date().getFullYear() : new Date().getFullYear()
       const insertData: Record<string, unknown> = {
@@ -133,6 +147,7 @@ export function AddStudentForm() {
       if (fn) insertData.fname = fn
       if (mn) insertData.mname = mn
       if (ln) insertData.lname = ln
+      if (motherN) insertData.mother_name = motherN
 
       for (let i = 1; i <= 8; i++) {
         insertData[`sub${i}`] = subjects[i]?.trim() || null
@@ -159,7 +174,8 @@ export function AddStudentForm() {
       setFirstName('')
       setMiddleName('')
       setLastName('')
-      setYear(`Year ${new Date().getFullYear()}`)
+      setMotherName('')
+      setYear(String(new Date().getFullYear()))
       setSubjects({ 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' })
       setInstituteNo('')
       setFormSerialNo('')
@@ -201,41 +217,7 @@ export function AddStudentForm() {
 
       <form onSubmit={(e) => void onSubmit(e)} className="form-grid">
         <label>
-          Form Serial Number <span className="req">*</span>
-          <input
-            type="text"
-            value={formSerialNo}
-            onChange={(e) => {
-              const cleaned = e.target.value.slice(0, 5).replace(/\D/g, '')
-              setFormSerialNo(cleaned)
-            }}
-            placeholder="e.g. 12345"
-            maxLength={5}
-            pattern="\d{0,5}"
-            required
-            autoComplete="off"
-          />
-        </label>
-
-        <label>
-          Application No <span className="req">*</span>
-          <input
-            type="text"
-            value={applicationNo}
-            onChange={(e) => {
-              const cleaned = e.target.value.slice(0, 5).replace(/\D/g, '')
-              setApplicationNo(cleaned)
-            }}
-            placeholder="e.g. 12345"
-            maxLength={5}
-            pattern="\d{0,5}"
-            required
-            autoComplete="off"
-          />
-        </label>
-
-        <label>
-          Institute Code (5 digits) <span className="req">*</span>
+          <span style={{ whiteSpace: 'nowrap' }}>Institute Code (5 digits) <span className="req">*</span></span>
           <input
             type="text"
             value={instituteNo}
@@ -254,7 +236,41 @@ export function AddStudentForm() {
         </label>
 
         <label>
-          First name <span className="req">*</span>
+          <span style={{ whiteSpace: 'nowrap' }}>Form Serial Number <span className="req">*</span></span>
+          <input
+            type="text"
+            value={formSerialNo}
+            onChange={(e) => {
+              const cleaned = e.target.value.slice(0, 5).replace(/\D/g, '')
+              setFormSerialNo(cleaned)
+            }}
+            placeholder="e.g. 12345"
+            maxLength={5}
+            pattern="\d{0,5}"
+            required
+            autoComplete="off"
+          />
+        </label>
+
+        <label>
+          <span style={{ whiteSpace: 'nowrap' }}>Application No <span className="req">*</span></span>
+          <input
+            type="text"
+            value={applicationNo}
+            onChange={(e) => {
+              const cleaned = e.target.value.slice(0, 5).replace(/\D/g, '')
+              setApplicationNo(cleaned)
+            }}
+            placeholder="e.g. 12345"
+            maxLength={5}
+            pattern="\d{0,5}"
+            required
+            autoComplete="off"
+          />
+        </label>
+
+        <label>
+          <span style={{ whiteSpace: 'nowrap' }}>First name <span className="req">*</span></span>
           <input
             type="text"
             value={firstName}
@@ -266,12 +282,24 @@ export function AddStudentForm() {
         </label>
 
         <label>
-          Last name <span className="req">*</span>
+          <span style={{ whiteSpace: 'nowrap' }}>Last name <span className="req">*</span></span>
           <input
             type="text"
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
             placeholder="e.g. Sharma"
+            required
+            autoComplete="off"
+          />
+        </label>
+
+        <label>
+          <span style={{ whiteSpace: 'nowrap' }}>Mother Name <span className="req">*</span></span>
+          <input
+            type="text"
+            value={motherName}
+            onChange={(e) => setMotherName(e.target.value)}
+            placeholder="e.g. Priya"
             required
             autoComplete="off"
           />
@@ -294,7 +322,7 @@ export function AddStudentForm() {
             type="text"
             value={year}
             onChange={(e) => setYear(e.target.value)}
-            placeholder={`Year ${new Date().getFullYear()}`}
+            placeholder={String(new Date().getFullYear())}
             autoComplete="off"
           />
         </label>

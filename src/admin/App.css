@@ -24,6 +24,7 @@
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
+  word-break: keep-all;
 }
 
 .form-grid input:not([type='checkbox']):not([type='radio']):not([type='hidden']):not([type='file']),
@@ -82,11 +83,12 @@
 
 .req {
   color: var(--danger);
-  display: inline-block;
-  margin-left: 0.15rem;
-  position: relative;
-  top: -0.08em;
-  line-height: 1.2;
+  display: inline;
+  margin-left: 0.08em;
+  margin-right: 0.02em;
+  vertical-align: baseline;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* Inline label */
