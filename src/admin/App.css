@@ -80,7 +80,14 @@
   color: var(--text-muted);
 }
 
-.req { color: var(--danger); }
+.req {
+  color: var(--danger);
+  display: inline-block;
+  margin-left: 0.15rem;
+  position: relative;
+  top: -0.08em;
+  line-height: 1.2;
+}
 
 /* Inline label */
 label.inline {

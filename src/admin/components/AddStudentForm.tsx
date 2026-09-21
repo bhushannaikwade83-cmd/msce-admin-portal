@@ -18,6 +18,8 @@ export function AddStudentForm() {
     1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '',
   })
   const [instituteNo, setInstituteNo] = useState('')
+  const [formSerialNo, setFormSerialNo] = useState('')
+  const [applicationNo, setApplicationNo] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
@@ -77,6 +79,11 @@ export function AddStudentForm() {
       setErr('Please select an institute.')
       return
     }
+    if (!formSerialNo.trim()) {
+      setErr('Form Serial Number is required.')
+      return
+    }
+    console.log('🏫 Selected institute:', { id: selectedInstitute.id, name: selectedInstitute.name, code: selectedInstitute.institute_code })
     setErr(null)
     setOk(null)
     const fn = firstName.trim()
@@ -91,15 +98,18 @@ export function AddStudentForm() {
     try {
       const sb = getSupabase()
       const nameCompare = `${fn.toLowerCase()} ${mn.toLowerCase()} ${ln.toLowerCase()}`.replace(/\s+/g, ' ').trim()
-      const { data: dupRows } = await sb
+      const { data: dupRows, error: dupErr } = await sb
         .from('students')
-        .select('id,fname,mname,lname,first_name,middle_name,last_name,name,student_name')
+        .select('id,fname,mname,lname,student_name,name')
         .eq('institute_id', selectedInstitute.id)
+      if (dupErr) {
+        console.error('❌ Duplicate check error:', dupErr)
+      }
       for (const row of dupRows ?? []) {
         const r = row as Record<string, unknown>
-        const fname = String(r.fname ?? r.first_name ?? '').toLowerCase()
-        const mname = String(r.mname ?? r.middle_name ?? '').toLowerCase()
-        const lname = String(r.lname ?? r.last_name ?? '').toLowerCase()
+        const fname = String(r.fname ?? '').toLowerCase()
+        const mname = String(r.mname ?? '').toLowerCase()
+        const lname = String(r.lname ?? '').toLowerCase()
         const ex = `${fname} ${mname} ${lname}`.replace(/\s+/g, ' ').trim()
         const nm = String(r.student_name ?? r.name ?? '')
           .toLowerCase()
@@ -111,23 +121,14 @@ export function AddStudentForm() {
           return
         }
       }
-      const { data: peakRaw, error: peakErr } = await sb.rpc('institute_peak_student_numbers', {
-        p_institute_id: selectedInstitute.id,
-      })
-      if (peakErr) throw peakErr
-      const peak = (peakRaw ?? {}) as { sr_max?: number; roll_max?: number }
-      const base = Math.max(Number(peak.sr_max ?? 0), Number(peak.roll_max ?? 0))
-      const nextSr = String(base + 1)
-
       const insertData: Record<string, unknown> = {
         institute_id: selectedInstitute.id,
-        user_id: nextSr,
-        sr_no: nextSr,
+        sr_no: applicationNo.trim(),
+        form_serial_no: formSerialNo.trim(),
         name: fullName,
         student_name: fullName,
         year: year.trim() || `Year ${new Date().getFullYear()}`,
-        is_pay: 1,
-        is_paid: 1,
+        payid: '1',
       }
 
       if (fn) insertData.fname = fn
@@ -138,10 +139,15 @@ export function AddStudentForm() {
         insertData[`sub${i}`] = subjects[i]?.trim() || null
       }
 
-      const { error: insErr } = await sb
+      console.log('📝 Inserting student data:', insertData)
+      const { error: insErr, data: insData } = await sb
         .from('students')
         .insert(insertData, { count: 'estimated' })
-      if (insErr) throw insErr
+      if (insErr) {
+        console.error('❌ Insert error:', insErr)
+        throw insErr
+      }
+      console.log('✅ Insert success:', insData)
       try {
         const { data: instRow } = await sb.from('institutes').select('student_count').eq('id', selectedInstitute.id).maybeSingle()
         const cur = Number((instRow as { student_count?: number } | null)?.student_count ?? 0)
@@ -149,13 +155,15 @@ export function AddStudentForm() {
       } catch {
         /* optional counter — ignore if RLS/column blocks */
       }
-      setOk(`✅ Saved ${fullName} with roll ${nextSr} in ${selectedInstitute.name}. Data is live in the database. Add face photo from the mobile app.`)
+      setOk(`✅ Saved ${fullName} (App No: ${applicationNo}) in ${selectedInstitute.name}. Data is live in the database. Add face photo from the mobile app.`)
       setFirstName('')
       setMiddleName('')
       setLastName('')
       setYear(`Year ${new Date().getFullYear()}`)
       setSubjects({ 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' })
       setInstituteNo('')
+      setFormSerialNo('')
+      setApplicationNo('')
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -193,6 +201,30 @@ export function AddStudentForm() {
 
       <form onSubmit={(e) => void onSubmit(e)} className="form-grid">
         <label>
+          Form Serial Number <span className="req">*</span>
+          <input
+            type="text"
+            value={formSerialNo}
+            onChange={(e) => setFormSerialNo(e.target.value)}
+            placeholder="e.g. 1"
+            required
+            autoComplete="off"
+          />
+        </label>
+
+        <label>
+          Application No <span className="req">*</span>
+          <input
+            type="text"
+            value={applicationNo}
+            onChange={(e) => setApplicationNo(e.target.value)}
+            placeholder="e.g. 1001"
+            required
+            autoComplete="off"
+          />
+        </label>
+
+        <label>
           Institute Code (5 digits) <span className="req">*</span>
           <input
             type="text"
@@ -224,17 +256,6 @@ export function AddStudentForm() {
         </label>
 
         <label>
-          Middle name
-          <input
-            type="text"
-            value={middleName}
-            onChange={(e) => setMiddleName(e.target.value)}
-            placeholder="e.g. Kumar"
-            autoComplete="off"
-          />
-        </label>
-
-        <label>
           Last name <span className="req">*</span>
           <input
             type="text"
@@ -242,6 +263,17 @@ export function AddStudentForm() {
             onChange={(e) => setLastName(e.target.value)}
             placeholder="e.g. Sharma"
             required
+            autoComplete="off"
+          />
+        </label>
+
+        <label>
+          Middle name
+          <input
+            type="text"
+            value={middleName}
+            onChange={(e) => setMiddleName(e.target.value)}
+            placeholder="e.g. Kumar"
             autoComplete="off"
           />
         </label>
