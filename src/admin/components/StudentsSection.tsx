@@ -55,28 +55,63 @@ import {
 
 type Student = Record<string, unknown> & {
   id: string
+  institute_id?: string | null
+  sr_no?: string | number | null
+  form_serial_no?: string | null
+  fname?: string | null
+  mname?: string | null
+  lname?: string | null
   name?: string | null
+  student_name?: string | null
+  first_name?: string | null
+  middle_name?: string | null
+  last_name?: string | null
+  mother_nm?: string | null
+  ctcd?: string | null
+  identy_no?: string | null
+  mobno?: string | null
+  pmobno?: string | null
+  payid?: string | null
+  allotted_hours?: string | null
+  is_phname?: string | null
+  year?: string | null
+  sub1?: string | null
+  sub2?: string | null
+  sub3?: string | null
+  sub4?: string | null
+  sub5?: string | null
+  sub6?: string | null
+  sub7?: string | null
+  sub8?: string | null
+  subjects?: string[] | string | null
+  subject?: string | null
+  face_photo_url?: string | null
+  face_registered_at?: string | null
+  face_registration_status?: string | null
+  is_face_real?: boolean | null
+  spoof_check_count?: number | null
+  face_embedding_front?: unknown
+  face_embedding_left?: unknown
+  face_embedding_right?: unknown
+  face_photo_change_count?: number | null
+  face_photo_change_disabled?: boolean | null
+  face_reset_snapshot?: unknown
+  status?: number | null
+  is_process?: number | null
+  is_pay?: number | null
+  is_delete_new?: number | null
   roll_no?: string | null
   class_name?: string | null
   section?: string | null
-  institute_id?: string | null
   photo_url?: string | null
-  face_photo_url?: string | null
   registration_photo_path?: string | null
   original_face_photo_url?: string | null
   original_registration_photo_path?: string | null
   face_photo_changed_once?: boolean | null
   face_photo_changed_at?: string | null
-  face_embedding?: unknown
   is_active?: boolean | null
   email?: string | null
   phone?: string | null
-  subjects?: string[] | string | null
-  subject?: string | null
-  year?: string | null
-  first_name?: string | null
-  middle_name?: string | null
-  last_name?: string | null
 }
 
 type Subject = Record<string, unknown> & {
@@ -1361,12 +1396,13 @@ function StudentsList({
     const q = search.trim().toLowerCase()
     if (!q) return students
     return students.filter((s) => {
-      const name = pick(s, 'name', 'student_name', 'full_name') ?? ''
+      const name = pick(s, 'student_name', 'name', 'full_name', 'fname', 'lname', 'mname') ?? ''
       const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno') ?? ''
       const cls = pick(s, 'class_name', 'class', 'grade') ?? ''
       const email = pick(s, 'email', 'email_id') ?? ''
+      const contact = pick(s, 'ctcd', 'mobno', 'pmobno') ?? ''
       const subs = subjectsFromStudent(s).join(' ')
-      return [name, roll, cls, email, subs, s.id].some((v) => v.toLowerCase().includes(q))
+      return [name, roll, cls, email, contact, subs, s.id].some((v) => v.toLowerCase().includes(q))
     })
   }, [students, search])
 
@@ -1539,15 +1575,31 @@ function StudentsList({
       let srCount = 1
       for (const student of selectedRows) {
         const studentId = student.id ?? ''
-        const studentName = pick(student, 'name', 'student_name', 'full_name') ?? ''
-        const firstName = student.first_name ?? ''
-        const lastName = student.last_name ?? ''
+        const studentName = pick(student, 'student_name', 'name', 'full_name', 'fname', 'lname', 'mname') ?? ''
+        const firstName = pick(student, 'fname', 'first_name') ?? ''
+        const lastName = pick(student, 'lname', 'last_name') ?? ''
+        const middleName = pick(student, 'mname', 'middle_name') ?? ''
         const srNo = pick(student, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no') ?? ''
         const year = student.year ?? ''
-        const subjects = Array.isArray(student.subjects)
-          ? (student.subjects as string[]).join(', ')
-          : (typeof student.subjects === 'string' ? student.subjects : (student.subject ?? ''))
+
+        let subjects = ''
+        if (Array.isArray(student.subjects)) {
+          subjects = (student.subjects as string[]).join(', ')
+        } else if (typeof student.subjects === 'string') {
+          subjects = student.subjects
+        } else if (student.subject) {
+          subjects = String(student.subject)
+        } else {
+          const subs = [
+            student.sub1, student.sub2, student.sub3, student.sub4,
+            student.sub5, student.sub6, student.sub7, student.sub8
+          ].filter(Boolean).map(String).join(', ')
+          subjects = subs
+        }
+
         const photoUrl = student.face_photo_url ?? ''
+        const contact = pick(student, 'ctcd', 'mobno', 'pmobno') ?? ''
+        const mothersName = pick(student, 'mother_nm', 'mother_name') ?? ''
 
         rows.push([
           String(srCount),
@@ -1556,10 +1608,13 @@ function StudentsList({
           studentId,
           studentName,
           firstName,
+          middleName,
           lastName,
           srNo,
           year,
           subjects,
+          contact,
+          mothersName,
           photoUrl,
         ])
         srCount += 1
@@ -1572,10 +1627,13 @@ function StudentsList({
         'student_id',
         'student_name',
         'first_name',
+        'middle_name',
         'last_name',
         'sr_no',
         'year',
         'subjects',
+        'contact',
+        'mother_name',
         'face_photo_url',
       ]
 
@@ -1827,7 +1885,7 @@ function StudentsList({
               </tr>
             ) : (
               paginatedRows.map((s) => {
-                const name = pick(s, 'name', 'student_name', 'full_name') ?? '—'
+                const name = pick(s, 'student_name', 'name', 'full_name', 'fname', 'lname', 'mname') ?? '—'
                 const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no') ?? '—'
                 const cls = pick(s, 'class_name', 'class', 'grade', 'standard', 'std')
                 const sec = pick(s, 'section', 'div', 'division')
@@ -2556,7 +2614,7 @@ export function StudentsSection({
                         const selectedList = Array.from(selectedStudents)
                         const timestamp = new Date().toISOString().slice(0, 10)
                         const csvLines: string[] = []
-                        const headers = ['sr_count', 'institute_code', 'institute_name', 'student_id', 'student_name', 'first_name', 'last_name', 'sr_no', 'year', 'subjects', 'face_photo_url']
+                        const headers = ['sr_count', 'institute_code', 'institute_name', 'student_id', 'student_name', 'first_name', 'middle_name', 'last_name', 'sr_no', 'year', 'subjects', 'contact', 'mother_name', 'face_photo_url']
 
                         for (const inst of multiInstitutes) {
                           const allInstStudents = multiInstituteStudents[inst.id] ?? []
@@ -2570,17 +2628,33 @@ export function StudentsSection({
                             const instCode = inst.institute_code ?? inst.id.slice(0, 8)
                             const instName = inst.name ?? ''
                             const studentId = student.id ?? ''
-                            const studentName = pick(student, 'name', 'student_name', 'full_name') ?? ''
-                            const firstName = student.first_name ?? ''
-                            const lastName = student.last_name ?? ''
+                            const studentName = pick(student, 'student_name', 'name', 'full_name', 'fname', 'lname', 'mname') ?? ''
+                            const firstName = pick(student, 'fname', 'first_name') ?? ''
+                            const middleName = pick(student, 'mname', 'middle_name') ?? ''
+                            const lastName = pick(student, 'lname', 'last_name') ?? ''
                             const srNo = pick(student, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no') ?? ''
                             const year = student.year ?? ''
-                            const subjects = Array.isArray(student.subjects)
-                              ? (student.subjects as string[]).join(', ')
-                              : (typeof student.subjects === 'string' ? student.subjects : (student.subject ?? ''))
-                            const photoUrl = student.face_photo_url ?? ''
 
-                            csvLines.push([String(srCount), instCode, instName, studentId, studentName, firstName, lastName, srNo, year, subjects, photoUrl].map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+                            let subjects = ''
+                            if (Array.isArray(student.subjects)) {
+                              subjects = (student.subjects as string[]).join(', ')
+                            } else if (typeof student.subjects === 'string') {
+                              subjects = student.subjects
+                            } else if (student.subject) {
+                              subjects = String(student.subject)
+                            } else {
+                              const subs = [
+                                student.sub1, student.sub2, student.sub3, student.sub4,
+                                student.sub5, student.sub6, student.sub7, student.sub8
+                              ].filter(Boolean).map(String).join(', ')
+                              subjects = subs
+                            }
+
+                            const photoUrl = student.face_photo_url ?? ''
+                            const contact = pick(student, 'ctcd', 'mobno', 'pmobno') ?? ''
+                            const mothersName = pick(student, 'mother_nm', 'mother_name') ?? ''
+
+                            csvLines.push([String(srCount), instCode, instName, studentId, studentName, firstName, middleName, lastName, srNo, year, subjects, contact, mothersName, photoUrl].map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
                             srCount += 1
                           }
 
