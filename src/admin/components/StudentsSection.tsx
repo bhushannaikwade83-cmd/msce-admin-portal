@@ -1486,16 +1486,18 @@ function StudentsList({
     try {
       const sb = getSupabase()
       const ids = students.map((s) => s.id)
+      const prefersAttendance = attendanceTables.includes('attendance')
       const prefersInOut = attendanceTables.includes('attendance_in_out')
 
-      if (prefersInOut) {
+      if (prefersAttendance || prefersInOut) {
         const chunks = chunkIds(ids, 100)
         const byStudent: Record<string, Record<string, unknown>[]> = {}
+        const tableName = prefersAttendance ? 'attendance' : 'attendance_in_out'
 
         for (const ch of chunks) {
           if (ch.length === 0) continue
           const q = applyInstituteCodeFilter(
-            sb.from('attendance_in_out').select('*').eq('attendance_date', attDate).in('student_id', ch),
+            sb.from(tableName).select('*').eq('attendance_date', attDate).in('student_id', ch),
             institute,
           )
           const { data, error: qErr } = await q

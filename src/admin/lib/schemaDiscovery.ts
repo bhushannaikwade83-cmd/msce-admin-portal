@@ -15,7 +15,7 @@ export const SUBJECT_CANDIDATES = [
   'modules',
 ]
 /** Tables this app reads — do not probe legacy names that are not in MSCE Supabase. */
-export const ATTENDANCE_CANDIDATES = ['teacher_attendance', 'attendance_in_out']
+export const ATTENDANCE_CANDIDATES = ['attendance', 'teacher_attendance', 'attendance_in_out']
 
 export type SchemaConfig = {
   subjectTable: string | null
