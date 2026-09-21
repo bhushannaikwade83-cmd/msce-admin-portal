@@ -15,6 +15,7 @@ export function AddStudentForm() {
   const [lastName, setLastName] = useState('')
   const [year, setYear] = useState(`Year ${new Date().getFullYear()}`)
   const [subjectsCsv, setSubjectsCsv] = useState('')
+  const [instituteNo, setInstituteNo] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
@@ -38,13 +39,33 @@ export function AddStudentForm() {
         list = filterInstitutesByPortalPrefixes(list, portal.institutePrefixes)
       }
       setInstitutes(list)
-      if (list.length === 1) {
-        setSelectedInstitute(list[0])
-      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function lookupInstituteByNo(no: string) {
+    if (!no || no.length !== 5) return null
+    const inst = institutes.find(i => i.institute_code === no)
+    return inst ?? null
+  }
+
+  function handleInstituteNoChange(val: string) {
+    const cleaned = val.slice(0, 5).replace(/\D/g, '')
+    setInstituteNo(cleaned)
+    if (cleaned.length === 5) {
+      void lookupInstituteByNo(cleaned).then(inst => {
+        if (inst) {
+          setSelectedInstitute(inst)
+        } else {
+          setErr(`Institute with code ${cleaned} not found.`)
+          setSelectedInstitute(null)
+        }
+      })
+    } else {
+      setSelectedInstitute(null)
     }
   }
 
@@ -133,6 +154,7 @@ export function AddStudentForm() {
       setLastName('')
       setYear(`Year ${new Date().getFullYear()}`)
       setSubjectsCsv('')
+      setInstituteNo('')
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -170,22 +192,22 @@ export function AddStudentForm() {
 
       <form onSubmit={(e) => void onSubmit(e)} className="form-grid">
         <label>
-          Institute <span className="req">*</span>
-          <select
-            value={selectedInstitute?.id ?? ''}
-            onChange={(e) => {
-              const inst = institutes.find((i) => i.id === e.target.value)
-              setSelectedInstitute(inst ?? null)
-            }}
+          Institute Code (5 digits) <span className="req">*</span>
+          <input
+            type="text"
+            value={instituteNo}
+            onChange={(e) => handleInstituteNoChange(e.target.value)}
+            placeholder="e.g. 12345"
+            maxLength={5}
+            pattern="\d{0,5}"
             required
-          >
-            <option value="">— Select institute —</option>
-            {institutes.map((inst) => (
-              <option key={inst.id} value={inst.id}>
-                {inst.name} {inst.institute_code ? `(${inst.institute_code})` : ''}
-              </option>
-            ))}
-          </select>
+            autoComplete="off"
+          />
+          {selectedInstitute && (
+            <div className="small" style={{ marginTop: '0.25rem', color: 'var(--success-fg)' }}>
+              ✓ {selectedInstitute.name}
+            </div>
+          )}
         </label>
 
         <label>
