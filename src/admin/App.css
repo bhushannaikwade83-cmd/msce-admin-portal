@@ -57,7 +57,15 @@
 .form-grid textarea:focus {
   outline: none;
   border-color: var(--gov-navy);
-  box-shadow: 0 0 0 3px rgba(0,48,135,0.08);
+  box-shadow: 0 0 0 3px rgba(0,48,135,0.08), 0 0 10px rgba(0,48,135,0.3);
+  transition: all 0.3s ease;
+  animation: inputGlow 0.4s ease-in-out;
+}
+
+@keyframes inputGlow {
+  0% { box-shadow: 0 0 0 0px rgba(0,48,135,0.3); }
+  50% { box-shadow: 0 0 15px 0px rgba(0,48,135,0.5); }
+  100% { box-shadow: 0 0 0 3px rgba(0,48,135,0.08), 0 0 10px rgba(0,48,135,0.3); }
 }
 
 .form-grid input:not([type='checkbox']):not([type='radio']):-webkit-autofill,
@@ -69,10 +77,68 @@
   transition: background-color 9999s ease-out 0s;
 }
 
+/* Animations for form elements */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.form-grid label {
+  animation: slideInLeft 0.4s ease-out;
+}
+
+.form-grid input:not([type='checkbox']):not([type='radio']),
+.form-grid select,
+.form-grid textarea {
+  transition: all 0.3s ease;
+}
+
 .form-grid input.readonly-locked {
   cursor: not-allowed;
   background: var(--bg);
   color: var(--text-secondary);
+}
+
+/* Message animations */
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.success {
+  animation: messageSlideIn 0.5s ease-out, colorPulse 1.5s ease-in-out 0.5s;
+}
+
+.error {
+  animation: messageSlideIn 0.5s ease-out;
+}
+
+@keyframes colorPulse {
+  0%, 100% { box-shadow: 0 0 0 0px rgba(19,136,8,0.3); }
+  50% { box-shadow: 0 0 12px 0px rgba(19,136,8,0.4); }
 }
 
 .form-grid .field-hint {
