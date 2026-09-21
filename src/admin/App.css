@@ -3,6 +3,25 @@
    Primary design tokens and base styles are in index.css.
 */
 
+/* ============================================================
+   PAGE TRANSITIONS & ENTRANCE ANIMATIONS
+   ============================================================ */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dash-content,
+.dash-content-full {
+  animation: pageEnter 0.3s ease-out;
+}
+
 /* AddInstituteForm grid */
 .form-grid {
   display: grid;
@@ -40,7 +59,15 @@
   color: var(--text);
   font-size: 0.875rem;
   font-family: inherit;
-  transition: border-color 0.12s, box-shadow 0.12s;
+  transition: all var(--trans-base);
+  position: relative;
+}
+
+.form-grid input:not([type='checkbox']):not([type='radio']):hover,
+.form-grid select:hover,
+.form-grid textarea:hover {
+  border-color: rgba(0, 48, 135, 0.4);
+  box-shadow: 0 0 0 2px rgba(0, 48, 135, 0.05);
 }
 
 .form-grid .form-section-label {
@@ -216,6 +243,26 @@ label.inline input[type='checkbox'] {
 
 /* Modal dialogs (edit institute, edit pending invite, etc.)
    Sit below fixed gov header + top nav (dash-shell); scroll inside overlay when tall. */
+@keyframes modalBackdropFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -232,6 +279,7 @@ label.inline input[type='checkbox'] {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  animation: modalBackdropFade 0.3s ease-out;
 }
 
 .modal-panel {
@@ -245,6 +293,9 @@ label.inline input[type='checkbox'] {
   margin: 0 auto clamp(1rem, 4vh, 2rem);
   flex-shrink: 0;
   border-radius: var(--radius-lg);
+  animation: modalSlideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: var(--surface);
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-panel-institute-edit {
@@ -597,11 +648,23 @@ label.inline input[type='checkbox'] {
   border-radius: var(--radius-lg);
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
   box-shadow: var(--shadow-card);
+  transition: all var(--trans-base);
+  animation: cardStagger 0.5s ease-out;
+}
+
+.institutes-stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 .institutes-stat-card--active {
   border-color: rgba(19, 136, 8, 0.35);
   background: linear-gradient(180deg, #f4fbf4 0%, #fff 100%);
+}
+
+.institutes-stat-card--active:hover {
+  border-color: rgba(19, 136, 8, 0.5);
+  box-shadow: 0 0 0 3px rgba(19, 136, 8, 0.1);
 }
 
 .institutes-stat-card--muted {
@@ -611,6 +674,11 @@ label.inline input[type='checkbox'] {
 .institutes-stat-card--warn {
   border-color: rgba(230, 126, 34, 0.35);
   background: linear-gradient(180deg, #fff8f0 0%, #fff 100%);
+}
+
+.institutes-stat-card--warn:hover {
+  border-color: rgba(230, 126, 34, 0.5);
+  box-shadow: 0 0 0 3px rgba(230, 126, 34, 0.1);
 }
 
 .institutes-stats-scope-hint {
@@ -1345,3 +1413,199 @@ label.inline input[type='checkbox'] {
   line-height: 1.35;
   word-break: break-word;
 }
+
+/* ============================================================
+   ENHANCED UTILITY ANIMATIONS & VISUAL POLISH
+   ============================================================ */
+
+/* Smooth fade animations for conditional renders */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slideInBottom {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Glow effects for active states */
+.glow-navy {
+  box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.1);
+  transition: box-shadow 0.2s ease;
+}
+
+.glow-navy:hover {
+  box-shadow: 0 0 0 4px rgba(0, 48, 135, 0.15);
+}
+
+.glow-success {
+  box-shadow: 0 0 0 3px rgba(19, 136, 8, 0.1);
+}
+
+.glow-danger {
+  box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.1);
+}
+
+/* Button group enhancements */
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.button-group .btn {
+  flex-shrink: 0;
+}
+
+/* Enhanced link styles */
+a {
+  transition: color var(--trans-fast), text-decoration-color var(--trans-fast);
+}
+
+a:hover {
+  color: var(--gov-navy-dark);
+}
+
+/* Smooth background transitions */
+.transition-bg {
+  transition: background-color var(--trans-base), background-image var(--trans-base);
+}
+
+/* Enhanced focus visible states */
+*:focus-visible {
+  outline: 2px solid var(--gov-navy);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Loading state animation */
+.is-loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.is-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.3);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Skeleton loader animation */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg) 25%, var(--bg-deep) 50%, var(--bg) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Smooth color transitions */
+.transition-all {
+  transition: all var(--trans-base);
+}
+
+.transition-fast {
+  transition: all var(--trans-fast);
+}
+
+.transition-slow {
+  transition: all var(--trans-slow);
+}
+
+/* Enhanced label styling */
+label {
+  transition: color var(--trans-fast);
+}
+
+label:hover {
+  color: var(--gov-navy);
+}
+
+/* Badge enhancements */
+.badge {
+  transition: all var(--trans-base);
+}
+
+.badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 48, 135, 0.15);
+}
+
+/* Search input polish */
+.search-bar {
+  transition: all var(--trans-base);
+}
+
+.search-bar:focus-within {
+  border-color: var(--gov-navy);
+  box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.08), 0 4px 12px rgba(0, 48, 135, 0.1);
+}
+
+/* Improved checkbox and radio styling */
+input[type='checkbox'],
+input[type='radio'] {
+  transition: all var(--trans-base);
+  accent-color: var(--gov-navy);
+}
+
+input[type='checkbox']:hover,
+input[type='radio']:hover {
+  transform: scale(1.1);
+}
+
+/* Breadcrumb enhancements */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  animation: slideInLeft 0.3s ease-out;
+}
+
+.breadcrumb-item {
+  transition: color var(--trans-fast);
+}
+
+.breadcrumb-item:hover {
+  color: var(--gov-navy);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Enhanced card list animations with stagger */
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.card-list .card {
+  animation: cardStagger 0.4s ease-out;
+}
+
+.card-list .card:nth-child(1) { animation-delay: 0.05s; }
+.card-list .card:nth-child(2) { animation-delay: 0.1s; }
+.card-list .card:nth-child(3) { animation-delay: 0.15s; }
+.card-list .card:nth-child(4) { animation-delay: 0.2s; }
+.card-list .card:nth-child(n+5) { animation-delay: 0.25s; }

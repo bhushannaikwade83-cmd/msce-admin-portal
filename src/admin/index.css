@@ -14,24 +14,31 @@
   --gov-navy:        #003087;
   --gov-navy-dark:   #001f5c;
   --gov-navy-light:  #004db3;
+  --gov-navy-lighter: #0050cc;
   --gov-saffron:     #FF6600;
   --gov-saffron-lt:  #fff3e8;
+  --gov-saffron-dark: #cc5200;
   --gov-green:       #138808;
   --gov-green-lt:    #e8f5e9;
+  --gov-green-dark:  #0f6b06;
   --gov-tricolor-h:  4px;
 
   /* --- Surfaces --- */
   --bg:              #f0f2f7;
   --bg-deep:         #e4e8f0;
+  --bg-subtle:       #fafbfd;
   --surface:         #ffffff;
   --surface-hover:   #f7f9fc;
+  --surface-active:  #eef4ff;
   --border:          #d0d7e6;
   --border-strong:   #a8b4cc;
+  --border-light:    #e8ecf4;
 
   /* --- Text --- */
   --text:            #0d1b3e;
   --text-secondary:  #3d5280;
   --text-muted:      #6b7fa8;
+  --text-light:      #8b96b0;
   --text-inverse:    #ffffff;
 
   /* --- Semantic --- */
@@ -40,10 +47,13 @@
   --accent-muted:    rgba(0, 48, 135, 0.08);
   --success:         #138808;
   --success-soft:    rgba(19, 136, 8, 0.10);
+  --success-lighter: rgba(19, 136, 8, 0.05);
   --danger:          #c0392b;
   --danger-soft:     rgba(192, 57, 43, 0.10);
+  --danger-lighter:  rgba(192, 57, 43, 0.05);
   --warn:            #e67e22;
   --warn-soft:       rgba(230, 126, 34, 0.10);
+  --warn-lighter:    rgba(230, 126, 34, 0.05);
 
   /* --- Layout (fluid; sidebar collapses to 0 in narrow @media) --- */
   --content-max:         none;
@@ -58,9 +68,25 @@
   --dash-topnav-h:       var(--topnav-h);
   --dash-chrome-top:     calc(var(--gov-tricolor-h) + var(--dash-header-h) + var(--dash-topnav-h));
   --radius:              6px;
-  --radius-lg:       10px;
+  --radius-md:           8px;
+  --radius-lg:           10px;
+  --radius-xl:           16px;
+
+  /* --- Enhanced Shadows --- */
+  --shadow-xs:       0 1px 2px rgba(0,48,135,0.05);
+  --shadow-sm:       0 1px 3px rgba(0,48,135,0.08);
   --shadow-card:     0 1px 4px rgba(0,48,135,0.08), 0 4px 16px rgba(0,48,135,0.05);
+  --shadow-md:       0 4px 12px rgba(0,48,135,0.1);
   --shadow-elevated: 0 2px 8px rgba(0,48,135,0.12), 0 8px 24px rgba(0,48,135,0.08);
+  --shadow-lg:       0 8px 24px rgba(0,48,135,0.12);
+  --shadow-xl:       0 12px 32px rgba(0,48,135,0.15);
+  --shadow-hover:    0 4px 20px rgba(0,48,135,0.2);
+
+  /* --- Transitions --- */
+  --trans-fast:      150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --trans-base:      200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --trans-slow:      300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --trans-smooth:    350ms cubic-bezier(0.34, 1.56, 0.64, 1);
 
   font-family: 'Noto Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
   line-height: 1.6;
@@ -132,7 +158,7 @@ body::before {
   left: 0; right: 0;
   min-height: var(--header-h);
   height: auto;
-  background: var(--gov-navy);
+  background: linear-gradient(90deg, var(--gov-navy) 0%, var(--gov-navy-light) 100%);
   display: flex;
   align-items: center;
   gap: clamp(0.5rem, 2vw, 1.25rem);
@@ -142,7 +168,8 @@ body::before {
     0.35rem
     max(var(--content-pad-inline), env(safe-area-inset-left, 0px));
   z-index: 200;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  animation: slideInDown 0.4s ease-out;
 }
 
 .gov-emblem {
@@ -239,6 +266,11 @@ body::before {
   padding: 1rem 1.25rem;
   border-bottom: 3px solid var(--gov-saffron);
   background: linear-gradient(135deg, #f8f9fc, #eef1f8);
+  transition: all var(--trans-base);
+}
+
+.dash-sidebar-head:hover {
+  background: linear-gradient(135deg, #eef1f8, #e8ecf4);
 }
 
 .dash-portal-label {
@@ -286,14 +318,29 @@ body::before {
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: all var(--trans-base);
   border-left: 3px solid transparent;
   font-family: inherit;
+  position: relative;
+}
+
+.dash-nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--gov-saffron);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform var(--trans-base);
 }
 
 .dash-nav-item:hover {
   background: var(--accent-muted);
   color: var(--gov-navy);
+  padding-left: 1.35rem;
 }
 
 .dash-nav-item.is-active {
@@ -301,6 +348,7 @@ body::before {
   color: var(--gov-navy);
   font-weight: 700;
   border-left-color: var(--gov-saffron);
+  box-shadow: inset -2px 0 0 rgba(0, 48, 135, 0.1);
 }
 
 .dash-nav-item-icon {
@@ -495,12 +543,26 @@ body::before {
   cursor: pointer;
   white-space: nowrap;
   font-family: inherit;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: all var(--trans-base);
+  position: relative;
+}
+
+.dash-topnav-item::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 3px;
+  background: var(--gov-saffron);
+  transform: translateX(-50%);
+  transition: width var(--trans-base);
 }
 
 .dash-topnav-item:hover {
   background: var(--accent-muted);
   color: var(--gov-navy);
+  transform: translateY(-1px);
 }
 
 .dash-topnav-item.is-active {
@@ -508,6 +570,7 @@ body::before {
   font-weight: 700;
   border-bottom-color: var(--gov-saffron);
   background: var(--accent-muted);
+  box-shadow: 0 2px 0 var(--gov-saffron);
 }
 
 .dash-topnav-page {
@@ -557,9 +620,26 @@ body::before {
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   box-shadow: var(--shadow-card);
+  transition: all var(--trans-base);
+  animation: fadeInScale 0.4s ease-out;
 }
 
-.card.muted { background: #fafbfd; }
+.card:hover, .dash-section:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.card.muted {
+  background: var(--bg-subtle);
+}
+
+.card-elevated {
+  box-shadow: var(--shadow-elevated);
+}
+
+.card-elevated:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
 
 .card-head {
   display: flex;
@@ -626,13 +706,14 @@ body::before {
 }
 
 .overview-hero {
-  background: linear-gradient(135deg, var(--gov-navy-dark), var(--gov-navy), #0050cc);
+  background: linear-gradient(135deg, var(--gov-navy-dark), var(--gov-navy), var(--gov-navy-lighter));
   border: none;
   padding: clamp(1.25rem, 4vw, 2rem);
   border-radius: var(--radius-lg);
   position: relative;
   overflow: hidden;
   box-shadow: var(--shadow-elevated);
+  animation: fadeInDown 0.5s ease-out;
 }
 
 .overview-hero::after {
@@ -696,15 +777,20 @@ body::before {
 }
 
 .overview-tile {
-  border-left: 3px solid var(--gov-saffron);
+  border-left: 4px solid var(--gov-saffron);
   padding: 1.2rem;
-  transition: box-shadow 0.2s, transform 0.15s;
+  transition: all var(--trans-smooth);
   cursor: default;
+  animation: cardStagger 0.5s ease-out;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
 }
 
 .overview-tile:hover {
-  box-shadow: var(--shadow-elevated);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-4px);
+  background: var(--surface-active);
 }
 
 .overview-tile-icon {
@@ -1005,6 +1091,7 @@ body::before {
   width: 100%;
   max-width: min(100%, 24rem);
   box-shadow: var(--shadow-elevated);
+  animation: modalSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .login-card-header {
@@ -1138,45 +1225,75 @@ body::before {
   border-radius: var(--radius);
   border: 1.5px solid transparent;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s, transform 0.08s;
+  transition: all var(--trans-base);
   white-space: nowrap;
   letter-spacing: 0.01em;
+  position: relative;
+  overflow: hidden;
 }
 
-.btn:active { transform: translateY(1px); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: left var(--trans-fast);
+}
+
+.btn:hover::before {
+  left: 100%;
+}
+
+.btn:active {
+  transform: translateY(1px) scale(0.98);
+  animation: buttonPress 0.15s ease-in-out;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
 
 .btn-primary {
-  background: var(--gov-navy);
+  background: linear-gradient(135deg, var(--gov-navy), var(--gov-navy-light));
   color: #fff;
   border-color: var(--gov-navy);
   box-shadow: 0 1px 3px rgba(0,48,135,0.28);
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--gov-navy-dark);
+  background: linear-gradient(135deg, var(--gov-navy-dark), var(--gov-navy));
   border-color: var(--gov-navy-dark);
-  box-shadow: 0 3px 8px rgba(0,48,135,0.32);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
 }
 
 .btn-ghost {
   background: transparent;
   color: var(--text-secondary);
   border-color: var(--border-strong);
+  transition: all var(--trans-base);
 }
 .btn-ghost:hover:not(:disabled) {
-  background: var(--bg);
-  color: var(--text);
-  border-color: var(--border-strong);
+  background: var(--surface-active);
+  color: var(--gov-navy);
+  border-color: var(--gov-navy);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,48,135,0.1);
 }
 
 .btn-success {
-  background: var(--gov-green);
+  background: linear-gradient(135deg, var(--gov-green), #1a9d0e);
   color: #fff;
   border-color: var(--gov-green);
+  box-shadow: 0 2px 6px rgba(19,136,8,0.2);
 }
 .btn-success:hover:not(:disabled) {
-  background: #0f6b06;
-  box-shadow: 0 2px 6px rgba(19,136,8,0.3);
+  background: linear-gradient(135deg, var(--gov-green-dark), var(--gov-green));
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
 }
 
 /* GPS Lock / Unlock buttons */
@@ -1464,7 +1581,14 @@ td {
 }
 
 tr:last-child td { border-bottom: none; }
-tbody tr:hover { background: var(--surface-hover); }
+tbody tr {
+  transition: all var(--trans-base);
+}
+tbody tr:hover {
+  background: var(--surface-hover);
+  box-shadow: inset 0 0 0 1px rgba(0,48,135,0.1);
+  transform: scale(1.001);
+}
 .tiny { font-size: 0.75em; }
 
 /* Dashboard wide tables — compact; horizontal scroll inside wrapper when needed */
@@ -1569,6 +1693,13 @@ tbody tr:hover { background: var(--surface-hover); }
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.02em;
+  transition: all var(--trans-base);
+  animation: fadeInScale 0.3s ease-out;
+}
+
+.badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .badge.ok {
@@ -1577,10 +1708,20 @@ tbody tr:hover { background: var(--surface-hover); }
   border: 1px solid rgba(19,136,8,0.2);
 }
 
+.badge.ok:hover {
+  background: rgba(19,136,8,0.15);
+  border-color: rgba(19,136,8,0.35);
+}
+
 .badge-pending {
   background: var(--warn-soft);
   color: var(--warn);
   border: 1px solid rgba(230,126,34,0.25);
+}
+
+.badge-pending:hover {
+  background: rgba(230,126,34,0.15);
+  border-color: rgba(230,126,34,0.4);
 }
 
 .badge.inactive {
@@ -1589,29 +1730,38 @@ tbody tr:hover { background: var(--surface-hover); }
   border: 1px solid rgba(192,57,43,0.2);
 }
 
+.badge.inactive:hover {
+  background: rgba(192,57,43,0.15);
+  border-color: rgba(192,57,43,0.35);
+}
+
 /* ============================================================
    ALERTS & FEEDBACK
    ============================================================ */
 .error {
   background: var(--danger-soft);
   border: 1px solid rgba(192,57,43,0.2);
-  border-left: 3px solid var(--danger);
+  border-left: 4px solid var(--danger);
   color: var(--danger);
   border-radius: var(--radius);
   padding: 0.6rem 0.875rem;
   font-size: 0.83rem;
   margin: 0.5rem 0;
+  animation: messageSlideIn 0.4s ease-out, errorShake 0.5s ease-in-out;
+  box-shadow: 0 2px 8px rgba(192,57,43,0.1);
 }
 
 .success {
   background: var(--success-soft);
   border: 1px solid rgba(19,136,8,0.18);
-  border-left: 3px solid var(--gov-green);
+  border-left: 4px solid var(--gov-green);
   color: var(--gov-green);
   border-radius: var(--radius);
   padding: 0.6rem 0.875rem;
   font-size: 0.83rem;
   margin: 0.5rem 0;
+  animation: messageSlideIn 0.4s ease-out, successPulse 1.5s ease-in-out 0.4s;
+  box-shadow: 0 2px 8px rgba(19,136,8,0.1);
 }
 
 .muted { color: var(--text-muted); }
@@ -1666,7 +1816,14 @@ tbody tr:hover { background: var(--surface-hover); }
   color: var(--text);
   background: #fff;
   font-family: inherit;
-  transition: border-color 0.12s, box-shadow 0.12s;
+  transition: all var(--trans-base);
+  position: relative;
+}
+
+.field input:not([type='checkbox']):not([type='radio']):hover,
+.field select:hover,
+.field textarea:hover {
+  border-color: var(--border-light);
 }
 
 .field input:not([type='checkbox']):not([type='radio']):focus,
@@ -1674,7 +1831,8 @@ tbody tr:hover { background: var(--surface-hover); }
 .field textarea:focus {
   outline: none;
   border-color: var(--gov-navy);
-  box-shadow: 0 0 0 3px rgba(0,48,135,0.08);
+  box-shadow: 0 0 0 3px rgba(0,48,135,0.08), 0 0 10px rgba(0,48,135,0.2);
+  animation: inputFocus 0.3s ease-out;
 }
 
 .field input:not([type='checkbox']):not([type='radio']):-webkit-autofill,
@@ -1709,14 +1867,228 @@ tbody tr:hover { background: var(--surface-hover); }
 .state-muted { font-size: 0.875rem; color: var(--text-muted); }
 
 .loading-spinner {
-  width: 34px; height: 34px;
+  width: 34px;
+  height: 34px;
   border: 3px solid var(--border);
   border-top-color: var(--gov-navy);
   border-radius: 50%;
-  animation: spin 0.75s linear infinite;
+  animation: spin-smooth 0.8s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+  box-shadow: inset 0 0 0 2px rgba(0,48,135,0.05);
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   ENHANCED ANIMATIONS
+   ============================================================ */
+
+/* Page & component entrance animations */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Button animations */
+@keyframes buttonPulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 48, 135, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(0, 48, 135, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 48, 135, 0); }
+}
+
+@keyframes buttonHoverGlow {
+  0%, 100% { box-shadow: 0 3px 8px rgba(0, 48, 135, 0.32); }
+  50% { box-shadow: 0 6px 16px rgba(0, 48, 135, 0.4); }
+}
+
+@keyframes buttonPress {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+
+/* Input field animations */
+@keyframes inputFocus {
+  0% { box-shadow: 0 0 0 0 rgba(0, 48, 135, 0.1); }
+  50% { box-shadow: 0 0 0 4px rgba(0, 48, 135, 0.15); }
+  100% { box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.08), 0 0 10px rgba(0, 48, 135, 0.3); }
+}
+
+@keyframes inputGlow {
+  0% { box-shadow: 0 0 0 0px rgba(0, 48, 135, 0.3); }
+  50% { box-shadow: 0 0 15px 0px rgba(0, 48, 135, 0.5); }
+  100% { box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.08), 0 0 10px rgba(0, 48, 135, 0.3); }
+}
+
+/* Card animations */
+@keyframes cardHover {
+  from {
+    transform: translateY(0) translateZ(0);
+    box-shadow: var(--shadow-card);
+  }
+  to {
+    transform: translateY(-4px) translateZ(0);
+    box-shadow: var(--shadow-hover);
+  }
+}
+
+@keyframes cardStagger {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Message animations */
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
+  }
+}
+
+@keyframes messageSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px) translateX(-10px);
+  }
+}
+
+@keyframes successPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(19, 136, 8, 0.3); }
+  50% { box-shadow: 0 0 12px 0 rgba(19, 136, 8, 0.4); }
+}
+
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+  20%, 40%, 60%, 80% { transform: translateX(3px); }
+}
+
+/* Loading animations */
+@keyframes spin-smooth {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+/* Navigation animations */
+@keyframes navItemSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes underlineExpand {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 100%;
+    opacity: 1;
+  }
+}
+
+/* Hover lift effect */
+@keyframes lift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* Bounce animation for attention-grabbing elements */
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* Rotate animation for loading indicators */
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Gradient shift animation */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
 
 /* ============================================================
    UTIL
@@ -2050,16 +2422,15 @@ tbody tr:hover { background: var(--surface-hover); }
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+  transition: all var(--trans-smooth);
   box-shadow: var(--shadow-card);
   animation: instCardFade 0.5s ease-out;
 }
 
 .inst-card:hover {
   border-color: var(--gov-navy);
-  box-shadow: var(--shadow-elevated);
-  animation: cardLift 0.6s ease-in-out;
-  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-4px);
 }
 
 .inst-card.inst-card-inactive {
@@ -2191,18 +2562,17 @@ tbody tr:hover { background: var(--surface-hover); }
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  transition: border-color 0.3s ease, background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+  transition: all var(--trans-smooth);
   position: relative;
   animation: studentCardFade 0.4s ease-out;
-  box-shadow: 0 1px 3px rgba(0,48,135,0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .student-card:hover {
   border-color: var(--gov-navy);
-  background: #f7f9fc;
-  transform: translateX(3px) translateY(-2px);
-  animation: cardHoverGlow 0.6s ease-in-out;
-  box-shadow: 0 4px 12px rgba(0,48,135,0.2);
+  background: var(--surface-active);
+  transform: translateX(2px) translateY(-3px);
+  box-shadow: var(--shadow-hover);
 }
 
 .student-avatar {

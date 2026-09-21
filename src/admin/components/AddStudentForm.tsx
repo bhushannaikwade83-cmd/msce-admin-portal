@@ -282,6 +282,17 @@ export function AddStudentForm() {
         </label>
 
         <label>
+          Middle name
+          <input
+            type="text"
+            value={middleName}
+            onChange={(e) => setMiddleName(e.target.value)}
+            placeholder="e.g. Kumar"
+            autoComplete="off"
+          />
+        </label>
+
+        <label>
           <span style={{ whiteSpace: 'nowrap' }}>Last name <span className="req">*</span></span>
           <input
             type="text"
@@ -301,17 +312,6 @@ export function AddStudentForm() {
             onChange={(e) => setMotherName(e.target.value)}
             placeholder="e.g. Priya"
             required
-            autoComplete="off"
-          />
-        </label>
-
-        <label>
-          Middle name
-          <input
-            type="text"
-            value={middleName}
-            onChange={(e) => setMiddleName(e.target.value)}
-            placeholder="e.g. Kumar"
             autoComplete="off"
           />
         </label>
