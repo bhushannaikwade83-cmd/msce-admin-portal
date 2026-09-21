@@ -333,10 +333,18 @@ function fmtDate(iso: string | null | undefined) {
 function fmtTime(val: string | null | undefined) {
   if (!val) return '—'
   try {
-    if (String(val).includes('T')) {
-      return new Date(String(val)).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+    const s = String(val).trim()
+    if (s.includes('T') || s.includes(' ')) {
+      try {
+        const d = new Date(s.replace(' ', 'T'))
+        if (Number.isFinite(d.getTime())) {
+          return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+        }
+      } catch {
+        // fallback below
+      }
     }
-    const [h, m] = String(val).split(':')
+    const [h, m] = s.split(':')
     const hr = parseInt(h, 10)
     return `${((hr % 12) || 12).toString().padStart(2, '0')}:${m} ${hr >= 12 ? 'PM' : 'AM'}`
   } catch { return String(val) }
@@ -384,8 +392,9 @@ function rowTimeKeyForInOut(
   const timeVal = kind === 'entry' ? (flat.in_time ?? flat.marked_time) : (flat.out_time ?? flat.marked_time)
   if (timeVal) {
     const s = String(timeVal).trim()
-    if (s.includes('T')) {
-      const n = Date.parse(s)
+    if (s.includes('T') || s.includes(' ')) {
+      const normalized = s.replace(' ', 'T')
+      const n = Date.parse(normalized)
       if (Number.isFinite(n)) return n
     }
     if (dateYmd && /^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
