@@ -582,17 +582,15 @@ function AddStudentPanel({
       const nameCompare = `${fn.toLowerCase()} ${mn.toLowerCase()} ${ln.toLowerCase()}`.replace(/\s+/g, ' ').trim()
       const { data: dupRows } = await sb
         .from('students')
-        .select('id,first_name,middle_name,last_name,name')
+        .select('id,fname,mname,lname,first_name,middle_name,last_name,name,student_name')
         .eq('institute_id', institute.id)
-        .ilike('first_name', fn)
-        .ilike('last_name', ln)
       for (const row of dupRows ?? []) {
         const r = row as Record<string, unknown>
-        const ex =
-          `${String(r.first_name ?? '').toLowerCase()} ${String(r.middle_name ?? '').toLowerCase()} ${String(r.last_name ?? '').toLowerCase()}`
-            .replace(/\s+/g, ' ')
-            .trim()
-        const nm = String(r.name ?? '')
+        const fname = String(r.fname ?? r.first_name ?? '').toLowerCase()
+        const mname = String(r.mname ?? r.middle_name ?? '').toLowerCase()
+        const lname = String(r.lname ?? r.last_name ?? '').toLowerCase()
+        const ex = `${fname} ${mname} ${lname}`.replace(/\s+/g, ' ').trim()
+        const nm = String(r.student_name ?? r.name ?? '')
           .toLowerCase()
           .replace(/\s+/g, ' ')
           .trim()
@@ -611,20 +609,28 @@ function AddStudentPanel({
       const nextSr = String(base + 1)
       const subjList = subjectsCsv.split(',').map((s) => s.trim()).filter(Boolean)
       // Use basic insert without ON CONFLICT
+      const insertData: Record<string, unknown> = {
+        institute_id: institute.id,
+        user_id: nextSr,
+        sr_no: nextSr,
+        name: fullName,
+        student_name: fullName,
+        year: year.trim() || `Year ${new Date().getFullYear()}`,
+        is_pay: 1,
+        is_paid: 1,
+      }
+
+      if (fn) insertData.fname = fn
+      if (mn) insertData.mname = mn
+      if (ln) insertData.lname = ln
+
+      for (let i = 1; i <= 8; i++) {
+        insertData[`sub${i}`] = subjList[i - 1] ?? null
+      }
+
       const { error: insErr } = await sb
         .from('students')
-        .insert({
-          institute_id: institute.id,
-          user_id: nextSr,
-          sr_no: nextSr,
-          name: fullName,
-          first_name: fn,
-          middle_name: mn || null,
-          last_name: ln,
-          year: year.trim() || `Year ${new Date().getFullYear()}`,
-          subjects: subjList.length > 0 ? subjList : null,
-          subject: subjList.length > 0 ? subjList.join(', ') : null,
-        }, { count: 'estimated' })
+        .insert(insertData, { count: 'estimated' })
       if (insErr) throw insErr
       try {
         const { data: instRow } = await sb.from('institutes').select('student_count').eq('id', institute.id).maybeSingle()
