@@ -100,7 +100,7 @@ export function AddStudentForm() {
       const nameCompare = `${fn.toLowerCase()} ${mn.toLowerCase()} ${ln.toLowerCase()}`.replace(/\s+/g, ' ').trim()
       const { data: dupRows, error: dupErr } = await sb
         .from('students')
-        .select('id,fname,mname,lname,student_name,name')
+        .select('id,fname,mname,lname,student_name')
         .eq('institute_id', selectedInstitute.id)
       if (dupErr) {
         console.error('❌ Duplicate check error:', dupErr)
@@ -121,14 +121,13 @@ export function AddStudentForm() {
           return
         }
       }
+      const yearNum = year.trim() ? parseInt(year.trim().replace(/\D/g, ''), 10) || new Date().getFullYear() : new Date().getFullYear()
       const insertData: Record<string, unknown> = {
         institute_id: selectedInstitute.id,
         sr_no: applicationNo.trim(),
         form_serial_no: formSerialNo.trim(),
-        name: fullName,
-        student_name: fullName,
-        year: year.trim() || `Year ${new Date().getFullYear()}`,
-        payid: '1',
+        year: yearNum,
+        payid: 1,
       }
 
       if (fn) insertData.fname = fn
@@ -145,6 +144,7 @@ export function AddStudentForm() {
         .insert(insertData, { count: 'estimated' })
       if (insErr) {
         console.error('❌ Insert error:', insErr)
+        console.error('📋 Error details:', { code: insErr.code, message: insErr.message, details: insErr.details, hint: insErr.hint })
         throw insErr
       }
       console.log('✅ Insert success:', insData)
@@ -205,8 +205,13 @@ export function AddStudentForm() {
           <input
             type="text"
             value={formSerialNo}
-            onChange={(e) => setFormSerialNo(e.target.value)}
-            placeholder="e.g. 1"
+            onChange={(e) => {
+              const cleaned = e.target.value.slice(0, 5).replace(/\D/g, '')
+              setFormSerialNo(cleaned)
+            }}
+            placeholder="e.g. 12345"
+            maxLength={5}
+            pattern="\d{0,5}"
             required
             autoComplete="off"
           />
@@ -217,8 +222,13 @@ export function AddStudentForm() {
           <input
             type="text"
             value={applicationNo}
-            onChange={(e) => setApplicationNo(e.target.value)}
-            placeholder="e.g. 1001"
+            onChange={(e) => {
+              const cleaned = e.target.value.slice(0, 5).replace(/\D/g, '')
+              setApplicationNo(cleaned)
+            }}
+            placeholder="e.g. 12345"
+            maxLength={5}
+            pattern="\d{0,5}"
             required
             autoComplete="off"
           />
