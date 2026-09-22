@@ -1885,7 +1885,7 @@ function StudentsList({
         </div>
       ) : null}
 
-      {/* Modern Student Cards Grid */}
+      {/* Modern Student List */}
       {students.length === 0 && !loading ? (
         <div className="empty-state">
           <div className="empty-icon">👥</div>
@@ -1899,8 +1899,39 @@ function StudentsList({
           <div className="empty-sub">No students match "{search}". Clear the search to see all {students.length} students.</div>
         </div>
       ) : (
-        <div className="students-grid-wrapper">
-          <div className="students-grid">
+        <div className="students-list-wrapper">
+          <div className="students-list-header">
+            <div className="list-header-cell list-header-checkbox">
+              <input
+                ref={selectAllCheckboxRef}
+                type="checkbox"
+                checked={paginatedRows.length > 0 && paginatedRows.every(s => selectedStudents.has(s.id))}
+                onChange={() => {
+                  if (paginatedRows.length > 0 && paginatedRows.every(s => selectedStudents.has(s.id))) {
+                    paginatedRows.forEach(s => {
+                      const next = new Set(selectedStudents)
+                      next.delete(s.id)
+                      setSelectedStudentsImpl(next)
+                    })
+                  } else {
+                    const next = new Set(selectedStudents)
+                    paginatedRows.forEach(s => next.add(s.id))
+                    setSelectedStudentsImpl(next)
+                  }
+                }}
+                title="Select all on this page"
+                aria-label="Select all"
+              />
+            </div>
+            <div className="list-header-cell list-header-photo">Photo</div>
+            <div className="list-header-cell list-header-name">Name</div>
+            <div className="list-header-cell list-header-roll">Roll</div>
+            <div className="list-header-cell list-header-class">Class</div>
+            <div className="list-header-cell list-header-subjects">Subjects</div>
+            {showDayAttendance && <div className="list-header-cell list-header-attendance">Attendance</div>}
+            <div className="list-header-cell list-header-actions">Actions</div>
+          </div>
+          <div className="students-list">
             {paginatedRows.map((s, idx) => {
               const name = pick(s, 'student_name', 'name', 'full_name', 'fname', 'lname', 'mname') ?? '—'
               const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no') ?? '—'
@@ -1916,109 +1947,91 @@ function StudentsList({
               return (
                 <div
                   key={s.id}
-                  className={`student-card ${!active ? 'student-card--inactive' : ''} ${isSelected ? 'student-card--selected' : ''}`}
-                  style={{ animationDelay: `${idx * 30}ms` }}
+                  className={`student-list-row ${!active ? 'student-list-row--inactive' : ''} ${isSelected ? 'student-list-row--selected' : ''}`}
+                  style={{ animationDelay: `${idx * 20}ms` }}
                 >
-                  {/* Card header with selection checkbox */}
-                  <div className="student-card-header">
-                    <div className="student-card-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleToggleStudent(s.id)}
-                        aria-label={`Select ${name}`}
-                      />
-                    </div>
-                    <div className="student-card-badges">
+                  <div className="list-cell list-cell-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleStudent(s.id)}
+                      aria-label={`Select ${name}`}
+                    />
+                  </div>
+                  <div className="list-cell list-cell-photo">
+                    <div className="list-photo-wrapper">
+                      <StudentDisplayPhoto student={s} displayName={name} size="xs" clickable={hasFacePhoto(s)} />
                       {faceOk ? (
-                        <span className="badge badge-present" title="Face photo registered">📸</span>
+                        <span className="photo-badge photo-badge--ok" title="Face photo registered">📸</span>
                       ) : (
-                        <span className="badge badge-muted" title="Face photo pending">⏳</span>
-                      )}
-                      {active ? (
-                        <span className="badge badge-present" title="Active">✓</span>
-                      ) : (
-                        <span className="badge badge-absent" title="Inactive">✗</span>
+                        <span className="photo-badge photo-badge--pending" title="Face photo pending">⏳</span>
                       )}
                     </div>
                   </div>
-
-                  {/* Student photo */}
-                  <div className="student-card-photo">
-                    <div className="student-photo-wrapper">
-                      <StudentDisplayPhoto student={s} displayName={name} size="sm" clickable={hasFacePhoto(s)} />
-                      <span className="student-photo-initials">{initials(name)}</span>
-                    </div>
-                  </div>
-
-                  {/* Student info */}
-                  <div className="student-card-body">
-                    <div className="student-card-name">{name}</div>
-
-                    <div className="student-card-details">
-                      <div className="student-detail-row">
-                        <span className="detail-label">Roll:</span>
-                        <span className="detail-value">{roll}</span>
-                      </div>
-                      <div className="student-detail-row">
-                        <span className="detail-label">Class:</span>
-                        <span className="detail-value">{classLabel}</span>
-                      </div>
-                    </div>
-
-                    {/* Subjects */}
-                    {enrolledSubjects.length > 0 && (
-                      <div className="student-card-subjects">
-                        <div className="subjects-label">📚 Subjects ({enrolledSubjects.length})</div>
-                        <div className="subjects-list">
-                          {enrolledSubjects.slice(0, 3).map((sub, i) => (
-                            <span key={i} className="subject-tag">{sub}</span>
-                          ))}
-                          {enrolledSubjects.length > 3 && (
-                            <span className="subject-tag subject-tag--more">+{enrolledSubjects.length - 3}</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Attendance info */}
-                    {showDayAttendance && (
-                      <div className="student-card-attendance">
-                        <div className="att-label">📅 Today's Attendance</div>
-                        <div className="att-times">
-                          <div className="att-time-item">
-                            <span className="att-time-label">In:</span>
-                            <span className="att-time-value">{attLoading ? '…' : fmtTime(rowAtt?.entryAt) || '—'}</span>
-                          </div>
-                          <div className="att-time-item">
-                            <span className="att-time-label">Out:</span>
-                            <span className="att-time-value">{attLoading ? '…' : fmtTime(rowAtt?.exitAt) || '—'}</span>
-                          </div>
-                        </div>
-                      </div>
+                  <div className="list-cell list-cell-name">
+                    <div className="name-primary">{name}</div>
+                    {active ? (
+                      <span className="status-badge status-badge--active">Active</span>
+                    ) : (
+                      <span className="status-badge status-badge--inactive">Inactive</span>
                     )}
                   </div>
-
-                  {/* Card actions */}
-                  <div className="student-card-actions">
-                    {!readOnly ? (
+                  <div className="list-cell list-cell-roll">
+                    <code className="code-text">{roll}</code>
+                  </div>
+                  <div className="list-cell list-cell-class">
+                    <span className="class-label">{classLabel}</span>
+                  </div>
+                  <div className="list-cell list-cell-subjects">
+                    {enrolledSubjects.length > 0 ? (
+                      <div className="subjects-compact">
+                        {enrolledSubjects.slice(0, 2).map((sub, i) => (
+                          <span key={i} className="subject-badge">{sub}</span>
+                        ))}
+                        {enrolledSubjects.length > 2 && (
+                          <span className="subject-badge subject-badge--more">+{enrolledSubjects.length - 2}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </div>
+                  {showDayAttendance && (
+                    <div className="list-cell list-cell-attendance">
+                      <div className="att-compact">
+                        {attLoading ? (
+                          <span className="muted">Loading…</span>
+                        ) : (
+                          <>
+                            <span title="Entry time">{fmtTime(rowAtt?.entryAt) || '—'}</span>
+                            <span className="att-sep">/</span>
+                            <span title="Exit time">{fmtTime(rowAtt?.exitAt) || '—'}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div className="list-cell list-cell-actions">
+                    <div className="actions-group">
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs"
+                          onClick={() => setEditingStudent(s)}
+                          title="Edit student information"
+                        >
+                          ✏️
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setEditingStudent(s)}
-                        title="Edit student information"
+                        className="btn btn-primary btn-xs"
+                        onClick={() => onSelectStudent(s)}
+                        title="View detailed student profile and subjects"
                       >
-                        ✏️ Edit
+                        Open →
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => onSelectStudent(s)}
-                      title="View detailed student profile and subjects"
-                    >
-                      Open →
-                    </button>
+                    </div>
                   </div>
                 </div>
               )
