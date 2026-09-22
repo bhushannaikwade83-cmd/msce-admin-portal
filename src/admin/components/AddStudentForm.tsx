@@ -122,23 +122,26 @@ export function AddStudentForm() {
           return
         }
         // Check for duplicate Application No (sr_no)
-        if (String(r.sr_no ?? '') === applicationNo.trim()) {
+        if (Number(r.sr_no ?? 0) === srNo) {
           setErr(`Application No ${applicationNo} already exists in this institute.`)
           setBusy(false)
           return
         }
         // Check for duplicate Form Serial No
-        if (String(r.form_serial_no ?? '') === formSerialNo.trim()) {
+        if (Number(r.form_serial_no ?? 0) === formSerialNoNum) {
           setErr(`Form Serial No ${formSerialNo} already exists in this institute.`)
           setBusy(false)
           return
         }
       }
       const yearNum = year.trim() ? parseInt(year.trim().replace(/\D/g, ''), 10) || new Date().getFullYear() : new Date().getFullYear()
+      const srNo = parseInt(applicationNo.trim(), 10)
+      const formSerialNoNum = parseInt(formSerialNo.trim(), 10)
+
       const insertData: Record<string, unknown> = {
         institute_id: selectedInstitute.id,
-        sr_no: applicationNo.trim(),
-        form_serial_no: formSerialNo.trim(),
+        sr_no: srNo,
+        form_serial_no: formSerialNoNum,
         year: yearNum,
         payid: 1,
       }

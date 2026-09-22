@@ -1885,156 +1885,147 @@ function StudentsList({
         </div>
       ) : null}
 
-      <div className="table-wrap institutes-table-wrap students-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: '32px' }}>
-                <input
-                  ref={selectAllCheckboxRef}
-                  type="checkbox"
-                  checked={selectedStudents.size > 0 && selectedStudents.size === filtered.length}
-                  onChange={handleSelectAll}
-                  title="Select all visible students"
-                  aria-label="Select all"
-                />
-              </th>
-              <th>Photo</th>
-              <th>Name</th>
-              <th>Roll</th>
-              <th>Class</th>
-              <th>Subjects</th>
-              <th title="Earliest entry on selected date (attendance_in_out)">Entry</th>
-              <th title="Latest exit on selected date">Exit</th>
-              <th>Face</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {students.length === 0 && !loading ? (
-              <tr>
-                <td colSpan={10} className="muted">
-                  No students registered for this institute yet.
-                </td>
-              </tr>
-            ) : filtered.length === 0 && !loading ? (
-              <tr>
-                <td colSpan={10} className="muted">
-                  No students match "{search}". Clear the search to see all {students.length} row(s).
-                </td>
-              </tr>
-            ) : (
-              paginatedRows.map((s) => {
-                const name = pick(s, 'student_name', 'name', 'full_name', 'fname', 'lname', 'mname') ?? '—'
-                const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no') ?? '—'
-                const cls = pick(s, 'class_name', 'class', 'grade', 'standard', 'std')
-                const sec = pick(s, 'section', 'div', 'division')
-                const active = s.is_active !== false
-                const faceOk = hasFacePhoto(s)
-                const classLabel = cls ? `${cls}${sec ? ` — ${sec}` : ''}` : studentFolderLabel(s)
-                const rowAtt = dayAtt[s.id]
-                const enrolledSubjects = subjectsFromStudent(s)
-                const isSelected = selectedStudents.has(s.id)
+      {/* Modern Student Cards Grid */}
+      {students.length === 0 && !loading ? (
+        <div className="empty-state">
+          <div className="empty-icon">👥</div>
+          <div className="empty-title">No students registered</div>
+          <div className="empty-sub">No students found for this institute yet. Add students to get started.</div>
+        </div>
+      ) : filtered.length === 0 && !loading ? (
+        <div className="empty-state">
+          <div className="empty-icon">🔍</div>
+          <div className="empty-title">No results found</div>
+          <div className="empty-sub">No students match "{search}". Clear the search to see all {students.length} students.</div>
+        </div>
+      ) : (
+        <div className="students-grid-wrapper">
+          <div className="students-grid">
+            {paginatedRows.map((s, idx) => {
+              const name = pick(s, 'student_name', 'name', 'full_name', 'fname', 'lname', 'mname') ?? '—'
+              const roll = pick(s, 'sr_no', 'user_id', 'roll_no', 'roll_number', 'rollno', 'admission_no') ?? '—'
+              const cls = pick(s, 'class_name', 'class', 'grade', 'standard', 'std')
+              const sec = pick(s, 'section', 'div', 'division')
+              const active = s.is_active !== false
+              const faceOk = hasFacePhoto(s)
+              const classLabel = cls ? `${cls}${sec ? ` — ${sec}` : ''}` : studentFolderLabel(s)
+              const rowAtt = dayAtt[s.id]
+              const enrolledSubjects = subjectsFromStudent(s)
+              const isSelected = selectedStudents.has(s.id)
 
-                return (
-                  <tr key={s.id} className={!active ? 'student-row-inactive' : undefined} style={{ backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.08)' : undefined }}>
-                    <td style={{ width: '32px', textAlign: 'center' }}>
+              return (
+                <div
+                  key={s.id}
+                  className={`student-card ${!active ? 'student-card--inactive' : ''} ${isSelected ? 'student-card--selected' : ''}`}
+                  style={{ animationDelay: `${idx * 30}ms` }}
+                >
+                  {/* Card header with selection checkbox */}
+                  <div className="student-card-header">
+                    <div className="student-card-checkbox">
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => handleToggleStudent(s.id)}
                         aria-label={`Select ${name}`}
                       />
-                    </td>
-                    <td className="students-photo-cell">
-                      <div className="student-table-avatar student-table-avatar-large">
-                        <StudentDisplayPhoto student={s} displayName={name} size="sm" clickable={hasFacePhoto(s)} />
-                        <span className="student-avatar-initials">{initials(name)}</span>
-                      </div>
-                    </td>
-                    <td className="student-name-cell">
-                      <strong>{name}</strong>
-                      <div className="muted small">
-                        <code className="tiny">{s.id}</code>
-                      </div>
-                    </td>
-                    <td>{roll}</td>
-                    <td>{classLabel}</td>
-                    <td className="small" style={{ minWidth: '180px', whiteSpace: 'normal', wordBreak: 'break-word' }} title={enrolledSubjects.join(', ') || undefined}>
-                      {enrolledSubjects.length > 0 ? (
-                        <span style={{ display: 'block' }}>
-                          {enrolledSubjects.map((sub, idx) => (
-                            <span key={idx} style={{ display: 'block', marginBottom: '2px' }}>
-                              {sub}
-                            </span>
-                          ))}
-                        </span>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td className="students-day-att-cell">
-                      {showDayAttendance ? (
-                        <>
-                          <div className="students-att-time">{attLoading ? '…' : fmtTime(rowAtt?.entryAt)}</div>
-                          <PhotoThumb url={rowAtt?.entryPhoto} label="In" compact />
-                        </>
-                      ) : (
-                        <span className="muted small">—</span>
-                      )}
-                    </td>
-                    <td className="students-day-att-cell">
-                      {showDayAttendance ? (
-                        <>
-                          <div className="students-att-time">{attLoading ? '…' : fmtTime(rowAtt?.exitAt)}</div>
-                          <PhotoThumb url={rowAtt?.exitPhoto} label="Out" compact />
-                        </>
-                      ) : (
-                        <span className="muted small">—</span>
-                      )}
-                    </td>
-                    <td>
+                    </div>
+                    <div className="student-card-badges">
                       {faceOk ? (
-                        <span className="badge badge-present">Registered</span>
+                        <span className="badge badge-present" title="Face photo registered">📸</span>
                       ) : (
-                        <span className="badge badge-muted">Pending</span>
+                        <span className="badge badge-muted" title="Face photo pending">⏳</span>
                       )}
-                    </td>
-                    <td>
                       {active ? (
-                        <span className="badge badge-present">Active</span>
+                        <span className="badge badge-present" title="Active">✓</span>
                       ) : (
-                        <span className="badge badge-absent">Inactive</span>
+                        <span className="badge badge-absent" title="Inactive">✗</span>
                       )}
-                    </td>
-                    <td className="actions-cell">
-                      <div className="row" style={{ gap: '0.35rem', flexWrap: 'wrap' }}>
-                        {!readOnly ? (
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm institutes-action-btn"
-                            onClick={() => setEditingStudent(s)}
-                          >
-                            Edit
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm institutes-action-btn"
-                          onClick={() => onSelectStudent(s)}
-                        >
-                          Open
-                        </button>
+                    </div>
+                  </div>
+
+                  {/* Student photo */}
+                  <div className="student-card-photo">
+                    <div className="student-photo-wrapper">
+                      <StudentDisplayPhoto student={s} displayName={name} size="sm" clickable={hasFacePhoto(s)} />
+                      <span className="student-photo-initials">{initials(name)}</span>
+                    </div>
+                  </div>
+
+                  {/* Student info */}
+                  <div className="student-card-body">
+                    <div className="student-card-name">{name}</div>
+
+                    <div className="student-card-details">
+                      <div className="student-detail-row">
+                        <span className="detail-label">Roll:</span>
+                        <span className="detail-value">{roll}</span>
                       </div>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                      <div className="student-detail-row">
+                        <span className="detail-label">Class:</span>
+                        <span className="detail-value">{classLabel}</span>
+                      </div>
+                    </div>
+
+                    {/* Subjects */}
+                    {enrolledSubjects.length > 0 && (
+                      <div className="student-card-subjects">
+                        <div className="subjects-label">📚 Subjects ({enrolledSubjects.length})</div>
+                        <div className="subjects-list">
+                          {enrolledSubjects.slice(0, 3).map((sub, i) => (
+                            <span key={i} className="subject-tag">{sub}</span>
+                          ))}
+                          {enrolledSubjects.length > 3 && (
+                            <span className="subject-tag subject-tag--more">+{enrolledSubjects.length - 3}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Attendance info */}
+                    {showDayAttendance && (
+                      <div className="student-card-attendance">
+                        <div className="att-label">📅 Today's Attendance</div>
+                        <div className="att-times">
+                          <div className="att-time-item">
+                            <span className="att-time-label">In:</span>
+                            <span className="att-time-value">{attLoading ? '…' : fmtTime(rowAtt?.entryAt) || '—'}</span>
+                          </div>
+                          <div className="att-time-item">
+                            <span className="att-time-label">Out:</span>
+                            <span className="att-time-value">{attLoading ? '…' : fmtTime(rowAtt?.exitAt) || '—'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card actions */}
+                  <div className="student-card-actions">
+                    {!readOnly ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setEditingStudent(s)}
+                        title="Edit student information"
+                      >
+                        ✏️ Edit
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => onSelectStudent(s)}
+                      title="View detailed student profile and subjects"
+                    >
+                      Open →
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {filtered.length > 0 ? (
         <DirectoryPager

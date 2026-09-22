@@ -3937,3 +3937,685 @@ tbody tr:hover {
   color: var(--text-muted);
   font-size: 0.85rem;
 }
+
+/* ============================================================
+   MODERN STUDENT CARDS GRID — Beautiful Redesign
+   ============================================================ */
+
+.students-grid-wrapper {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.students-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 1.25rem;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@media (max-width: 768px) {
+  .students-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .students-grid {
+    grid-template-columns: 1fr;
+    gap: 0.875rem;
+  }
+}
+
+/* Student Card */
+.student-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  gap: 0.875rem;
+  box-shadow: var(--shadow-card);
+  transition: all var(--trans-base);
+  animation: fadeInScale 0.4s ease-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.student-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--gov-navy) 0%, var(--gov-saffron) 50%, var(--gov-green) 100%);
+  opacity: 0.5;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--trans-base);
+}
+
+.student-card:hover {
+  border-color: var(--gov-navy);
+  box-shadow: var(--shadow-elevated);
+  transform: translateY(-4px);
+}
+
+.student-card:hover::before {
+  transform: scaleX(1);
+}
+
+.student-card.student-card--selected {
+  border-color: var(--gov-navy);
+  background: var(--surface-active);
+  box-shadow: inset 0 0 0 2px rgba(0, 48, 135, 0.1), var(--shadow-card);
+}
+
+.student-card.student-card--inactive {
+  opacity: 0.7;
+}
+
+.student-card.student-card--inactive::after {
+  content: 'Inactive';
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(192, 57, 43, 0.15);
+  color: var(--danger);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.25rem 0.55rem;
+  border-radius: 12px;
+  letter-spacing: 0.05em;
+}
+
+/* Card Header */
+.student-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.student-card-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.student-card-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--gov-navy);
+}
+
+.student-card-badges {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.student-card-badges .badge {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.65rem;
+  border-radius: 4px;
+  font-weight: 700;
+  background: var(--surface-active);
+  border: 1px solid var(--border);
+}
+
+.student-card-badges .badge-present {
+  background: rgba(19, 136, 8, 0.1);
+  color: var(--gov-green);
+  border-color: rgba(19, 136, 8, 0.25);
+}
+
+.student-card-badges .badge-muted {
+  background: rgba(230, 126, 34, 0.1);
+  color: var(--warn);
+  border-color: rgba(230, 126, 34, 0.25);
+}
+
+.student-card-badges .badge-absent {
+  background: rgba(192, 57, 43, 0.1);
+  color: var(--danger);
+  border-color: rgba(192, 57, 43, 0.25);
+}
+
+/* Student Photo */
+.student-card-photo {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+.student-photo-wrapper {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--gov-navy-light), var(--gov-saffron));
+  box-shadow: 0 4px 12px rgba(0, 48, 135, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--trans-base);
+}
+
+.student-card:hover .student-photo-wrapper {
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(0, 48, 135, 0.25);
+}
+
+.student-photo-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.student-photo-initials {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Card Body */
+.student-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  flex: 1;
+}
+
+.student-card-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+  word-break: break-word;
+  text-align: center;
+}
+
+.student-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.625rem;
+  background: var(--bg-subtle);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+}
+
+.student-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.detail-value {
+  font-weight: 600;
+  color: var(--text);
+  text-align: right;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Subjects */
+.student-card-subjects {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.subjects-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.03em;
+}
+
+.subjects-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.subject-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: linear-gradient(135deg, rgba(0, 48, 135, 0.08), rgba(255, 102, 0, 0.08));
+  color: var(--gov-navy);
+  border: 1px solid rgba(0, 48, 135, 0.15);
+  border-radius: 12px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  transition: all var(--trans-fast);
+}
+
+.subject-tag:hover {
+  background: linear-gradient(135deg, rgba(0, 48, 135, 0.15), rgba(255, 102, 0, 0.15));
+  border-color: rgba(0, 48, 135, 0.3);
+  transform: translateY(-1px);
+}
+
+.subject-tag.subject-tag--more {
+  background: var(--accent-muted);
+  color: var(--gov-navy);
+  font-weight: 700;
+  cursor: default;
+}
+
+/* Attendance Info */
+.student-card-attendance {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.625rem;
+  background: linear-gradient(135deg, rgba(19, 136, 8, 0.05), rgba(19, 136, 8, 0.02));
+  border: 1px solid rgba(19, 136, 8, 0.1);
+  border-radius: var(--radius);
+}
+
+.att-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.03em;
+}
+
+.att-times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+}
+
+.att-time-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.att-time-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+}
+
+.att-time-value {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+/* Card Actions */
+.student-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.student-card-actions .btn {
+  flex: 1;
+  font-size: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  transition: all var(--trans-base);
+}
+
+.student-card-actions .btn-ghost {
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.student-card-actions .btn-ghost:hover {
+  background: var(--surface-active);
+  color: var(--gov-navy);
+}
+
+.student-card-actions .btn-primary {
+  background: linear-gradient(135deg, var(--gov-navy), var(--gov-navy-light));
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 48, 135, 0.2);
+}
+
+.student-card-actions .btn-primary:hover {
+  box-shadow: 0 4px 12px rgba(0, 48, 135, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Loading Row Enhancement */
+.loading-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.loading-row .loading-spinner {
+  flex-shrink: 0;
+}
+
+/* Enhanced Search Bar Styling */
+.institutes-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  background: linear-gradient(135deg, var(--surface), var(--surface-hover));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1.25rem;
+}
+
+.institutes-search-row .search-bar {
+  flex: 1 1 auto;
+  min-width: 200px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0 1rem;
+  background: var(--surface);
+  transition: all var(--trans-base);
+}
+
+.institutes-search-row .search-bar:focus-within {
+  border-color: var(--gov-navy);
+  box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.08), var(--shadow-card);
+  background: #fff;
+}
+
+.institutes-search-row .search-input {
+  padding: 0.75rem 0;
+  font-size: 0.9rem;
+}
+
+.institutes-search-row .search-icon {
+  font-size: 1rem;
+}
+
+.institutes-search-row .btn-ghost,
+.institutes-search-row .btn-primary {
+  font-size: 0.8rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.students-att-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.students-att-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-start;
+}
+
+.students-att-date-field span {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.students-att-date-field input {
+  padding: 0.5rem 0.75rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  background: #fff;
+  transition: all var(--trans-base);
+}
+
+.students-att-date-field input:focus {
+  outline: none;
+  border-color: var(--gov-navy);
+  box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.08);
+}
+
+/* Modern Institute Info Bar */
+.inst-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, var(--surface), var(--surface-hover));
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow-card);
+  animation: fadeInDown 0.4s ease-out;
+}
+
+.inst-info-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.inst-info-bar > div:nth-child(2) {
+  flex: 1;
+}
+
+.inst-info-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.25rem;
+}
+
+.inst-info-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.inst-info-meta span {
+  display: flex;
+  align-items: center;
+}
+
+.inst-info-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, rgba(0, 48, 135, 0.08), rgba(255, 102, 0, 0.08));
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(0, 48, 135, 0.1);
+}
+
+.big-num {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--gov-navy);
+}
+
+.big-lbl {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Stats Grid Enhancement */
+.institutes-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.institutes-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 1.1rem;
+  background: linear-gradient(135deg, var(--surface), var(--surface-hover));
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  transition: all var(--trans-base);
+  box-shadow: var(--shadow-sm);
+  animation: cardStagger 0.5s ease-out;
+}
+
+.institutes-stat-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--gov-navy);
+  box-shadow: var(--shadow-elevated);
+}
+
+.institutes-stat-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--gov-navy), var(--gov-navy-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.institutes-stat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+}
+
+.institutes-stat-card--active {
+  background: linear-gradient(135deg, rgba(19, 136, 8, 0.05), rgba(19, 136, 8, 0.02));
+  border-color: rgba(19, 136, 8, 0.15);
+}
+
+.institutes-stat-card--active .institutes-stat-value {
+  background: linear-gradient(135deg, var(--gov-green), #1a9d0e);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.institutes-stat-card--warn {
+  background: linear-gradient(135deg, rgba(230, 126, 34, 0.05), rgba(230, 126, 34, 0.02));
+  border-color: rgba(230, 126, 34, 0.15);
+}
+
+.institutes-stat-card--warn .institutes-stat-value {
+  background: linear-gradient(135deg, var(--warn), #f59e0b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.institutes-stat-card--muted {
+  background: linear-gradient(135deg, var(--bg-subtle), var(--bg));
+  border-color: var(--border);
+}
+
+.institutes-stat-card--muted .institutes-stat-value {
+  color: var(--text-muted);
+  background: none;
+  -webkit-text-fill-color: unset;
+  background-clip: unset;
+}
+
+/* Pager Enhancement */
+.institutes-panel-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem;
+  margin-top: 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  flex-wrap: wrap;
+}
+
+.institutes-pager-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.institutes-page-size {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.institutes-page-size span {
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.institutes-page-size select {
+  padding: 0.4rem 0.6rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  background: #fff;
+  cursor: pointer;
+  transition: all var(--trans-fast);
+}
+
+.institutes-page-size select:hover {
+  border-color: var(--gov-navy);
+}
+
+.institutes-page-size select:focus {
+  outline: none;
+  border-color: var(--gov-navy);
+  box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.08);
+}
