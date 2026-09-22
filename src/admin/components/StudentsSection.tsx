@@ -1928,7 +1928,14 @@ function StudentsList({
             <div className="list-header-cell list-header-roll">Roll</div>
             <div className="list-header-cell list-header-class">Class</div>
             <div className="list-header-cell list-header-subjects">Subjects</div>
-            {showDayAttendance && <div className="list-header-cell list-header-attendance">Attendance</div>}
+            {showDayAttendance && (
+              <>
+                <div className="list-header-cell list-header-entry">Entry</div>
+                <div className="list-header-cell list-header-exit">Exit</div>
+                <div className="list-header-cell list-header-face">Face</div>
+              </>
+            )}
+            <div className="list-header-cell list-header-status">Status</div>
             <div className="list-header-cell list-header-actions">Actions</div>
           </div>
           <div className="students-list">
@@ -1997,20 +2004,31 @@ function StudentsList({
                     )}
                   </div>
                   {showDayAttendance && (
-                    <div className="list-cell list-cell-attendance">
-                      <div className="att-compact">
-                        {attLoading ? (
-                          <span className="muted">Loading…</span>
-                        ) : (
-                          <>
-                            <span title="Entry time">{fmtTime(rowAtt?.entryAt) || '—'}</span>
-                            <span className="att-sep">/</span>
-                            <span title="Exit time">{fmtTime(rowAtt?.exitAt) || '—'}</span>
-                          </>
-                        )}
+                    <>
+                      <div className="list-cell list-cell-entry">
+                        <div className="att-photo-cell">
+                          {attLoading ? '…' : fmtTime(rowAtt?.entryAt) || '—'}
+                          {rowAtt?.entryPhoto && <PhotoThumb url={rowAtt.entryPhoto} label="In" />}
+                        </div>
                       </div>
-                    </div>
+                      <div className="list-cell list-cell-exit">
+                        <div className="att-photo-cell">
+                          {attLoading ? '…' : fmtTime(rowAtt?.exitAt) || '—'}
+                          {rowAtt?.exitPhoto && <PhotoThumb url={rowAtt.exitPhoto} label="Out" />}
+                        </div>
+                      </div>
+                      <div className="list-cell list-cell-face">
+                        {faceOk ? '📸' : '⏳'}
+                      </div>
+                    </>
                   )}
+                  <div className="list-cell list-cell-status">
+                    {active ? (
+                      <span className="status-badge status-badge--active">Active</span>
+                    ) : (
+                      <span className="status-badge status-badge--inactive">Inactive</span>
+                    )}
+                  </div>
                   <div className="list-cell list-cell-actions">
                     <div className="actions-group">
                       {!readOnly ? (
