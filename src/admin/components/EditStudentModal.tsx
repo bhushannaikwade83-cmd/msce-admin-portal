@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { getSupabase } from '../lib/supabase'
-import { parseSubjectsCsv, subjectsFromStudent, subjectsToCsv } from '../lib/studentSubjects'
+import { subjectsFromStudent } from '../lib/studentSubjects'
 import { ModalPortal } from './ModalPortal'
 
 type StudentRow = Record<string, unknown> & { id: string }
@@ -31,7 +31,13 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
   const [middleName, setMiddleName] = useState(initial.middle)
   const [lastName, setLastName] = useState(initial.last)
   const [year, setYear] = useState(String(student.year ?? `Year ${new Date().getFullYear()}`).trim())
-  const [subjectsCsv, setSubjectsCsv] = useState(subjectsToCsv(subjectsFromStudent(student)))
+  const [subjects, setSubjects] = useState<Record<number, string>>(() => {
+    const subs: Record<number, string> = { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' }
+    for (let i = 1; i <= 8; i++) {
+      subs[i] = String(student[`sub${i}`] ?? '').trim()
+    }
+    return subs
+  })
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [confirmClearPhoto, setConfirmClearPhoto] = useState(false)
@@ -42,7 +48,11 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
     setMiddleName(n.middle)
     setLastName(n.last)
     setYear(String(student.year ?? `Year ${new Date().getFullYear()}`).trim())
-    setSubjectsCsv(subjectsToCsv(subjectsFromStudent(student)))
+    const subs: Record<number, string> = { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' }
+    for (let i = 1; i <= 8; i++) {
+      subs[i] = String(student[`sub${i}`] ?? '').trim()
+    }
+    setSubjects(subs)
     setFormError(null)
   }, [student])
 
@@ -57,7 +67,7 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
       return
     }
     const fullName = `${fn} ${mn} ${ln}`.replace(/\s+/g, ' ').trim()
-    const subjList = parseSubjectsCsv(subjectsCsv)
+    const subjList = Object.values(subjects).filter(s => s.trim() !== '')
 
     setBusy(true)
     try {
@@ -73,9 +83,9 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
         subject: subjList.length > 0 ? subjList.join(', ') : null,
       }
 
-      // Also update individual sub1-sub8 fields
+      // Update individual sub1-sub8 fields
       for (let i = 1; i <= 8; i++) {
-        patch[`sub${i}`] = subjList[i - 1] || null
+        patch[`sub${i}`] = subjects[i]?.trim() || null
       }
 
       const { error } = await sb.from('students').update(patch).eq('id', student.id)
@@ -198,20 +208,30 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
                 disabled={busy}
               />
             </div>
-            <div className="field">
-              <label htmlFor="edit-stu-subjects">
-                Subjects <span className="muted small">(comma-separated, optional)</span>
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
+              <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
+                Subjects (1-8)
               </label>
-              <input
-                id="edit-stu-subjects"
-                type="text"
-                value={subjectsCsv}
-                onChange={(e) => setSubjectsCsv(e.target.value)}
-                placeholder="e.g. GCC TBC MAR 30, GCC TBC ENG 40"
-                disabled={busy}
-              />
-              <span className="muted small" style={{ marginTop: '0.35rem', display: 'block' }}>
-                Clears subjects if left empty. Matches the mobile app <code>subjects</code> array.
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i}>
+                    <label htmlFor={`edit-stu-sub${i}`} style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>
+                      Subject {i}
+                    </label>
+                    <input
+                      id={`edit-stu-sub${i}`}
+                      type="text"
+                      value={subjects[i] ?? ''}
+                      onChange={(e) => setSubjects({ ...subjects, [i]: e.target.value })}
+                      placeholder={`e.g. GCC TBC ENG ${30 + i}`}
+                      disabled={busy}
+                      style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <span className="muted small" style={{ marginTop: '0.5rem', display: 'block' }}>
+                Leave empty fields blank. Each subject is stored individually in the database.
               </span>
             </div>
             <div className="modal-form-actions">
