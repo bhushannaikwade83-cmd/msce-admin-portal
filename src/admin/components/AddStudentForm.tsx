@@ -331,15 +331,15 @@ export function AddStudentForm() {
           <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
             Subjects (up to 8, optional)
           </label>
-          <div style={{ display: 'space-y', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
             {Array.from(groupSubjectsByFamily(PREDEFINED_SUBJECTS).entries()).map(([family, familySubjects]) => (
-              <div key={family} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--text)' }}>
+              <div key={family}>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.75rem', color: 'var(--text)' }}>
                   {family}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                   {familySubjects.map((sub) => (
-                    <label key={sub.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                    <label key={sub.name} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontSize: '0.85rem', userSelect: 'none' }}>
                       <input
                         type="checkbox"
                         checked={selectedSubjects.has(sub.name)}
@@ -353,16 +353,16 @@ export function AddStudentForm() {
                           setSelectedSubjects(next)
                         }}
                         disabled={busy}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', flexShrink: 0, width: '16px', height: '16px' }}
                       />
-                      <span>{sub.name}</span>
+                      <span style={{ flex: 1 }}>{sub.name}</span>
                     </label>
                   ))}
                 </div>
               </div>
             ))}
           </div>
-          <span className="muted small" style={{ marginTop: '0.5rem', display: 'block' }}>
+          <span className="muted small" style={{ marginTop: '1rem', display: 'block' }}>
             Select up to 8 subjects. Each is stored individually in the database.
           </span>
         </div>
