@@ -328,18 +328,23 @@ export function AddStudentForm() {
         </label>
 
         <div style={{ gridColumn: '1 / -1', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
-          <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
-            Subjects (up to 8, optional)
+          <label style={{ display: 'block', marginBottom: '1rem', fontWeight: 700, fontSize: '1rem', color: 'var(--text)' }}>
+            📚 Subjects (up to 8, optional)
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
-            {Array.from(groupSubjectsByFamily(PREDEFINED_SUBJECTS).entries()).map(([family, familySubjects]) => (
-              <div key={family}>
-                <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.75rem', color: 'var(--text)' }}>
+            {Array.from(groupSubjectsByFamily(PREDEFINED_SUBJECTS).entries()).map(([family, familySubjects], idx) => {
+              const colors = ['#003087', '#FF6600', '#138808']
+              const bgColors = ['#E8F1FF', '#FFF4E8', '#E8F8E8']
+              const color = colors[idx % colors.length]
+              const bgColor = bgColors[idx % bgColors.length]
+              return (
+              <div key={family} style={{ padding: '1rem', borderRadius: '0.5rem', backgroundColor: bgColor, borderLeft: `4px solid ${color}` }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.75rem', color: color, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   {family}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                   {familySubjects.map((sub) => (
-                    <label key={sub.name} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontSize: '0.85rem', userSelect: 'none' }}>
+                    <label key={sub.name} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontSize: '0.85rem', userSelect: 'none', padding: '0.4rem 0.6rem', borderRadius: '0.375rem', transition: 'all 0.2s ease', backgroundColor: selectedSubjects.has(sub.name) ? 'rgba(0, 48, 135, 0.1)' : 'transparent' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 48, 135, 0.08)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedSubjects.has(sub.name) ? 'rgba(0, 48, 135, 0.1)' : 'transparent'}>
                       <input
                         type="checkbox"
                         checked={selectedSubjects.has(sub.name)}
@@ -353,14 +358,15 @@ export function AddStudentForm() {
                           setSelectedSubjects(next)
                         }}
                         disabled={busy}
-                        style={{ cursor: 'pointer', flexShrink: 0, width: '16px', height: '16px' }}
+                        style={{ cursor: 'pointer', flexShrink: 0, width: '16px', height: '16px', accentColor: 'var(--gov-navy)' }}
                       />
-                      <span style={{ flex: 1 }}>{sub.name}</span>
+                      <span style={{ flex: 1, color: selectedSubjects.has(sub.name) ? '#003087' : 'var(--text)' }}>{sub.name}</span>
                     </label>
                   ))}
                 </div>
               </div>
-            ))}
+            )
+            })}
           </div>
           <span className="muted small" style={{ marginTop: '1rem', display: 'block' }}>
             Select up to 8 subjects. Each is stored individually in the database.
