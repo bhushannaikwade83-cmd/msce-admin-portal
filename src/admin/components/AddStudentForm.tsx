@@ -3,6 +3,7 @@ import { getSupabase } from '../lib/supabase'
 import { usePortalAccess } from '../context/portal-access-context'
 import { sortByInstituteId } from '../lib/instituteSort'
 import { filterInstitutesByPortalPrefixes } from '../lib/portalDistricts'
+import { PREDEFINED_SUBJECTS, groupSubjectsByFamily } from '../lib/predefinedSubjects'
 import type { InstituteRow } from './InstituteList'
 
 export function AddStudentForm() {
@@ -15,9 +16,7 @@ export function AddStudentForm() {
   const [lastName, setLastName] = useState('')
   const [motherName, setMotherName] = useState('')
   const [year, setYear] = useState(String(new Date().getFullYear()))
-  const [subjects, setSubjects] = useState<Record<number, string>>({
-    1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '',
-  })
+  const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(new Set())
   const [instituteNo, setInstituteNo] = useState('')
   const [formSerialNo, setFormSerialNo] = useState('')
   const [applicationNo, setApplicationNo] = useState('')
@@ -149,8 +148,9 @@ export function AddStudentForm() {
       if (ln) insertData.lname = ln
       if (motherN) insertData.mother_name = motherN
 
+      const subjList = Array.from(selectedSubjects).sort()
       for (let i = 1; i <= 8; i++) {
-        insertData[`sub${i}`] = subjects[i]?.trim() || null
+        insertData[`sub${i}`] = subjList[i - 1] || null
       }
 
       console.log('📝 Inserting student data:', insertData)
@@ -176,7 +176,7 @@ export function AddStudentForm() {
       setLastName('')
       setMotherName('')
       setYear(String(new Date().getFullYear()))
-      setSubjects({ 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' })
+      setSelectedSubjects(new Set())
       setInstituteNo('')
       setFormSerialNo('')
       setApplicationNo('')
@@ -327,24 +327,44 @@ export function AddStudentForm() {
           />
         </label>
 
-        <div style={{ gridColumn: '1 / -1' }}>
-          <div style={{ marginBottom: '0.5rem' }}>
-            <strong>Subjects (optional)</strong>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem' }}>
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-              <label key={i} style={{ marginBottom: 0 }}>
-                <span className="small" style={{ display: 'block', marginBottom: '0.25rem' }}>Subject {i}</span>
-                <input
-                  type="text"
-                  value={subjects[i] ?? ''}
-                  onChange={(e) => setSubjects({ ...subjects, [i]: e.target.value })}
-                  placeholder={`e.g. Subject ${i}`}
-                  autoComplete="off"
-                />
-              </label>
+        <div style={{ gridColumn: '1 / -1', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
+          <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
+            Subjects (up to 8, optional)
+          </label>
+          <div style={{ display: 'space-y', gap: '1rem' }}>
+            {Array.from(groupSubjectsByFamily(PREDEFINED_SUBJECTS).entries()).map(([family, familySubjects]) => (
+              <div key={family} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--text)' }}>
+                  {family}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {familySubjects.map((sub) => (
+                    <label key={sub.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedSubjects.has(sub.name)}
+                        onChange={(e) => {
+                          const next = new Set(selectedSubjects)
+                          if (e.target.checked) {
+                            next.add(sub.name)
+                          } else {
+                            next.delete(sub.name)
+                          }
+                          setSelectedSubjects(next)
+                        }}
+                        disabled={busy}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>{sub.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
+          <span className="muted small" style={{ marginTop: '0.5rem', display: 'block' }}>
+            Select up to 8 subjects. Each is stored individually in the database.
+          </span>
         </div>
 
         <div className="span-2" style={{ display: 'flex', gap: '0.5rem' }}>
