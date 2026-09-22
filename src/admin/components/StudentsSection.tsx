@@ -338,7 +338,13 @@ function fmtTime(val: string | null | undefined) {
       try {
         const d = new Date(s.replace(' ', 'T'))
         if (Number.isFinite(d.getTime())) {
-          return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+          // If time is from database (likely UTC/GMT), convert to IST (UTC+5:30)
+          const istFormatter = new Intl.DateTimeFormat('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'Asia/Kolkata'
+          })
+          return istFormatter.format(d)
         }
       } catch {
         // fallback below
