@@ -4,16 +4,19 @@ export const PREDEFINED_SUBJECTS = [
   { family: 'GCC TBC ENG', level: '30', name: 'GCC TBC ENG 30' },
   { family: 'GCC TBC ENG', level: '40', name: 'GCC TBC ENG 40' },
   { family: 'GCC TBC ENG', level: '50', name: 'GCC TBC ENG 50' },
+  { family: 'GCC TBC ENG', level: '60', name: 'GCC TBC ENG 60' },
 
   // GCC TBC MAR (Marathi)
   { family: 'GCC TBC MAR', level: '30', name: 'GCC TBC MAR 30' },
   { family: 'GCC TBC MAR', level: '40', name: 'GCC TBC MAR 40' },
   { family: 'GCC TBC MAR', level: '50', name: 'GCC TBC MAR 50' },
+  { family: 'GCC TBC MAR', level: '60', name: 'GCC TBC MAR 60' },
 
   // GCC TBC HINDI (Hindi)
   { family: 'GCC TBC HINDI', level: '30', name: 'GCC TBC HINDI 30' },
   { family: 'GCC TBC HINDI', level: '40', name: 'GCC TBC HINDI 40' },
   { family: 'GCC TBC HINDI', level: '50', name: 'GCC TBC HINDI 50' },
+  { family: 'GCC TBC HINDI', level: '60', name: 'GCC TBC HINDI 60' },
 ]
 
 export function groupSubjectsByFamily(subjects: typeof PREDEFINED_SUBJECTS) {
