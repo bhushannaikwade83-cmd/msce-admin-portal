@@ -270,14 +270,13 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
             </div>
           </form>
 
-          {hasPhoto && (
-            <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '1rem', paddingTop: '1rem' }}>
-              <div style={{ marginBottom: '0.75rem' }}>
-                <strong>Photo Registration</strong>
-                <p className="muted small" style={{ margin: '0.5rem 0 0' }}>
-                  Clear photo and face embedding to allow student to retake registration
-                </p>
-              </div>
+          <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '1rem', paddingTop: '1rem' }}>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <strong>📸 Photo Registration</strong>
+              <p className="muted small" style={{ margin: '0.5rem 0 0' }}>
+                {hasPhoto ? 'Clear photo and face embedding to allow student to retake registration' : 'Clear any stored photo data and allow student to register new photo'}
+              </p>
+            </div>
               {!confirmClearPhoto ? (
                 <button
                   type="button"
@@ -315,7 +314,6 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
                 </div>
               )}
             </div>
-          )}
         </div>
       </div>
     </ModalPortal>
