@@ -336,15 +336,14 @@ function fmtTime(val: string | null | undefined) {
     const s = String(val).trim()
     if (s.includes('T') || s.includes(' ')) {
       try {
-        const d = new Date(s.replace(' ', 'T'))
-        if (Number.isFinite(d.getTime())) {
-          // If time is from database (likely UTC/GMT), convert to IST (UTC+5:30)
-          const istFormatter = new Intl.DateTimeFormat('en-IN', {
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'Asia/Kolkata'
-          })
-          return istFormatter.format(d)
+        // Database stores times as "YYYY-MM-DD HH:MM:SS.microseconds" (already in IST, no conversion needed)
+        // Extract HH:MM and format as 24-hour with AM/PM
+        const timeMatch = s.match(/(\d{1,2}):(\d{2})/)
+        if (timeMatch) {
+          const h = parseInt(timeMatch[1], 10)
+          const m = timeMatch[2]
+          const ampm = h >= 12 ? 'PM' : 'AM'
+          return `${h.toString().padStart(2, '0')}:${m} ${ampm}`
         }
       } catch {
         // fallback below
