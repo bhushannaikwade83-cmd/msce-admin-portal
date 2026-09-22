@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { getSupabase } from '../lib/supabase'
 import { subjectsFromStudent } from '../lib/studentSubjects'
+import { PREDEFINED_SUBJECTS, groupSubjectsByFamily } from '../lib/predefinedSubjects'
 import { ModalPortal } from './ModalPortal'
 
 type StudentRow = Record<string, unknown> & { id: string }
@@ -31,10 +32,11 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
   const [middleName, setMiddleName] = useState(initial.middle)
   const [lastName, setLastName] = useState(initial.last)
   const [year, setYear] = useState(String(student.year ?? `Year ${new Date().getFullYear()}`).trim())
-  const [subjects, setSubjects] = useState<Record<number, string>>(() => {
-    const subs: Record<number, string> = { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' }
+  const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(() => {
+    const subs = new Set<string>()
     for (let i = 1; i <= 8; i++) {
-      subs[i] = String(student[`sub${i}`] ?? '').trim()
+      const sub = String(student[`sub${i}`] ?? '').trim()
+      if (sub) subs.add(sub)
     }
     return subs
   })
@@ -48,11 +50,12 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
     setMiddleName(n.middle)
     setLastName(n.last)
     setYear(String(student.year ?? `Year ${new Date().getFullYear()}`).trim())
-    const subs: Record<number, string> = { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' }
+    const subs = new Set<string>()
     for (let i = 1; i <= 8; i++) {
-      subs[i] = String(student[`sub${i}`] ?? '').trim()
+      const sub = String(student[`sub${i}`] ?? '').trim()
+      if (sub) subs.add(sub)
     }
-    setSubjects(subs)
+    setSelectedSubjects(subs)
     setFormError(null)
   }, [student])
 
@@ -67,7 +70,7 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
       return
     }
     const fullName = `${fn} ${mn} ${ln}`.replace(/\s+/g, ' ').trim()
-    const subjList = Object.values(subjects).filter(s => s.trim() !== '')
+    const subjList = Array.from(selectedSubjects).sort()
 
     setBusy(true)
     try {
@@ -83,9 +86,9 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
         subject: subjList.length > 0 ? subjList.join(', ') : null,
       }
 
-      // Update individual sub1-sub8 fields
+      // Update individual sub1-sub8 fields from selected subjects
       for (let i = 1; i <= 8; i++) {
-        patch[`sub${i}`] = subjects[i]?.trim() || null
+        patch[`sub${i}`] = subjList[i - 1] || null
       }
 
       const { error } = await sb.from('students').update(patch).eq('id', student.id)
@@ -210,28 +213,41 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
             </div>
             <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
               <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>
-                Subjects (1-8)
+                Subjects (up to 8)
               </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                  <div key={i}>
-                    <label htmlFor={`edit-stu-sub${i}`} style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>
-                      Subject {i}
-                    </label>
-                    <input
-                      id={`edit-stu-sub${i}`}
-                      type="text"
-                      value={subjects[i] ?? ''}
-                      onChange={(e) => setSubjects({ ...subjects, [i]: e.target.value })}
-                      placeholder={`e.g. GCC TBC ENG ${30 + i}`}
-                      disabled={busy}
-                      style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                    />
+              <div style={{ display: 'space-y', gap: '1rem' }}>
+                {Array.from(groupSubjectsByFamily(PREDEFINED_SUBJECTS).entries()).map(([family, familySubjects]) => (
+                  <div key={family} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.5rem', color: 'var(--text)' }}>
+                      {family}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {familySubjects.map((sub) => (
+                        <label key={sub.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedSubjects.has(sub.name)}
+                            onChange={(e) => {
+                              const next = new Set(selectedSubjects)
+                              if (e.target.checked) {
+                                next.add(sub.name)
+                              } else {
+                                next.delete(sub.name)
+                              }
+                              setSelectedSubjects(next)
+                            }}
+                            disabled={busy}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <span>{sub.name}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
               <span className="muted small" style={{ marginTop: '0.5rem', display: 'block' }}>
-                Leave empty fields blank. Each subject is stored individually in the database.
+                Select up to 8 subjects. Each is stored individually in the database.
               </span>
             </div>
             <div className="modal-form-actions">
