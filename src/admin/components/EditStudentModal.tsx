@@ -292,23 +292,24 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
                   <p className="small" style={{ margin: '0 0 0.5rem' }}>
                     Clear all photos and face embedding? Student can retake from the mobile app.
                   </p>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       className="btn btn-sm"
-                      style={{ background: 'var(--color-danger)', color: 'white', border: 'none' }}
+                      style={{ background: '#d32f2f', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.375rem', cursor: busy ? 'not-allowed' : 'pointer' }}
                       disabled={busy}
                       onClick={() => void handleClearPhoto()}
                     >
-                      {busy ? 'Clearing…' : 'Yes, clear photo'}
+                      {busy ? '⏳ Clearing…' : '🗑️ Yes, clear photo'}
                     </button>
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
+                      style={{ padding: '0.5rem 1rem', borderRadius: '0.375rem', cursor: busy ? 'not-allowed' : 'pointer' }}
                       disabled={busy}
                       onClick={() => setConfirmClearPhoto(false)}
                     >
-                      Cancel
+                      ✕ Cancel
                     </button>
                   </div>
                 </div>
