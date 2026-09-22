@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { getSupabase } from '../lib/supabase'
-import { subjectsFromStudent } from '../lib/studentSubjects'
 import { PREDEFINED_SUBJECTS, groupSubjectsByFamily } from '../lib/predefinedSubjects'
 import { ModalPortal } from './ModalPortal'
 
