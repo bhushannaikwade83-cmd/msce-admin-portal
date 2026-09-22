@@ -41,6 +41,7 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
   })
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [formSuccess, setFormSuccess] = useState<string | null>(null)
   const [confirmClearPhoto, setConfirmClearPhoto] = useState(false)
 
   useEffect(() => {
@@ -87,8 +88,12 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
 
       const { error } = await sb.from('students').update(patch).eq('id', student.id)
       if (error) throw error
-      onSaved()
-      onClose()
+      const fullName = `${fn} ${mn} ${ln}`.replace(/\s+/g, ' ').trim()
+      setFormSuccess(`✅ Successfully updated ${fullName}`)
+      setTimeout(() => {
+        onSaved()
+        onClose()
+      }, 1500)
     } catch (err) {
       setFormError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -156,6 +161,11 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
           {formError ? (
             <p className="error" style={{ marginTop: '0.75rem' }}>
               {formError}
+            </p>
+          ) : null}
+          {formSuccess ? (
+            <p className="success" style={{ marginTop: '0.75rem' }}>
+              {formSuccess}
             </p>
           ) : null}
           <form className="modal-form" onSubmit={(e) => void handleSubmit(e)} autoComplete="off">
