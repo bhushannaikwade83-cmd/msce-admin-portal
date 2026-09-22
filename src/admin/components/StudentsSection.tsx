@@ -2027,16 +2027,20 @@ function StudentsList({
                   {showDayAttendance && (
                     <>
                       <div className="list-cell list-cell-entry">
-                        <div className="att-photo-cell">
-                          {attLoading ? '…' : fmtTime(rowAtt?.entryAt) || '—'}
-                          {rowAtt?.entryPhoto && <PhotoThumb url={rowAtt.entryPhoto} label="In" />}
-                        </div>
+                        <div className="att-time-display">{attLoading ? '…' : fmtTime(rowAtt?.entryAt) || '—'}</div>
+                        {rowAtt?.entryPhoto && (
+                          <div className="att-photo-square">
+                            <img src={rowAtt.entryPhoto} alt="Entry" className="att-photo-img" />
+                          </div>
+                        )}
                       </div>
                       <div className="list-cell list-cell-exit">
-                        <div className="att-photo-cell">
-                          {attLoading ? '…' : fmtTime(rowAtt?.exitAt) || '—'}
-                          {rowAtt?.exitPhoto && <PhotoThumb url={rowAtt.exitPhoto} label="Out" />}
-                        </div>
+                        <div className="att-time-display">{attLoading ? '…' : fmtTime(rowAtt?.exitAt) || '—'}</div>
+                        {rowAtt?.exitPhoto && (
+                          <div className="att-photo-square">
+                            <img src={rowAtt.exitPhoto} alt="Exit" className="att-photo-img" />
+                          </div>
+                        )}
                       </div>
                       <div className="list-cell list-cell-face">
                         {faceOk ? '📸' : '⏳'}
