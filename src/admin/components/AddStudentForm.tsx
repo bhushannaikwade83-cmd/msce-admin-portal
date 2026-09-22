@@ -98,6 +98,10 @@ export function AddStudentForm() {
     setBusy(true)
     try {
       const sb = getSupabase()
+      const yearNum = year.trim() ? parseInt(year.trim().replace(/\D/g, ''), 10) || new Date().getFullYear() : new Date().getFullYear()
+      const srNo = parseInt(applicationNo.trim(), 10)
+      const formSerialNoNum = parseInt(formSerialNo.trim(), 10)
+
       const nameCompare = `${fn.toLowerCase()} ${mn.toLowerCase()} ${ln.toLowerCase()}`.replace(/\s+/g, ' ').trim()
       const { data: dupRows, error: dupErr } = await sb
         .from('students')
@@ -134,9 +138,6 @@ export function AddStudentForm() {
           return
         }
       }
-      const yearNum = year.trim() ? parseInt(year.trim().replace(/\D/g, ''), 10) || new Date().getFullYear() : new Date().getFullYear()
-      const srNo = parseInt(applicationNo.trim(), 10)
-      const formSerialNoNum = parseInt(formSerialNo.trim(), 10)
 
       const insertData: Record<string, unknown> = {
         institute_id: selectedInstitute.id,
