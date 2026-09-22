@@ -150,7 +150,7 @@ export function AddStudentForm() {
       if (fn) insertData.fname = fn
       if (mn) insertData.mname = mn
       if (ln) insertData.lname = ln
-      if (motherN) insertData.mother_name = motherN
+      if (motherN) insertData.mother_nm = motherN
 
       const subjList = Array.from(selectedSubjects).sort()
       for (let i = 1; i <= 8; i++) {
