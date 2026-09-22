@@ -68,21 +68,16 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
       setFormError('First and last name are required.')
       return
     }
-    const fullName = `${fn} ${mn} ${ln}`.replace(/\s+/g, ' ').trim()
     const subjList = Array.from(selectedSubjects).sort()
 
     setBusy(true)
     try {
       const sb = getSupabase()
       const patch: Record<string, unknown> = {
-        name: fullName,
-        first_name: fn,
-        middle_name: mn || null,
-        last_name: ln,
-        year: year.trim() || `Year ${new Date().getFullYear()}`,
-        updated_at: new Date().toISOString(),
-        subjects: subjList,
-        subject: subjList.length > 0 ? subjList.join(', ') : null,
+        fname: fn,
+        mname: mn || null,
+        lname: ln,
+        year: year.trim() ? parseInt(year.trim().replace(/\D/g, ''), 10) || new Date().getFullYear() : new Date().getFullYear(),
       }
 
       // Update individual sub1-sub8 fields from selected subjects
