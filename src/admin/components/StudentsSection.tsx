@@ -334,30 +334,40 @@ function fmtTime(val: string | null | undefined) {
   if (!val) return '—'
   try {
     const s = String(val).trim()
+    // Extract HH:MM from timestamp (works for "2026-08-17 06:21:11.475004" or "06:21:30")
+    const timeMatch = s.match(/(\d{1,2}):(\d{2})/)
+    if (!timeMatch) return String(val)
+
+    const hourStr = timeMatch[1]
+    const minStr = timeMatch[2]
+
     if (s.includes('T') || s.includes(' ')) {
       try {
-        // Database stores times in GMT - convert to IST (UTC+5:30)
-        const d = new Date(s.replace(' ', 'T'))
+        // Full timestamp found - treat as UTC, convert to IST (UTC+5:30)
+        let isoStr = s.replace(' ', 'T')
+        // Force UTC by adding Z if no timezone info
+        if (!isoStr.includes('Z') && !isoStr.includes('+') && !isoStr.includes('-')) {
+          isoStr = isoStr.split('.')[0] + 'Z'
+        }
+        const d = new Date(isoStr)
         if (Number.isFinite(d.getTime())) {
-          // Convert GMT/UTC to IST using formatter
-          const istTime = new Intl.DateTimeFormat('en-IN', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-            timeZone: 'Asia/Kolkata'
-          }).format(d)
-          // Add AM/PM based on IST time
-          const [h, m] = istTime.split(':').map(x => parseInt(x, 10))
+          // Add 5:30 hours (330 minutes) to UTC to get IST
+          const istDate = new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
+          const h = istDate.getUTCHours()
+          const m = istDate.getUTCMinutes()
+          const hStr = h.toString().padStart(2, '0')
+          const mStr = m.toString().padStart(2, '0')
           const ampm = h >= 12 ? 'PM' : 'AM'
-          return `${istTime} ${ampm}`
+          return `${hStr}:${mStr} ${ampm}`
         }
       } catch {
-        // fallback below
+        // Fallback: use extracted time with AM/PM
       }
     }
-    const [h, m] = s.split(':')
-    const hr = parseInt(h, 10)
-    return `${((hr % 12) || 12).toString().padStart(2, '0')}:${m} ${hr >= 12 ? 'PM' : 'AM'}`
+
+    // Simple time format (no date) - just add AM/PM
+    const hr = parseInt(hourStr, 10)
+    return `${hourStr}:${minStr} ${hr >= 12 ? 'PM' : 'AM'}`
   } catch { return String(val) }
 }
 

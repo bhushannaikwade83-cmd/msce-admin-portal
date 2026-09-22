@@ -23,6 +23,7 @@ export function AddStudentForm() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
+  const [keepInstitute, setKeepInstitute] = useState(false)
 
   useEffect(() => {
     void loadInstitutes()
@@ -63,9 +64,17 @@ export function AddStudentForm() {
       void lookupInstituteByNo(cleaned).then(inst => {
         if (inst) {
           setSelectedInstitute(inst)
+          setErr(null)
         } else {
-          setErr(`Institute with code ${cleaned} not found.`)
-          setSelectedInstitute(null)
+          // Allow saving with institute code even if not found in list
+          // Create temp institute object with just the code
+          setSelectedInstitute({
+            id: `code_${cleaned}`,
+            name: `Institute ${cleaned}`,
+            institute_code: cleaned,
+            student_count: 0,
+          } as InstituteRow)
+          setErr(null)
         }
       })
     } else {
@@ -181,9 +190,13 @@ export function AddStudentForm() {
       setMotherName('')
       setYear(String(new Date().getFullYear()))
       setSelectedSubjects(new Set())
-      setInstituteNo('')
       setFormSerialNo('')
       setApplicationNo('')
+      // Only keep institute if checkbox is checked
+      if (!keepInstitute) {
+        setInstituteNo('')
+        setSelectedInstitute(null)
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -375,6 +388,19 @@ export function AddStudentForm() {
           <span className="muted small" style={{ marginTop: '1rem', display: 'block' }}>
             Select up to 8 subjects. Each is stored individually in the database.
           </span>
+        </div>
+
+        <div style={{ gridColumn: '1 / -1', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontSize: '0.95rem' }}>
+            <input
+              type="checkbox"
+              checked={keepInstitute}
+              onChange={(e) => setKeepInstitute(e.target.checked)}
+              disabled={busy}
+              style={{ cursor: 'pointer', width: '18px', height: '18px', accentColor: 'var(--gov-navy)' }}
+            />
+            <span>Keep institute code for adding more students</span>
+          </label>
         </div>
 
         <div className="span-2" style={{ display: 'flex', gap: '0.5rem' }}>
