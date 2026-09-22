@@ -73,6 +73,11 @@ export function EditStudentModal({ student, instituteLabel, onClose, onSaved }: 
         subject: subjList.length > 0 ? subjList.join(', ') : null,
       }
 
+      // Also update individual sub1-sub8 fields
+      for (let i = 1; i <= 8; i++) {
+        patch[`sub${i}`] = subjList[i - 1] || null
+      }
+
       const { error } = await sb.from('students').update(patch).eq('id', student.id)
       if (error) throw error
       onSaved()
