@@ -4635,7 +4635,7 @@ tbody tr:hover {
 
 .students-list-header {
   display: grid;
-  grid-template-columns: 32px 60px 1fr 80px 120px 1fr 1fr 1fr 100px 120px;
+  grid-template-columns: 32px 120px 1fr 80px 120px 1fr 1fr 1fr 100px 120px;
   gap: 0;
   padding: 0.75rem 1rem;
   background: linear-gradient(to right, var(--gov-navy), var(--gov-navy-dark));
@@ -4675,11 +4675,12 @@ tbody tr:hover {
 
 .student-list-row {
   display: grid;
-  grid-template-columns: 32px 60px 1fr 80px 120px 1fr 1fr 1fr 100px 120px;
+  grid-template-columns: 32px 120px 1fr 80px 120px 1fr 1fr 1fr 100px 120px;
   gap: 0;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-light);
-  align-items: center;
+  align-items: flex-start;
+  min-height: 110px;
   transition: all var(--trans-fast);
   animation: slideInLeft 0.3s ease-out forwards;
   opacity: 1;
@@ -4719,12 +4720,14 @@ tbody tr:hover {
 
 .list-cell-photo {
   justify-content: center;
+  align-items: flex-start;
+  padding-top: 0.75rem;
 }
 
 .list-photo-wrapper {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 100px;
+  height: 100px;
   flex-shrink: 0;
 }
 
