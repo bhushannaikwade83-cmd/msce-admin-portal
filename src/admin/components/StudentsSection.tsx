@@ -1961,8 +1961,18 @@ function StudentsList({
                     </td>
                     <td>{roll}</td>
                     <td>{classLabel}</td>
-                    <td className="small" title={enrolledSubjects.join(', ') || undefined}>
-                      {formatSubjectsDisplay(enrolledSubjects)}
+                    <td className="small" style={{ minWidth: '180px', whiteSpace: 'normal', wordBreak: 'break-word' }} title={enrolledSubjects.join(', ') || undefined}>
+                      {enrolledSubjects.length > 0 ? (
+                        <span style={{ display: 'block' }}>
+                          {enrolledSubjects.map((sub, idx) => (
+                            <span key={idx} style={{ display: 'block', marginBottom: '2px' }}>
+                              {sub}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
                     </td>
                     <td className="students-day-att-cell">
                       {showDayAttendance ? (
