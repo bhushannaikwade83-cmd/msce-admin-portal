@@ -1953,10 +1953,8 @@ function StudentsList({
               <>
                 <div className="list-header-cell list-header-entry">Entry</div>
                 <div className="list-header-cell list-header-exit">Exit</div>
-                <div className="list-header-cell list-header-face">Face</div>
               </>
             )}
-            <div className="list-header-cell list-header-status">Status</div>
             <div className="list-header-cell list-header-actions">Actions</div>
           </div>
           <div className="students-list">
@@ -2042,18 +2040,8 @@ function StudentsList({
                           </div>
                         )}
                       </div>
-                      <div className="list-cell list-cell-face">
-                        {faceOk ? '📸' : '⏳'}
-                      </div>
                     </>
                   )}
-                  <div className="list-cell list-cell-status">
-                    {active ? (
-                      <span className="status-badge status-badge--active">Active</span>
-                    ) : (
-                      <span className="status-badge status-badge--inactive">Inactive</span>
-                    )}
-                  </div>
                   <div className="list-cell list-cell-actions">
                     <div className="actions-group">
                       {!readOnly ? (

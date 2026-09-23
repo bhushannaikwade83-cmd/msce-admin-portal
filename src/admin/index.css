@@ -4635,7 +4635,7 @@ tbody tr:hover {
 
 .students-list-header {
   display: grid;
-  grid-template-columns: 32px 160px 1.5fr 80px 110px 1.2fr 80px 80px 80px 100px;
+  grid-template-columns: 32px 160px 1.5fr 80px 110px 1.2fr 80px 80px 100px;
   gap: 0;
   padding: 0.75rem 1rem;
   background: linear-gradient(to right, var(--gov-navy), var(--gov-navy-dark));
@@ -4675,8 +4675,8 @@ tbody tr:hover {
 
 .student-list-row {
   display: grid;
-  grid-template-columns: 32px 160px 1.5fr 80px 110px 1.2fr 80px 80px 80px 100px;
-  gap: 0;
+  grid-template-columns: 32px 160px 1.5fr 80px 110px 1.2fr 80px 80px 100px;
+  gap: 0.8rem;
   padding: 1rem;
   border-bottom: 1px solid var(--border-light);
   align-items: center;
@@ -4716,6 +4716,15 @@ tbody tr:hover {
   height: 16px;
   cursor: pointer;
   accent-color: var(--gov-navy);
+}
+
+.list-cell-entry,
+.list-cell-exit {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.8rem;
 }
 
 .list-cell-photo {
@@ -4892,13 +4901,13 @@ tbody tr:hover {
   font-size: 0.8rem;
   color: var(--text);
   font-weight: 500;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.2rem;
   text-align: center;
 }
 
 .att-photo-square {
-  width: 60px;
-  height: 60px;
+  width: 100px;
+  height: 100px;
   border-radius: 0.375rem;
   overflow: hidden;
   border: 1px solid var(--border-light);
