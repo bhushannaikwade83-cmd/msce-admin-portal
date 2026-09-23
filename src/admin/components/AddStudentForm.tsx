@@ -73,6 +73,9 @@ export function AddStudentForm() {
             name: `Institute ${cleaned}`,
             institute_code: cleaned,
             student_count: 0,
+            city: '',
+            state: '',
+            is_active: true,
           } as InstituteRow)
           setErr(null)
         }

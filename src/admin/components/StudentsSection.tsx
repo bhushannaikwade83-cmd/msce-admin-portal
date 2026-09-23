@@ -1610,14 +1610,6 @@ function StudentsList({
     setSelectedStudentsImpl(next)
   }
 
-  const handleSelectAll = () => {
-    const studentsWithPhotos = filtered.filter(s => hasFacePhoto(s))
-    if (selectedStudents.size === studentsWithPhotos.length) {
-      setSelectedStudentsImpl(new Set())
-    } else {
-      setSelectedStudentsImpl(new Set(studentsWithPhotos.map(s => s.id)))
-    }
-  }
 
   const exportSelectedAsCSV = async () => {
     if (selectedStudents.size === 0) {
@@ -1986,7 +1978,7 @@ function StudentsList({
                   </div>
                   <div className="list-cell list-cell-photo">
                     <div className="list-photo-wrapper">
-                      <StudentDisplayPhoto student={s} displayName={name} size="xs" clickable={hasFacePhoto(s)} />
+                      <StudentDisplayPhoto student={s} displayName={name} size="sm" clickable={hasFacePhoto(s)} />
                       {faceOk ? (
                         <span className="photo-badge photo-badge--ok" title="Face photo registered">📸</span>
                       ) : (
