@@ -69,7 +69,7 @@ export function AddStudentForm() {
           // Allow saving with institute code even if not found in list
           // Create temp institute object with just the code
           setSelectedInstitute({
-            id: `code_${cleaned}`,
+            id: cleaned,
             name: `Institute ${cleaned}`,
             institute_code: cleaned,
             student_count: 0,
