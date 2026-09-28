@@ -1610,6 +1610,18 @@ function StudentsList({
     setSelectedStudentsImpl(next)
   }
 
+  const handleDeleteStudent = async (student: Student) => {
+    const name = pick(student, 'student_name', 'name', 'full_name', 'fname', 'lname') ?? 'Unknown'
+    if (!confirm(`Delete "${name}" from database? This cannot be undone.`)) return
+    try {
+      const sb = getSupabase()
+      const { error } = await sb.from('students').delete().eq('id', student.id)
+      if (error) throw error
+      setStudents(students.filter(s => s.id !== student.id))
+    } catch (e) {
+      alert(`Error deleting student: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
 
   const exportSelectedAsCSV = async () => {
     if (selectedStudents.size === 0) {
@@ -2037,14 +2049,25 @@ function StudentsList({
                   <div className="list-cell list-cell-actions">
                     <div className="actions-group">
                       {!readOnly ? (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs"
-                          onClick={() => setEditingStudent(s)}
-                          title="Edit student information"
-                        >
-                          ✏️
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs"
+                            onClick={() => setEditingStudent(s)}
+                            title="Edit student information"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs"
+                            onClick={() => void handleDeleteStudent(s)}
+                            title="Delete student from database"
+                            style={{ color: 'var(--danger)' }}
+                          >
+                            🗑️
+                          </button>
+                        </>
                       ) : null}
                       <button
                         type="button"
