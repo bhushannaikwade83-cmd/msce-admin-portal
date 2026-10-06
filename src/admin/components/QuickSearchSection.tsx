@@ -86,10 +86,6 @@ function hasCurrentPhoto(student: QuickStudent): boolean {
   )
 }
 
-function hasOriginalPhoto(student: QuickStudent): boolean {
-  return Boolean(pick(student, 'original_face_photo_url', 'original_registration_photo_path'))
-}
-
 function instituteCodeHead(row: InstituteRow): string {
   const raw = String(row.institute_code ?? row.id ?? '').trim().padStart(5, '0')
   return raw.slice(0, 2)
@@ -111,32 +107,11 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
   const lastSearchQueryRef = useRef<string>('')
   const [searchQuery, setSearchQuery] = useState('')
   const [institutes, setInstitutes] = useState<InstituteRow[]>([])
-  const [selectedPrefix, setSelectedPrefix] = useState('')
-  const [selectedInstituteId, setSelectedInstituteId] = useState('')
-  const [institutePickerOpen, setInstitutePickerOpen] = useState(false)
-  const [students, setStudents] = useState<QuickStudent[]>([])
-  const [studentsLoading, setStudentsLoading] = useState(false)
-  const [studentsError, setStudentsError] = useState<string | null>(null)
-  const [globalSearchMode, setGlobalSearchMode] = useState(false)
-  const [globalSearchResults, setGlobalSearchResults] = useState<(QuickStudent & { institute_name?: string })[]>([])
+  const [globalSearchResults, setGlobalSearchResults] = useState<(QuickStudent & { institute_name?: string | null })[]>([])
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [editingStudent, setEditingStudent] = useState<QuickStudent | null>(null)
   const [editingStudentInstitute, setEditingStudentInstitute] = useState<InstituteRow | null>(null)
-  const [districtKey, setDistrictKey] = useState(() => {
-    if (typeof window === 'undefined') return ''
-    try {
-      return localStorage.getItem('msce_quick_search_selected_district') || ''
-    } catch {
-      return ''
-    }
-  })
-
-  const lockedDistrict = useMemo(
-    () => findPortalDistrictForPrefixes(portal.institutePrefixes),
-    [portal.institutePrefixes],
-  )
 
   const loadInstitutes = useCallback(async () => {
     setLoading(true)
@@ -244,128 +219,10 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
   }, [loadInstitutes])
 
   useEffect(() => {
-    if (globalSearchMode && searchQuery.trim()) {
+    if (searchQuery.trim()) {
       void performGlobalSearch(searchQuery)
     }
-  }, [searchQuery, globalSearchMode, performGlobalSearch])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      localStorage.setItem('msce_quick_search_selected_district', districtKey)
-    } catch {
-      // Ignore localStorage errors.
-    }
-  }, [districtKey])
-
-  const effectiveDistrictKey =
-    portal.mode === 'district_viewer' && lockedDistrict ? lockedDistrict.key : districtKey
-
-  const districtFilteredInstitutes = useMemo(() => {
-    if (!effectiveDistrictKey) return institutes
-    const district = findPortalDistrictByKey(effectiveDistrictKey)
-    if (!district) return institutes
-    return institutes.filter((i) => instituteRowMatchesPrefixes(i, district.prefixes))
-  }, [institutes, effectiveDistrictKey])
-
-  const prefixOptions = useMemo(() => {
-    if (effectiveDistrictKey) {
-      return findPortalDistrictByKey(effectiveDistrictKey)?.prefixes ?? []
-    }
-    return [...new Set(PORTAL_DISTRICTS.flatMap((district) => district.prefixes))].sort()
-  }, [effectiveDistrictKey])
-
-  const prefixFilteredInstitutes = useMemo(() => {
-    if (!selectedPrefix) return districtFilteredInstitutes
-    return districtFilteredInstitutes.filter((institute) => instituteCodeHead(institute) === selectedPrefix)
-  }, [districtFilteredInstitutes, selectedPrefix])
-
-  const selectedInstitute = useMemo(
-    () => institutes.find((institute) => institute.id === selectedInstituteId) ?? null,
-    [institutes, selectedInstituteId],
-  )
-
-  const visibleInstituteOptions = useMemo(() => {
-    return prefixFilteredInstitutes
-  }, [prefixFilteredInstitutes])
-
-  const filteredStudents = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    if (!q) return students
-    return students.filter((student) =>
-      [
-        studentName(student),
-        studentRoll(student),
-        studentClass(student),
-        student.id,
-        pick(student, 'email', 'email_id', 'phone', 'mobile'),
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q)),
-    )
-  }, [students, searchQuery])
-
-  useEffect(() => {
-    setSelectedPrefix('')
-    setSelectedInstituteId('')
-    setStudents([])
-    setStudentsError(null)
-  }, [effectiveDistrictKey])
-
-  useEffect(() => {
-    if (!selectedInstituteId) {
-      setStudents([])
-      setStudentsError(null)
-      return
-    }
-
-    let cancelled = false
-    async function loadStudents() {
-      setStudentsLoading(true)
-      setStudentsError(null)
-      try {
-        const sb = getSupabase()
-        const raw = await fetchAllPaged<QuickStudent>((rangeFrom, rangeTo) =>
-          sb
-            .from('students')
-            .select('*')
-            .eq('institute_id', selectedInstituteId)
-            .order('id', { ascending: true })
-            .range(rangeFrom, rangeTo),
-        )
-        if (!cancelled) setStudents(sortStudents(raw))
-      } catch (e) {
-        if (!cancelled) {
-          setStudents([])
-          setStudentsError(e instanceof Error ? e.message : String(e))
-        }
-      } finally {
-        if (!cancelled) setStudentsLoading(false)
-      }
-    }
-
-    void loadStudents()
-    return () => {
-      cancelled = true
-    }
-  }, [selectedInstituteId])
-
-  useEffect(() => {
-    if (!selectedInstituteId || studentsLoading) return
-    window.requestAnimationFrame(() => {
-      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }, [selectedInstituteId, studentsLoading])
-
-  useEffect(() => {
-    if (!institutePickerOpen || !selectedInstituteId) return
-    window.requestAnimationFrame(() => {
-      const optionsEl = instituteOptionsRef.current
-      const selectedEl = optionsEl?.querySelector<HTMLElement>('[data-selected="true"]')
-      if (!optionsEl || !selectedEl) return
-      optionsEl.scrollTop = Math.max(0, selectedEl.offsetTop - optionsEl.clientHeight / 2)
-    })
-  }, [institutePickerOpen, selectedInstituteId])
+  }, [searchQuery, performGlobalSearch])
 
   return (
     <div style={{ padding: '1.5rem' }}>
