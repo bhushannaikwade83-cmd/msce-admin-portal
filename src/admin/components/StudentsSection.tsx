@@ -340,10 +340,34 @@ function fmtTime(val: string | null | undefined) {
 
     const hourStr = timeMatch[1]
     const minStr = timeMatch[2]
-    const hr = parseInt(hourStr, 10)
 
-    // Show UTC time as-is (no conversion)
-    return `${hourStr}:${minStr} ${hr >= 12 ? 'PM' : 'AM'} (UTC)`
+    if (s.includes('T') || s.includes(' ')) {
+      try {
+        // Full timestamp found - treat as UTC, convert to IST (UTC+5:30)
+        let isoStr = s.replace(' ', 'T')
+        // Force UTC by adding Z if no timezone info
+        if (!isoStr.includes('Z') && !isoStr.includes('+') && !isoStr.includes('-')) {
+          isoStr = isoStr.split('.')[0] + 'Z'
+        }
+        const d = new Date(isoStr)
+        if (Number.isFinite(d.getTime())) {
+          // Add 5:30 hours (330 minutes) to UTC to get IST
+          const istDate = new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
+          const h = istDate.getUTCHours()
+          const m = istDate.getUTCMinutes()
+          const hStr = h.toString().padStart(2, '0')
+          const mStr = m.toString().padStart(2, '0')
+          const ampm = h >= 12 ? 'PM' : 'AM'
+          return `${hStr}:${mStr} ${ampm}`
+        }
+      } catch {
+        // Fallback: use extracted time with AM/PM
+      }
+    }
+
+    // Simple time format (no date) - just add AM/PM
+    const hr = parseInt(hourStr, 10)
+    return `${hourStr}:${minStr} ${hr >= 12 ? 'PM' : 'AM'}`
   } catch { return String(val) }
 }
 
