@@ -520,6 +520,7 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
                     <th>Photo</th>
                     <th>Name</th>
                     <th>Institute</th>
+                    <th>Institute ID</th>
                     <th>Roll</th>
                     <th>Class</th>
                     <th>Status</th>
@@ -543,7 +544,10 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
                           <div className="muted small"><code>{student.id}</code></div>
                         </td>
                         <td>
-                          <span className="muted">{student.institute_name || student.institute_id}</span>
+                          <span className="muted">{student.institute_name}</span>
+                        </td>
+                        <td>
+                          <code className="tiny">{student.institute_id}</code>
                         </td>
                         <td>{studentRoll(student)}</td>
                         <td>{studentClass(student)}</td>
