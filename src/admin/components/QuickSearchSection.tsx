@@ -170,7 +170,6 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
       if (error) throw error
 
       setGlobalSearchResults((prev) => prev.filter((s) => s.id !== student.id))
-      setStudents((prev) => prev.filter((s) => s.id !== student.id))
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to delete student')
     }
