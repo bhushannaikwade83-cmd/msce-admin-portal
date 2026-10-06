@@ -370,13 +370,13 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
   return (
     <div style={{ padding: '1.5rem' }}>
       <h2 style={{ marginBottom: '0.5rem' }}>Quick Search</h2>
-      <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>Search for students, institutes, or other data</p>
+      <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>Search for students across all institutes</p>
 
       <div className="card-elevated" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             type="text"
-            placeholder={globalSearchMode ? "Search student name across all institutes..." : "Search by name, ID, institute code..."}
+            placeholder="Search student by name, ID, roll number, phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -387,21 +387,9 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
               fontSize: '1rem',
             }}
           />
-          <button
-            className={globalSearchMode ? "btn btn-primary" : "btn btn-outline"}
-            onClick={() => {
-              setGlobalSearchMode(!globalSearchMode)
-              setSearchQuery('')
-              setGlobalSearchResults([])
-              setSelectedInstituteId('')
-            }}
-            title={globalSearchMode ? "Switch to institute selection mode" : "Switch to global search mode"}
-          >
-            {globalSearchMode ? '🌐 Global' : '🏢 Institute'}
-          </button>
         </div>
 
-        {!globalSearchMode ? (
+        {false ? (
           <div style={{ marginTop: '1rem', display: 'grid', gap: '1rem' }}>
             <InstituteDistrictFilter
               rows={institutes}
@@ -490,27 +478,18 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
         ) : null}
       </div>
 
-      {error ? (
-        <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
-          Could not load district filter: {error}
+      {globalSearchLoading ? (
+        <div className="loading-row">
+          <div className="loading-spinner" />
+          <span>Searching across all institutes...</span>
         </div>
       ) : null}
 
-      {/* Global Search Mode */}
-      {globalSearchMode ? (
-        <>
-          {globalSearchLoading ? (
-            <div className="loading-row">
-              <div className="loading-spinner" />
-              <span>Searching across all institutes...</span>
-            </div>
-          ) : null}
-
-          {searchQuery && !globalSearchLoading && (
-            <div style={{ padding: '1rem', color: '#64748b', marginBottom: '1rem' }}>
-              <p>Found {globalSearchResults.length} student(s) matching "{searchQuery}"</p>
-            </div>
-          )}
+      {searchQuery && !globalSearchLoading && (
+        <div style={{ padding: '1rem', color: '#64748b', marginBottom: '1rem' }}>
+          <p>Found {globalSearchResults.length} student(s) matching "{searchQuery}"</p>
+        </div>
+      )}
 
           {globalSearchResults.length > 0 && (
             <div className="table-wrap institutes-table-wrap students-table-wrap quick-search-table-wrap">
@@ -591,148 +570,10 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
             </div>
           )}
 
-          {searchQuery && !globalSearchLoading && globalSearchResults.length === 0 && (
-            <div style={{ padding: '1rem', textAlign: 'center', color: '#64748b' }}>
-              No students found matching your search.
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          {searchQuery && (
-            <div style={{ padding: '1rem', color: '#64748b' }}>
-              <p>
-                Showing search "{searchQuery}" in {selectedInstitute ? selectedInstitute.name ?? selectedInstitute.id : 'selected institute'}
-              </p>
-            </div>
-          )}
-
-          {selectedInstitute ? (
-            <div ref={resultsRef} className="card-elevated quick-search-selected-institute" style={{ padding: '1rem', marginBottom: '1rem' }}>
-              <strong>{selectedInstitute.name ?? selectedInstitute.id}</strong>
-              <div className="muted small">
-                ID: <code>{selectedInstitute.id}</code>
-                {selectedInstitute.institute_code ? <> · Code: <code>{selectedInstitute.institute_code}</code></> : null}
-                {selectedInstitute.city ? <> · {selectedInstitute.city}</> : null}
-              </div>
-            </div>
-          ) : null}
-
-          {studentsError ? <p className="error">{studentsError}</p> : null}
-          {studentsLoading ? (
-            <div className="loading-row">
-              <div className="loading-spinner" />
-              <span>Loading students...</span>
-            </div>
-          ) : null}
-
-          {selectedInstituteId ? (
-            <div className="table-wrap institutes-table-wrap students-table-wrap quick-search-table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Original photo</th>
-                    <th>Current photo</th>
-                    <th>Name</th>
-                    <th>Roll</th>
-                    <th>Class</th>
-                    <th>Student ID</th>
-                    <th>Photo status</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {!studentsLoading && filteredStudents.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="muted">
-                        No students found for this institute.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredStudents.map((student) => {
-                      const name = studentName(student)
-                      const originalStudent = {
-                        ...student,
-                        face_photo_url: student.original_face_photo_url,
-                        registration_photo_path: student.original_registration_photo_path,
-                      }
-                      return (
-                        <tr key={student.id}>
-                          <td className="students-photo-cell">
-                            {hasOriginalPhoto(student) ? (
-                              <StudentDisplayPhoto
-                                student={originalStudent}
-                                displayName={`${name} original`}
-                                size="sm"
-                                clickable
-                              />
-                            ) : (
-                              <span className="muted small">No old photo</span>
-                            )}
-                          </td>
-                          <td className="students-photo-cell">
-                            {hasCurrentPhoto(student) ? (
-                              <StudentDisplayPhoto student={student} displayName={name} size="sm" clickable />
-                            ) : (
-                              <span className="muted small">No photo</span>
-                            )}
-                          </td>
-                          <td>
-                            <strong>{name}</strong>
-                          </td>
-                          <td>{studentRoll(student)}</td>
-                          <td>{studentClass(student)}</td>
-                          <td>
-                            <code className="tiny">{student.id}</code>
-                          </td>
-                          <td>
-                            {student.face_photo_changed_once === true || hasOriginalPhoto(student) ? (
-                              <span className="badge badge-absent">Changed</span>
-                            ) : (
-                              <span className="badge badge-present">Same</span>
-                            )}
-                          </td>
-                          <td>
-                            {student.is_active === false ? (
-                              <span className="badge badge-muted">Inactive</span>
-                            ) : (
-                              <span className="badge badge-present">Active</span>
-                            )}
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-xs"
-                                onClick={() => {
-                                  setEditingStudent(student)
-                                  setEditingStudentInstitute(selectedInstitute)
-                                }}
-                                title="Edit student"
-                              >
-                                ✏️
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-xs"
-                                onClick={() => void handleDeleteStudent(student)}
-                                title="Delete student"
-                                style={{ color: 'var(--danger)' }}
-                              >
-                                🗑️
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </>
+      {searchQuery && !globalSearchLoading && globalSearchResults.length === 0 && (
+        <div style={{ padding: '1rem', textAlign: 'center', color: '#64748b' }}>
+          No students found matching your search.
+        </div>
       )}
 
       {editingStudent && editingStudentInstitute ? (
