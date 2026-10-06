@@ -173,27 +173,38 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
       const sb = getSupabase()
       const q = `%${query.trim()}%`
 
-      // Optimized: Use Supabase filters for faster searching (uses database indexes)
-      const students = await fetchAllPaged<QuickStudent>((rangeFrom, rangeTo) =>
-        sb
-          .from('students')
-          .select('*')
-          .or(
-            `id.ilike.${q},` +
-            `student_name.ilike.${q},` +
-            `fname.ilike.${q},` +
-            `mname.ilike.${q},` +
-            `lname.ilike.${q},` +
-            `sr_no.ilike.${q},` +
-            `mobno.ilike.${q},` +
-            `pmobno.ilike.${q},` +
-            `payid.ilike.${q},` +
-            `identy_no.ilike.${q},` +
-            `ctcd.ilike.${q}`,
-          )
-          .order('id', { ascending: true })
-          .range(rangeFrom, rangeTo),
-      )
+      // Search using student_name field (fastest with index)
+      // Falls back to frontend filtering if needed
+      let students: QuickStudent[] = []
+      try {
+        students = await fetchAllPaged<QuickStudent>((rangeFrom, rangeTo) =>
+          sb
+            .from('students')
+            .select('*')
+            .ilike('student_name', q)
+            .order('id', { ascending: true })
+            .range(rangeFrom, rangeTo),
+        )
+      } catch (e) {
+        // Fallback: fetch all and filter on frontend (slower but reliable)
+        const allStudents = await fetchAllPaged<QuickStudent>((rangeFrom, rangeTo) =>
+          sb
+            .from('students')
+            .select('*')
+            .order('id', { ascending: true })
+            .range(rangeFrom, rangeTo),
+        )
+        students = allStudents.filter((student) =>
+          [
+            studentName(student),
+            studentRoll(student),
+            student.id,
+            pick(student, 'mobno', 'payid', 'identy_no'),
+          ]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(query.trim().toLowerCase())),
+        )
+      }
 
       const instituteMap = new Map(institutes.map((i) => [i.id, i]))
       const resultsWithInstitutes = students.map((s) => ({
