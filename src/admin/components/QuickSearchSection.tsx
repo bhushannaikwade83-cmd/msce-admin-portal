@@ -108,6 +108,7 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
   const portal = usePortalAccess()
   const resultsRef = useRef<HTMLDivElement | null>(null)
   const instituteOptionsRef = useRef<HTMLDivElement | null>(null)
+  const lastSearchQueryRef = useRef<string>('')
   const [searchQuery, setSearchQuery] = useState('')
   const [institutes, setInstitutes] = useState<InstituteRow[]>([])
   const [selectedPrefix, setSelectedPrefix] = useState('')
@@ -163,18 +164,24 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
   }, [portal.mode, portal.institutePrefixes])
 
   const performGlobalSearch = useCallback(async (query: string) => {
-    if (!query.trim()) {
+    const trimmedQuery = query.trim()
+    if (!trimmedQuery) {
       setGlobalSearchResults([])
+      lastSearchQueryRef.current = ''
       return
     }
 
+    // Don't re-search if it's the same query
+    if (lastSearchQueryRef.current === trimmedQuery) {
+      return
+    }
+
+    lastSearchQueryRef.current = trimmedQuery
     setGlobalSearchLoading(true)
     try {
       const sb = getSupabase()
-      const q = `%${query.trim()}%`
+      const q = `%${trimmedQuery}%`
 
-      // Search using student_name field (fastest with index)
-      // Falls back to frontend filtering if needed
       let students: QuickStudent[] = []
       try {
         students = await fetchAllPaged<QuickStudent>((rangeFrom, rangeTo) =>
@@ -186,7 +193,6 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
             .range(rangeFrom, rangeTo),
         )
       } catch (e) {
-        // Fallback: fetch all and filter on frontend (slower but reliable)
         const allStudents = await fetchAllPaged<QuickStudent>((rangeFrom, rangeTo) =>
           sb
             .from('students')
@@ -202,7 +208,7 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
             pick(student, 'mobno', 'payid', 'identy_no'),
           ]
             .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(query.trim().toLowerCase())),
+            .some((value) => String(value).toLowerCase().includes(trimmedQuery.toLowerCase())),
         )
       }
 
@@ -213,8 +219,6 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
       }))
 
       setGlobalSearchResults(resultsWithInstitutes)
-    } catch (e) {
-      setGlobalSearchResults([])
     } finally {
       setGlobalSearchLoading(false)
     }
