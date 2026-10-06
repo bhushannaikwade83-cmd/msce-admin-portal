@@ -14,6 +14,7 @@ import { fetchAllPaged } from '../lib/supabasePaged'
 import { InstituteDistrictFilter } from './InstituteDistrictFilter'
 import type { InstituteRow } from './InstituteList'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
+import { EditStudentModal } from './EditStudentModal'
 
 type QuickStudent = Record<string, unknown> & {
   id: string
@@ -21,6 +22,9 @@ type QuickStudent = Record<string, unknown> & {
   name?: string | null
   student_name?: string | null
   full_name?: string | null
+  fname?: string | null
+  mname?: string | null
+  lname?: string | null
   roll_no?: string | null
   roll_number?: string | null
   rollno?: string | null
@@ -33,11 +37,16 @@ type QuickStudent = Record<string, unknown> & {
   div?: string | null
   division?: string | null
   is_active?: boolean | null
+  status?: number | null
   face_photo_url?: string | null
   registration_photo_path?: string | null
   original_face_photo_url?: string | null
   original_registration_photo_path?: string | null
   face_photo_changed_once?: boolean | null
+  mobno?: string | null
+  pmobno?: string | null
+  payid?: string | null
+  identy_no?: string | null
 }
 
 function pick(row: Record<string, unknown>, ...keys: string[]): string | null {
@@ -49,7 +58,15 @@ function pick(row: Record<string, unknown>, ...keys: string[]): string | null {
 }
 
 function studentName(student: QuickStudent): string {
-  return pick(student, 'name', 'student_name', 'full_name') ?? student.id
+  const fullName = pick(student, 'name', 'student_name', 'full_name')
+  if (fullName) return fullName
+
+  const fname = pick(student, 'fname') ?? ''
+  const mname = pick(student, 'mname') ?? ''
+  const lname = pick(student, 'lname') ?? ''
+  const constructed = [fname, mname, lname].filter(Boolean).join(' ').trim()
+
+  return constructed || student.id
 }
 
 function studentRoll(student: QuickStudent): string {
@@ -99,8 +116,13 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
   const [students, setStudents] = useState<QuickStudent[]>([])
   const [studentsLoading, setStudentsLoading] = useState(false)
   const [studentsError, setStudentsError] = useState<string | null>(null)
+  const [globalSearchMode, setGlobalSearchMode] = useState(false)
+  const [globalSearchResults, setGlobalSearchResults] = useState<(QuickStudent & { institute_name?: string })[]>([])
+  const [globalSearchLoading, setGlobalSearchLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [editingStudent, setEditingStudent] = useState<QuickStudent | null>(null)
+  const [editingStudentInstitute, setEditingStudentInstitute] = useState<InstituteRow | null>(null)
   const [districtKey, setDistrictKey] = useState(() => {
     if (typeof window === 'undefined') return ''
     try {
@@ -140,9 +162,77 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
     }
   }, [portal.mode, portal.institutePrefixes])
 
+  const performGlobalSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setGlobalSearchResults([])
+      return
+    }
+
+    setGlobalSearchLoading(true)
+    try {
+      const sb = getSupabase()
+      const q = `%${query.trim()}%`
+
+      // Optimized: Use Supabase filters for faster searching (uses database indexes)
+      const students = await fetchAllPaged<QuickStudent>((rangeFrom, rangeTo) =>
+        sb
+          .from('students')
+          .select('*')
+          .or(
+            `id.ilike.${q},` +
+            `student_name.ilike.${q},` +
+            `fname.ilike.${q},` +
+            `mname.ilike.${q},` +
+            `lname.ilike.${q},` +
+            `sr_no.ilike.${q},` +
+            `mobno.ilike.${q},` +
+            `pmobno.ilike.${q},` +
+            `payid.ilike.${q},` +
+            `identy_no.ilike.${q},` +
+            `ctcd.ilike.${q}`,
+          )
+          .order('id', { ascending: true })
+          .range(rangeFrom, rangeTo),
+      )
+
+      const instituteMap = new Map(institutes.map((i) => [i.id, i]))
+      const resultsWithInstitutes = students.map((s) => ({
+        ...s,
+        institute_name: instituteMap.get(s.institute_id ?? '')?.name ?? instituteMap.get(s.institute_id ?? '')?.id ?? s.institute_id,
+      }))
+
+      setGlobalSearchResults(resultsWithInstitutes)
+    } catch (e) {
+      setGlobalSearchResults([])
+    } finally {
+      setGlobalSearchLoading(false)
+    }
+  }, [institutes])
+
+  const handleDeleteStudent = useCallback(async (student: QuickStudent) => {
+    if (!confirm(`Delete student "${studentName(student)}"?`)) return
+
+    try {
+      const sb = getSupabase()
+      const { error } = await sb.from('students').delete().eq('id', student.id)
+      if (error) throw error
+
+      setGlobalSearchResults((prev) => prev.filter((s) => s.id !== student.id))
+      setStudents((prev) => prev.filter((s) => s.id !== student.id))
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to delete student')
+    }
+  }, [])
+
   useEffect(() => {
     void loadInstitutes()
   }, [loadInstitutes])
+
+  useEffect(() => {
+    if (globalSearchMode && searchQuery.trim()) {
+      void performGlobalSearch(searchQuery)
+    }
+  }, [searchQuery, globalSearchMode, performGlobalSearch])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -268,10 +358,10 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
       <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>Search for students, institutes, or other data</p>
 
       <div className="card-elevated" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
           <input
             type="text"
-            placeholder="Search by name, ID, institute code..."
+            placeholder={globalSearchMode ? "Search student name across all institutes..." : "Search by name, ID, institute code..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -282,94 +372,107 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
               fontSize: '1rem',
             }}
           />
-          <button className="btn btn-primary">Search</button>
+          <button
+            className={globalSearchMode ? "btn btn-primary" : "btn btn-outline"}
+            onClick={() => {
+              setGlobalSearchMode(!globalSearchMode)
+              setSearchQuery('')
+              setGlobalSearchResults([])
+              setSelectedInstituteId('')
+            }}
+            title={globalSearchMode ? "Switch to institute selection mode" : "Switch to global search mode"}
+          >
+            {globalSearchMode ? '🌐 Global' : '🏢 Institute'}
+          </button>
         </div>
 
-        <div style={{ marginTop: '1rem', display: 'grid', gap: '1rem' }}>
-          <InstituteDistrictFilter
-            rows={institutes}
-            districtKey={effectiveDistrictKey}
-            onDistrictKeyChange={setDistrictKey}
-            filteredCount={districtFilteredInstitutes.length}
-            lockedDistrict={portal.mode === 'district_viewer' ? lockedDistrict : null}
-            disabled={loading}
-          />
+        {!globalSearchMode ? (
+          <div style={{ marginTop: '1rem', display: 'grid', gap: '1rem' }}>
+            <InstituteDistrictFilter
+              rows={institutes}
+              districtKey={effectiveDistrictKey}
+              onDistrictKeyChange={setDistrictKey}
+              filteredCount={districtFilteredInstitutes.length}
+              lockedDistrict={portal.mode === 'district_viewer' ? lockedDistrict : null}
+              disabled={loading}
+            />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 260px) minmax(260px, 1fr)', gap: '0.75rem' }}>
-            <label className="field">
-              <span>Prefix</span>
-              <select
-                value={selectedPrefix}
-                disabled={loading || prefixOptions.length === 0}
-                onChange={(e) => {
-                  setSelectedPrefix(e.target.value)
-                  setSelectedInstituteId('')
-                  setInstitutePickerOpen(false)
-                  setStudents([])
-                }}
-              >
-                <option value="">
-                  All prefixes ({formatDistrictPrefixHint(prefixOptions)})
-                </option>
-                {prefixOptions.map((prefix) => (
-                  <option key={prefix} value={prefix}>
-                    {prefix} ({districtFilteredInstitutes.filter((institute) => instituteCodeHead(institute) === prefix).length})
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 260px) minmax(260px, 1fr)', gap: '0.75rem' }}>
+              <label className="field">
+                <span>Prefix</span>
+                <select
+                  value={selectedPrefix}
+                  disabled={loading || prefixOptions.length === 0}
+                  onChange={(e) => {
+                    setSelectedPrefix(e.target.value)
+                    setSelectedInstituteId('')
+                    setInstitutePickerOpen(false)
+                    setStudents([])
+                  }}
+                >
+                  <option value="">
+                    All prefixes ({formatDistrictPrefixHint(prefixOptions)})
                   </option>
-                ))}
-              </select>
-            </label>
+                  {prefixOptions.map((prefix) => (
+                    <option key={prefix} value={prefix}>
+                      {prefix} ({districtFilteredInstitutes.filter((institute) => instituteCodeHead(institute) === prefix).length})
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <div className="field quick-search-institute-picker">
-              <span>Institute ID</span>
-              <button
-                type="button"
-                className="quick-search-institute-trigger"
-                disabled={loading || prefixFilteredInstitutes.length === 0}
-                onClick={() => setInstitutePickerOpen((open) => !open)}
-              >
-                {selectedInstitute
-                  ? `${selectedInstitute.id}${selectedInstitute.institute_code ? ` / ${selectedInstitute.institute_code}` : ''}${selectedInstitute.name ? ` - ${selectedInstitute.name}` : ''}`
-                  : `Select institute (${prefixFilteredInstitutes.length.toLocaleString('en-IN')})`}
-                <span aria-hidden>▾</span>
-              </button>
-              {institutePickerOpen ? (
-                <div className="quick-search-institute-menu">
-                  <div className="quick-search-institute-options" role="listbox" aria-label="Institute ID">
-                    <div ref={instituteOptionsRef} className="quick-search-institute-options-scroll">
-                    {visibleInstituteOptions.length === 0 ? (
-                      <div className="quick-search-institute-empty">No institute found</div>
-                    ) : (
-                      visibleInstituteOptions.map((institute) => (
-                        <button
-                          key={institute.id}
-                          type="button"
-                          className={`quick-search-institute-option${selectedInstituteId === institute.id ? ' is-selected' : ''}`}
-                          data-selected={selectedInstituteId === institute.id ? 'true' : undefined}
-                          onClick={() => {
-                            setSelectedInstituteId(institute.id)
-                            setInstitutePickerOpen(false)
-                          }}
-                          role="option"
-                          aria-selected={selectedInstituteId === institute.id}
-                        >
-                          <span className="quick-search-institute-check" aria-hidden>
-                            {selectedInstituteId === institute.id ? '✓' : ''}
-                          </span>
-                          <span>
-                            <strong>{institute.id}</strong>
-                            {institute.institute_code ? <span> / {institute.institute_code}</span> : null}
-                            {institute.name ? <span> - {institute.name}</span> : null}
-                          </span>
-                        </button>
-                      ))
-                    )}
+              <div className="field quick-search-institute-picker">
+                <span>Institute ID</span>
+                <button
+                  type="button"
+                  className="quick-search-institute-trigger"
+                  disabled={loading || prefixFilteredInstitutes.length === 0}
+                  onClick={() => setInstitutePickerOpen((open) => !open)}
+                >
+                  {selectedInstitute
+                    ? `${selectedInstitute.id}${selectedInstitute.institute_code ? ` / ${selectedInstitute.institute_code}` : ''}${selectedInstitute.name ? ` - ${selectedInstitute.name}` : ''}`
+                    : `Select institute (${prefixFilteredInstitutes.length.toLocaleString('en-IN')})`}
+                  <span aria-hidden>▾</span>
+                </button>
+                {institutePickerOpen ? (
+                  <div className="quick-search-institute-menu">
+                    <div className="quick-search-institute-options" role="listbox" aria-label="Institute ID">
+                      <div ref={instituteOptionsRef} className="quick-search-institute-options-scroll">
+                      {visibleInstituteOptions.length === 0 ? (
+                        <div className="quick-search-institute-empty">No institute found</div>
+                      ) : (
+                        visibleInstituteOptions.map((institute) => (
+                          <button
+                            key={institute.id}
+                            type="button"
+                            className={`quick-search-institute-option${selectedInstituteId === institute.id ? ' is-selected' : ''}`}
+                            data-selected={selectedInstituteId === institute.id ? 'true' : undefined}
+                            onClick={() => {
+                              setSelectedInstituteId(institute.id)
+                              setInstitutePickerOpen(false)
+                            }}
+                            role="option"
+                            aria-selected={selectedInstituteId === institute.id}
+                          >
+                            <span className="quick-search-institute-check" aria-hidden>
+                              {selectedInstituteId === institute.id ? '✓' : ''}
+                            </span>
+                            <span>
+                              <strong>{institute.id}</strong>
+                              {institute.institute_code ? <span> / {institute.institute_code}</span> : null}
+                              {institute.name ? <span> - {institute.name}</span> : null}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
       {error ? (
@@ -378,113 +481,261 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
         </div>
       ) : null}
 
-      {searchQuery && (
-        <div style={{ padding: '1rem', color: '#64748b' }}>
-          <p>
-            Showing search "{searchQuery}" in {selectedInstitute ? selectedInstitute.name ?? selectedInstitute.id : 'selected institute'}
-          </p>
-        </div>
-      )}
+      {/* Global Search Mode */}
+      {globalSearchMode ? (
+        <>
+          {globalSearchLoading ? (
+            <div className="loading-row">
+              <div className="loading-spinner" />
+              <span>Searching across all institutes...</span>
+            </div>
+          ) : null}
 
-      {selectedInstitute ? (
-        <div ref={resultsRef} className="card-elevated quick-search-selected-institute" style={{ padding: '1rem', marginBottom: '1rem' }}>
-          <strong>{selectedInstitute.name ?? selectedInstitute.id}</strong>
-          <div className="muted small">
-            ID: <code>{selectedInstitute.id}</code>
-            {selectedInstitute.institute_code ? <> · Code: <code>{selectedInstitute.institute_code}</code></> : null}
-            {selectedInstitute.city ? <> · {selectedInstitute.city}</> : null}
-          </div>
-        </div>
-      ) : null}
+          {searchQuery && !globalSearchLoading && (
+            <div style={{ padding: '1rem', color: '#64748b', marginBottom: '1rem' }}>
+              <p>Found {globalSearchResults.length} student(s) matching "{searchQuery}"</p>
+            </div>
+          )}
 
-      {studentsError ? <p className="error">{studentsError}</p> : null}
-      {studentsLoading ? (
-        <div className="loading-row">
-          <div className="loading-spinner" />
-          <span>Loading students...</span>
-        </div>
-      ) : null}
+          {globalSearchResults.length > 0 && (
+            <div className="table-wrap institutes-table-wrap students-table-wrap quick-search-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Photo</th>
+                    <th>Name</th>
+                    <th>Institute</th>
+                    <th>Roll</th>
+                    <th>Class</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {globalSearchResults.map((student) => {
+                    const name = studentName(student)
+                    return (
+                      <tr key={student.id}>
+                        <td className="students-photo-cell">
+                          {hasCurrentPhoto(student) ? (
+                            <StudentDisplayPhoto student={student} displayName={name} size="sm" clickable />
+                          ) : (
+                            <span className="muted small">No photo</span>
+                          )}
+                        </td>
+                        <td>
+                          <strong>{name}</strong>
+                          <div className="muted small"><code>{student.id}</code></div>
+                        </td>
+                        <td>
+                          <span className="muted">{student.institute_name || student.institute_id}</span>
+                        </td>
+                        <td>{studentRoll(student)}</td>
+                        <td>{studentClass(student)}</td>
+                        <td>
+                          {student.is_active === false ? (
+                            <span className="badge badge-muted">Inactive</span>
+                          ) : (
+                            <span className="badge badge-present">Active</span>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs"
+                              onClick={() => {
+                                setEditingStudent(student)
+                                const inst = institutes.find((i) => i.id === student.institute_id)
+                                setEditingStudentInstitute(inst || null)
+                              }}
+                              title="Edit student"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs"
+                              onClick={() => void handleDeleteStudent(student)}
+                              title="Delete student"
+                              style={{ color: 'var(--danger)' }}
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-      {selectedInstituteId ? (
-        <div className="table-wrap institutes-table-wrap students-table-wrap quick-search-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Original photo</th>
-                <th>Current photo</th>
-                <th>Name</th>
-                <th>Roll</th>
-                <th>Class</th>
-                <th>Student ID</th>
-                <th>Photo status</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!studentsLoading && filteredStudents.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="muted">
-                    No students found for this institute.
-                  </td>
-                </tr>
-              ) : (
-                filteredStudents.map((student) => {
-                  const name = studentName(student)
-                  const originalStudent = {
-                    ...student,
-                    face_photo_url: student.original_face_photo_url,
-                    registration_photo_path: student.original_registration_photo_path,
-                  }
-                  return (
-                    <tr key={student.id}>
-                      <td className="students-photo-cell">
-                        {hasOriginalPhoto(student) ? (
-                          <StudentDisplayPhoto
-                            student={originalStudent}
-                            displayName={`${name} original`}
-                            size="sm"
-                            clickable
-                          />
-                        ) : (
-                          <span className="muted small">No old photo</span>
-                        )}
-                      </td>
-                      <td className="students-photo-cell">
-                        {hasCurrentPhoto(student) ? (
-                          <StudentDisplayPhoto student={student} displayName={name} size="sm" clickable />
-                        ) : (
-                          <span className="muted small">No photo</span>
-                        )}
-                      </td>
-                      <td>
-                        <strong>{name}</strong>
-                      </td>
-                      <td>{studentRoll(student)}</td>
-                      <td>{studentClass(student)}</td>
-                      <td>
-                        <code className="tiny">{student.id}</code>
-                      </td>
-                      <td>
-                        {student.face_photo_changed_once === true || hasOriginalPhoto(student) ? (
-                          <span className="badge badge-absent">Changed</span>
-                        ) : (
-                          <span className="badge badge-present">Same</span>
-                        )}
-                      </td>
-                      <td>
-                        {student.is_active === false ? (
-                          <span className="badge badge-muted">Inactive</span>
-                        ) : (
-                          <span className="badge badge-present">Active</span>
-                        )}
+          {searchQuery && !globalSearchLoading && globalSearchResults.length === 0 && (
+            <div style={{ padding: '1rem', textAlign: 'center', color: '#64748b' }}>
+              No students found matching your search.
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {searchQuery && (
+            <div style={{ padding: '1rem', color: '#64748b' }}>
+              <p>
+                Showing search "{searchQuery}" in {selectedInstitute ? selectedInstitute.name ?? selectedInstitute.id : 'selected institute'}
+              </p>
+            </div>
+          )}
+
+          {selectedInstitute ? (
+            <div ref={resultsRef} className="card-elevated quick-search-selected-institute" style={{ padding: '1rem', marginBottom: '1rem' }}>
+              <strong>{selectedInstitute.name ?? selectedInstitute.id}</strong>
+              <div className="muted small">
+                ID: <code>{selectedInstitute.id}</code>
+                {selectedInstitute.institute_code ? <> · Code: <code>{selectedInstitute.institute_code}</code></> : null}
+                {selectedInstitute.city ? <> · {selectedInstitute.city}</> : null}
+              </div>
+            </div>
+          ) : null}
+
+          {studentsError ? <p className="error">{studentsError}</p> : null}
+          {studentsLoading ? (
+            <div className="loading-row">
+              <div className="loading-spinner" />
+              <span>Loading students...</span>
+            </div>
+          ) : null}
+
+          {selectedInstituteId ? (
+            <div className="table-wrap institutes-table-wrap students-table-wrap quick-search-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Original photo</th>
+                    <th>Current photo</th>
+                    <th>Name</th>
+                    <th>Roll</th>
+                    <th>Class</th>
+                    <th>Student ID</th>
+                    <th>Photo status</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!studentsLoading && filteredStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="muted">
+                        No students found for this institute.
                       </td>
                     </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ) : (
+                    filteredStudents.map((student) => {
+                      const name = studentName(student)
+                      const originalStudent = {
+                        ...student,
+                        face_photo_url: student.original_face_photo_url,
+                        registration_photo_path: student.original_registration_photo_path,
+                      }
+                      return (
+                        <tr key={student.id}>
+                          <td className="students-photo-cell">
+                            {hasOriginalPhoto(student) ? (
+                              <StudentDisplayPhoto
+                                student={originalStudent}
+                                displayName={`${name} original`}
+                                size="sm"
+                                clickable
+                              />
+                            ) : (
+                              <span className="muted small">No old photo</span>
+                            )}
+                          </td>
+                          <td className="students-photo-cell">
+                            {hasCurrentPhoto(student) ? (
+                              <StudentDisplayPhoto student={student} displayName={name} size="sm" clickable />
+                            ) : (
+                              <span className="muted small">No photo</span>
+                            )}
+                          </td>
+                          <td>
+                            <strong>{name}</strong>
+                          </td>
+                          <td>{studentRoll(student)}</td>
+                          <td>{studentClass(student)}</td>
+                          <td>
+                            <code className="tiny">{student.id}</code>
+                          </td>
+                          <td>
+                            {student.face_photo_changed_once === true || hasOriginalPhoto(student) ? (
+                              <span className="badge badge-absent">Changed</span>
+                            ) : (
+                              <span className="badge badge-present">Same</span>
+                            )}
+                          </td>
+                          <td>
+                            {student.is_active === false ? (
+                              <span className="badge badge-muted">Inactive</span>
+                            ) : (
+                              <span className="badge badge-present">Active</span>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-xs"
+                                onClick={() => {
+                                  setEditingStudent(student)
+                                  setEditingStudentInstitute(selectedInstitute)
+                                }}
+                                title="Edit student"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-xs"
+                                onClick={() => void handleDeleteStudent(student)}
+                                title="Delete student"
+                                style={{ color: 'var(--danger)' }}
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </>
+      )}
+
+      {editingStudent && editingStudentInstitute ? (
+        <EditStudentModal
+          student={editingStudent}
+          instituteLabel={editingStudentInstitute.name ?? editingStudentInstitute.institute_code ?? editingStudentInstitute.id}
+          onClose={() => {
+            setEditingStudent(null)
+            setEditingStudentInstitute(null)
+          }}
+          onSaved={() => {
+            setEditingStudent(null)
+            setEditingStudentInstitute(null)
+            if (globalSearchMode && searchQuery.trim()) {
+              void performGlobalSearch(searchQuery)
+            } else if (selectedInstituteId) {
+              setStudents((prev) =>
+                prev.map((s) => (s.id === editingStudent.id ? editingStudent : s))
+              )
+            }
+          }}
+        />
       ) : null}
     </div>
   )

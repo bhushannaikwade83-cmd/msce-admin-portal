@@ -23,6 +23,7 @@ type Props = {
   activeTab: DashboardTab
   onTab: (t: DashboardTab) => void
   onSignOut: () => void | Promise<void>
+  onChangePassword?: () => void
   children: ReactNode
 }
 
@@ -54,6 +55,7 @@ export function DashboardLayout({
   activeTab,
   onTab,
   onSignOut,
+  onChangePassword,
   children,
 }: Props) {
   const headerRef = useRef<HTMLElement>(null)
@@ -99,6 +101,16 @@ export function DashboardLayout({
           <span className="dash-topnav-user" title={userEmail ?? ''}>
             {userEmail ?? '—'}
           </span>
+          {onChangePassword && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => onChangePassword()}
+              title="Change your password"
+            >
+              🔐 Change Password
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-ghost btn-sm dash-signout-btn"

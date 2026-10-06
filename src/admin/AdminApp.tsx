@@ -14,6 +14,7 @@ import { StudentsSection } from './components/StudentsSection'
 import { QuickSearchSection } from './components/QuickSearchSection'
 import { ReportsSection } from './components/ReportsSection'
 import { AttendanceIntegritySection } from './components/AttendanceIntegritySection'
+import { ChangePasswordModal } from './components/ChangePasswordModal'
 import ExamsPage from './pages/ExamsPage'
 import { STRINGS } from './constants/strings'
 import './index.css'
@@ -103,6 +104,7 @@ function AuthenticatedApp() {
   const [instituteReload, setInstituteReload] = useState(0)
   const [studentsJumpInstituteId, setStudentsJumpInstituteId] = useState<string | null>(null)
   const [reportsJumpInstituteId, setReportsJumpInstituteId] = useState<string | null>(null)
+  const [showChangePassword, setShowChangePassword] = useState(false)
 
   const handleStudentsJumpHandled = useCallback(() => setStudentsJumpInstituteId(null), [])
   const handleReportsJumpHandled = useCallback(() => setReportsJumpInstituteId(null), [])
@@ -142,15 +144,17 @@ function AuthenticatedApp() {
   }
 
   return (
-    <DashboardLayout
-      userEmail={user.email ?? null}
-      districtLabel={portal.districtName}
-      readOnly={readOnly}
-      allowedTabs={allowedTabs}
-      activeTab={activeTab}
-      onTab={setTab}
-      onSignOut={signOut}
-    >
+    <>
+      <DashboardLayout
+        userEmail={user.email ?? null}
+        districtLabel={portal.districtName}
+        readOnly={readOnly}
+        allowedTabs={allowedTabs}
+        activeTab={activeTab}
+        onTab={setTab}
+        onSignOut={signOut}
+        onChangePassword={() => setShowChangePassword(true)}
+      >
       {visibleTabs.includes('overview') && activeTab === 'overview' ? (
         <TabPanel active>
           <OverviewPanel />
@@ -228,6 +232,13 @@ function AuthenticatedApp() {
         </TabPanel>
       ) : null}
     </DashboardLayout>
+    {showChangePassword && (
+      <ChangePasswordModal
+        userEmail={user.email ?? null}
+        onClose={() => setShowChangePassword(false)}
+      />
+    )}
+    </>
   )
 }
 
