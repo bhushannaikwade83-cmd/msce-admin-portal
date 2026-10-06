@@ -1,17 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { usePortalAccess } from '../context/portal-access-context'
-import { sortByInstituteId } from '../lib/instituteSort'
-import {
-  PORTAL_DISTRICTS,
-  filterInstitutesByPortalPrefixes,
-  formatDistrictPrefixHint,
-  findPortalDistrictByKey,
-  findPortalDistrictForPrefixes,
-  instituteRowMatchesPrefixes,
-} from '../lib/portalDistricts'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getSupabase } from '../lib/supabase'
 import { fetchAllPaged } from '../lib/supabasePaged'
-import { InstituteDistrictFilter } from './InstituteDistrictFilter'
 import type { InstituteRow } from './InstituteList'
 import { StudentDisplayPhoto } from './StudentDisplayPhoto'
 import { EditStudentModal } from './EditStudentModal'
@@ -86,36 +75,16 @@ function hasCurrentPhoto(student: QuickStudent): boolean {
   )
 }
 
-function instituteCodeHead(row: InstituteRow): string {
-  const raw = String(row.institute_code ?? row.id ?? '').trim().padStart(5, '0')
-  return raw.slice(0, 2)
-}
-
-function sortStudents(rows: QuickStudent[]): QuickStudent[] {
-  return [...rows].sort((a, b) => {
-    const ar = Number(studentRoll(a))
-    const br = Number(studentRoll(b))
-    if (Number.isFinite(ar) && Number.isFinite(br) && ar !== br) return ar - br
-    return studentName(a).localeCompare(studentName(b), undefined, { sensitivity: 'base' })
-  })
-}
-
 export function QuickSearchSection({ embedded: _embedded = false }: { embedded?: boolean }) {
-  const portal = usePortalAccess()
-  const resultsRef = useRef<HTMLDivElement | null>(null)
-  const instituteOptionsRef = useRef<HTMLDivElement | null>(null)
   const lastSearchQueryRef = useRef<string>('')
   const [searchQuery, setSearchQuery] = useState('')
   const [institutes, setInstitutes] = useState<InstituteRow[]>([])
   const [globalSearchResults, setGlobalSearchResults] = useState<(QuickStudent & { institute_name?: string | null })[]>([])
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [editingStudent, setEditingStudent] = useState<QuickStudent | null>(null)
   const [editingStudentInstitute, setEditingStudentInstitute] = useState<InstituteRow | null>(null)
 
   const loadInstitutes = useCallback(async () => {
-    setLoading(true)
-    setError(null)
     try {
       const sb = getSupabase()
       const raw = await fetchAllPaged<InstituteRow>((rangeFrom, rangeTo) =>
@@ -125,18 +94,11 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
           .order('id', { ascending: true })
           .range(rangeFrom, rangeTo),
       )
-      const scoped =
-        portal.mode === 'district_viewer' && portal.institutePrefixes.length > 0
-          ? filterInstitutesByPortalPrefixes(raw, portal.institutePrefixes)
-          : raw
-      setInstitutes(sortByInstituteId(scoped))
+      setInstitutes(raw)
     } catch (e) {
       setInstitutes([])
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
     }
-  }, [portal.mode, portal.institutePrefixes])
+  }, [])
 
   const performGlobalSearch = useCallback(async (query: string) => {
     const trimmedQuery = query.trim()
@@ -356,12 +318,8 @@ export function QuickSearchSection({ embedded: _embedded = false }: { embedded?:
           onSaved={() => {
             setEditingStudent(null)
             setEditingStudentInstitute(null)
-            if (globalSearchMode && searchQuery.trim()) {
+            if (searchQuery.trim()) {
               void performGlobalSearch(searchQuery)
-            } else if (selectedInstituteId) {
-              setStudents((prev) =>
-                prev.map((s) => (s.id === editingStudent.id ? editingStudent : s))
-              )
             }
           }}
         />
