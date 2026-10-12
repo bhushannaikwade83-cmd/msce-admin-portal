@@ -1409,6 +1409,17 @@ function StudentsList({
   const selectedStudents = externalSelectedStudents ?? internalSelectedStudents
   const setSelectedStudentsImpl = externalSetSelectedStudents ?? setInternalSelectedStudents
 
+  // Calculate photo registration stats
+  const photoStats = useMemo(() => {
+    const total = students.length
+    const registered = students.filter(s => {
+      const photoUrl = pick(s, 'face_photo_url', 'photo_url', 'face_pic_url')
+      return photoUrl && String(photoUrl).trim()
+    }).length
+    const notRegistered = total - registered
+    return { total, registered, notRegistered }
+  }, [students])
+
   const showDayAttendance =
     attendanceTables.includes('attendance_in_out') || attendanceTables.includes('teacher_attendance')
   const primaryAttTable = attendanceTables[0] ?? null
@@ -1824,6 +1835,16 @@ function StudentsList({
         <span className="search-count">
           {loading ? '…' : `${filtered.length} of ${students.length} shown`}
         </span>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontWeight: 600, color: 'var(--text)' }}>📸 Face Status:</span>
+            <span title="Students with registered face photos">✅ {photoStats.registered}</span>
+            <span style={{ color: 'var(--border-light)' }}>•</span>
+            <span title="Students without registered face photos">⏳ {photoStats.notRegistered}</span>
+            <span style={{ color: 'var(--border-light)' }}>•</span>
+            <span title="Total students">👥 {photoStats.total}</span>
+          </div>
+        </div>
         <button
           type="button"
           className="btn btn-ghost btn-sm"
