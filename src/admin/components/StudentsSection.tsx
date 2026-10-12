@@ -1835,14 +1835,35 @@ function StudentsList({
         <span className="search-count">
           {loading ? '…' : `${filtered.length} of ${students.length} shown`}
         </span>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontWeight: 600, color: 'var(--text)' }}>📸 Face Status:</span>
-            <span title="Students with registered face photos">✅ {photoStats.registered}</span>
-            <span style={{ color: 'var(--border-light)' }}>•</span>
-            <span title="Students without registered face photos">⏳ {photoStats.notRegistered}</span>
-            <span style={{ color: 'var(--border-light)' }}>•</span>
-            <span title="Total students">👥 {photoStats.total}</span>
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.8rem',
+            padding: '0.4rem 0.8rem',
+            borderRadius: '0.375rem',
+            backgroundColor: 'var(--surface-hover)',
+            border: '1px solid var(--border-light)',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span>✅</span>
+              <span style={{ color: 'var(--success)' }}>{photoStats.registered}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Reg</span>
+            </div>
+            <span style={{ color: 'var(--border)' }}>|</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span>⏳</span>
+              <span style={{ color: 'var(--warn)' }}>{photoStats.notRegistered}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Pend</span>
+            </div>
+            <span style={{ color: 'var(--border)' }}>|</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span>👥</span>
+              <span style={{ color: 'var(--text)' }}>{photoStats.total}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tot</span>
+            </div>
           </div>
         </div>
         <button
