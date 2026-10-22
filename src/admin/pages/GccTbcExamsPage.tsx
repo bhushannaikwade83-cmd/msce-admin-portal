@@ -13,7 +13,16 @@ interface Props {
   onBack: () => void
 }
 
-type Tab = 'centres' | 'students' | 'devices'
+type Tab = 'centres' | 'students' | 'devices' | 'attendance'
+
+interface AttendanceSummary {
+  centre_code: string
+  centre_name: string
+  total_students: number
+  present: number
+  absent: number
+  percentage: number
+}
 type SortKey = 'centre_code' | 'centre_name' | 'district_name' | 'taluka_name' | 'capacity'
 type SortDir = 'asc' | 'desc'
 
@@ -38,6 +47,9 @@ export default function GccTbcExamsPage({ onBack }: Props) {
 
   const [devices, setDevices] = useState<GccTbcDevice[]>([])
   const [devicesLoading, setDevicesLoading] = useState(false)
+
+  const [attendanceSummary, setAttendanceSummary] = useState<AttendanceSummary[]>([])
+  const [attendanceLoading, setAttendanceLoading] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -81,6 +93,57 @@ export default function GccTbcExamsPage({ onBack }: Props) {
       setError(err instanceof Error ? err.message : 'Failed to load devices')
     } finally {
       setDevicesLoading(false)
+    }
+  }
+
+  async function loadAttendanceSummary() {
+    try {
+      setAttendanceLoading(true)
+      setError(null)
+
+      // Load all students for all centres and calculate attendance summary
+      const summaryMap = new Map<string, AttendanceSummary>()
+
+      // Initialize with all centres
+      centres.forEach(centre => {
+        summaryMap.set(centre.centre_code, {
+          centre_code: centre.centre_code,
+          centre_name: centre.centre_name || centre.centre_code,
+          total_students: 0,
+          present: 0,
+          absent: 0,
+          percentage: 0,
+        })
+      })
+
+      // Fetch students for each centre and count attendance
+      for (const centre of centres) {
+        try {
+          const studentsData = await fetchGccTbcStudents(centre.centre_code)
+          const summary = summaryMap.get(centre.centre_code)
+          if (summary && studentsData) {
+            studentsData.forEach((student: any) => {
+              summary.total_students += 1
+              if (student.entry_photo_url || student.entry_photo) {
+                summary.present += 1
+              } else {
+                summary.absent += 1
+              }
+            })
+            summary.percentage = summary.total_students > 0
+              ? Math.round((summary.present / summary.total_students) * 100)
+              : 0
+          }
+        } catch (err) {
+          console.warn(`Failed to load students for centre ${centre.centre_code}:`, err)
+        }
+      }
+
+      setAttendanceSummary(Array.from(summaryMap.values()))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load attendance summary')
+    } finally {
+      setAttendanceLoading(false)
     }
   }
 
@@ -258,12 +321,18 @@ export default function GccTbcExamsPage({ onBack }: Props) {
               ['centres', '📍 Centres'],
               ['students', '👥 Students'],
               ['devices', '📱 Logged-in Devices'],
+              ['attendance', '📊 Attendance Summary'],
             ] as const
           ).map(([id, label]) => (
             <button
               key={id}
               type="button"
-              onClick={() => setTab(id)}
+              onClick={() => {
+                setTab(id as Tab)
+                if (id === 'attendance') {
+                  setTimeout(() => loadAttendanceSummary(), 100)
+                }
+              }}
               style={{
                 padding: '12px 20px',
                 border: 'none',
@@ -684,6 +753,111 @@ export default function GccTbcExamsPage({ onBack }: Props) {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ✅ ATTENDANCE SUMMARY TAB */}
+        {tab === 'attendance' && (
+          <div>
+            <h3>📊 Attendance Summary - {centres.length} Centres</h3>
+            {attendanceLoading ? (
+              <div className="state-screen state-compact">
+                <div className="loading-spinner" />
+              </div>
+            ) : attendanceSummary.length === 0 ? (
+              <div className="state-screen state-compact">
+                <p>No attendance data available.</p>
+              </div>
+            ) : (
+              <>
+                <div className="table-container">
+                  <table className="data-table" style={{ marginBottom: '20px' }}>
+                    <thead>
+                      <tr>
+                        <th>Centre Code</th>
+                        <th>Centre Name</th>
+                        <th>Total Students</th>
+                        <th style={{ backgroundColor: '#d4edda' }}>✓ Present</th>
+                        <th style={{ backgroundColor: '#f8d7da' }}>✗ Absent</th>
+                        <th>Attendance %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attendanceSummary.map((summary) => (
+                        <tr key={summary.centre_code}>
+                          <td className="monospace"><strong>{summary.centre_code}</strong></td>
+                          <td>{summary.centre_name}</td>
+                          <td style={{ textAlign: 'center' }}><strong>{summary.total_students}</strong></td>
+                          <td style={{ textAlign: 'center', backgroundColor: '#d4edda' }}>
+                            <strong style={{ color: '#155724' }}>{summary.present}</strong>
+                          </td>
+                          <td style={{ textAlign: 'center', backgroundColor: '#f8d7da' }}>
+                            <strong style={{ color: '#721c24' }}>{summary.absent}</strong>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <strong style={{
+                              color: summary.percentage >= 80 ? '#28a745' : summary.percentage >= 60 ? '#ffc107' : '#dc3545'
+                            }}>
+                              {summary.percentage}%
+                            </strong>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Summary Stats */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '15px',
+                }}>
+                  <div style={{
+                    padding: '15px',
+                    backgroundColor: '#f0f0f0',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Total Centres</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{attendanceSummary.length}</div>
+                  </div>
+                  <div style={{
+                    padding: '15px',
+                    backgroundColor: '#d4edda',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '12px', color: '#155724', marginBottom: '5px' }}>Total Present</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#155724' }}>
+                      {attendanceSummary.reduce((sum, c) => sum + c.present, 0)}
+                    </div>
+                  </div>
+                  <div style={{
+                    padding: '15px',
+                    backgroundColor: '#f8d7da',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '12px', color: '#721c24', marginBottom: '5px' }}>Total Absent</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#721c24' }}>
+                      {attendanceSummary.reduce((sum, c) => sum + c.absent, 0)}
+                    </div>
+                  </div>
+                  <div style={{
+                    padding: '15px',
+                    backgroundColor: '#e7f3ff',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '12px', color: '#004085', marginBottom: '5px' }}>Total Students</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#004085' }}>
+                      {attendanceSummary.reduce((sum, c) => sum + c.total_students, 0)}
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}
