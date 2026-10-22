@@ -178,9 +178,11 @@ export function ExamsSection({ readOnly = false }: Props) {
       // Fetch all exam students with attendance data
       const { data: examStudents, error: fetchError } = await sb
         .from('exam_students')
-        .select('centre_code, student_name, entry_photo_url')
+        .select('*')
 
       if (fetchError) throw fetchError
+
+      console.log('Exam students data:', examStudents)
 
       // Calculate present/absent by centre
       const summaryMap = new Map<string, AttendanceSummary>()
@@ -197,12 +199,17 @@ export function ExamsSection({ readOnly = false }: Props) {
         })
       })
 
-      // Count attendance
-      examStudents?.forEach(student => {
-        const summary = summaryMap.get(student.centre_code)
+      console.log('Centres initialized:', Array.from(summaryMap.values()))
+
+      // Count attendance - check all possible column names
+      examStudents?.forEach((student: any) => {
+        const centreCode = student.centre_code || student.center_code || student.centre || ''
+        const entryPhoto = student.entry_photo_url || student.entry_photo || student.photo_url || null
+
+        const summary = summaryMap.get(centreCode)
         if (summary) {
           summary.total_students += 1
-          if (student.entry_photo_url) {
+          if (entryPhoto) {
             summary.present += 1
           } else {
             summary.absent += 1
@@ -217,9 +224,12 @@ export function ExamsSection({ readOnly = false }: Props) {
         }
       })
 
-      setAttendanceSummary(Array.from(summaryMap.values()))
+      const finalSummary = Array.from(summaryMap.values())
+      console.log('Final attendance summary:', finalSummary)
+      setAttendanceSummary(finalSummary)
     } catch (err) {
       console.error('Error loading attendance summary:', err)
+      setError(`Error loading attendance: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -331,7 +341,10 @@ export function ExamsSection({ readOnly = false }: Props) {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('attendance')}
+          onClick={() => {
+            setActiveTab('attendance')
+            setTimeout(() => loadAttendanceSummary(), 100)
+          }}
           style={{
             padding: '12px 20px',
             border: 'none',
