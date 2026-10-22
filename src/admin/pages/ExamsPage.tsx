@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import CentresPage from './CentresPage';
 import ExamStudentsPage from './ExamStudentsPage';
+import GccTbcExamsPage from './GccTbcExamsPage';
 
-type Page = 'main' | 'centres' | 'students';
+type Page = 'main' | 'centres' | 'students' | 'gcctbc';
 
 export default function ExamsPage() {
   const [currentPage, setCurrentPage] = useState<Page>('main');
@@ -13,6 +14,10 @@ export default function ExamsPage() {
 
   if (currentPage === 'students') {
     return <ExamStudentsPage onBack={() => setCurrentPage('main')} />;
+  }
+
+  if (currentPage === 'gcctbc') {
+    return <GccTbcExamsPage onBack={() => setCurrentPage('main')} />;
   }
 
   return (
@@ -95,6 +100,40 @@ export default function ExamsPage() {
           <span style={{ fontSize: '48px' }}>👥</span>
           <span>Exam Students</span>
           <small style={{ fontSize: '13px', opacity: 0.9 }}>View and manage students</small>
+        </button>
+
+        {/* ✅ GCC TBC EXAMS (NEW APP DATABASE) BUTTON */}
+        <button
+          onClick={() => setCurrentPage('gcctbc')}
+          style={{
+            padding: '40px 20px',
+            border: '2px solid #7b2ff7',
+            background: 'linear-gradient(135deg, #7b2ff7 0%, #5a1fb8 100%)',
+            color: 'white',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontSize: '18px',
+            fontWeight: '600',
+            transition: 'all 0.3s',
+            boxShadow: '0 4px 12px rgba(123, 47, 247, 0.2)',
+            minHeight: '200px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '15px',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 8px 20px rgba(123, 47, 247, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(123, 47, 247, 0.2)';
+          }}
+        >
+          <span style={{ fontSize: '48px' }}>📲</span>
+          <span>Exams 11 Centre</span>
         </button>
       </div>
     </div>

@@ -39,12 +39,22 @@ type Props = {
   readOnly?: boolean
 }
 
-type TabType = 'exams' | 'centres' | 'students'
+type TabType = 'exams' | 'centres' | 'students' | 'attendance'
+
+interface AttendanceSummary {
+  centre_code: string
+  centre_name: string
+  total_students: number
+  present: number
+  absent: number
+  percentage: number
+}
 
 export function ExamsSection({ readOnly = false }: Props) {
   const [exams, setExams] = useState<Exam[]>([])
   const [centres, setCentres] = useState<Centre[]>([])
   const [students, setStudents] = useState<ExamStudent[]>([])
+  const [attendanceSummary, setAttendanceSummary] = useState<AttendanceSummary[]>([])
   const [activeTab, setActiveTab] = useState<TabType>('exams')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -63,6 +73,12 @@ export function ExamsSection({ readOnly = false }: Props) {
     loadCentres()
     loadStudents()
   }, [])
+
+  useEffect(() => {
+    if (centres.length > 0) {
+      loadAttendanceSummary()
+    }
+  }, [centres])
 
   async function loadExams() {
     try {
@@ -152,6 +168,58 @@ export function ExamsSection({ readOnly = false }: Props) {
       setStudents(data || [])
     } catch (err) {
       console.error('Error loading students:', err)
+    }
+  }
+
+  async function loadAttendanceSummary() {
+    try {
+      const sb = getSupabase()
+
+      // Fetch all exam students with attendance data
+      const { data: examStudents, error: fetchError } = await sb
+        .from('exam_students')
+        .select('centre_code, student_name, entry_photo_url')
+
+      if (fetchError) throw fetchError
+
+      // Calculate present/absent by centre
+      const summaryMap = new Map<string, AttendanceSummary>()
+
+      // Initialize with all centres
+      centres.forEach(centre => {
+        summaryMap.set(centre.code, {
+          centre_code: centre.code,
+          centre_name: centre.name,
+          total_students: 0,
+          present: 0,
+          absent: 0,
+          percentage: 0,
+        })
+      })
+
+      // Count attendance
+      examStudents?.forEach(student => {
+        const summary = summaryMap.get(student.centre_code)
+        if (summary) {
+          summary.total_students += 1
+          if (student.entry_photo_url) {
+            summary.present += 1
+          } else {
+            summary.absent += 1
+          }
+        }
+      })
+
+      // Calculate percentage
+      summaryMap.forEach(summary => {
+        if (summary.total_students > 0) {
+          summary.percentage = Math.round((summary.present / summary.total_students) * 100)
+        }
+      })
+
+      setAttendanceSummary(Array.from(summaryMap.values()))
+    } catch (err) {
+      console.error('Error loading attendance summary:', err)
     }
   }
 
@@ -260,6 +328,21 @@ export function ExamsSection({ readOnly = false }: Props) {
           }}
         >
           👥 Exam Students
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('attendance')}
+          style={{
+            padding: '12px 20px',
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            fontWeight: activeTab === 'attendance' ? '600' : '500',
+            color: activeTab === 'attendance' ? '#0066cc' : '#666',
+            borderBottom: activeTab === 'attendance' ? '3px solid #0066cc' : '3px solid transparent',
+          }}
+        >
+          📊 Attendance Summary
         </button>
       </div>
 
@@ -540,6 +623,110 @@ export function ExamsSection({ readOnly = false }: Props) {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ✅ ATTENDANCE SUMMARY TAB */}
+      {activeTab === 'attendance' && (
+        <div>
+          <h3>📊 Attendance Summary - 11 Centres</h3>
+          {loading ? (
+            <div className="state-screen state-compact">
+              <div className="loading-spinner" />
+            </div>
+          ) : attendanceSummary.length === 0 ? (
+            <div className="state-screen state-compact">
+              <p>{STRINGS.noData}</p>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="data-table" style={{ marginBottom: '20px' }}>
+                <thead>
+                  <tr>
+                    <th>Centre Code</th>
+                    <th>Centre Name</th>
+                    <th>Total Students</th>
+                    <th style={{ backgroundColor: '#d4edda' }}>✓ Present</th>
+                    <th style={{ backgroundColor: '#f8d7da' }}>✗ Absent</th>
+                    <th>Attendance %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendanceSummary.map((summary, idx) => (
+                    <tr key={idx}>
+                      <td className="monospace"><strong>{summary.centre_code}</strong></td>
+                      <td>{summary.centre_name}</td>
+                      <td style={{ textAlign: 'center' }}><strong>{summary.total_students}</strong></td>
+                      <td style={{ textAlign: 'center', backgroundColor: '#d4edda' }}>
+                        <strong style={{ color: '#155724' }}>{summary.present}</strong>
+                      </td>
+                      <td style={{ textAlign: 'center', backgroundColor: '#f8d7da' }}>
+                        <strong style={{ color: '#721c24' }}>{summary.absent}</strong>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <strong style={{
+                          color: summary.percentage >= 80 ? '#28a745' : summary.percentage >= 60 ? '#ffc107' : '#dc3545'
+                        }}>
+                          {summary.percentage}%
+                        </strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Summary Stats */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '15px',
+                marginTop: '30px'
+              }}>
+                <div style={{
+                  padding: '15px',
+                  backgroundColor: '#f0f0f0',
+                  borderRadius: '8px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Total Centres</div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{attendanceSummary.length}</div>
+                </div>
+                <div style={{
+                  padding: '15px',
+                  backgroundColor: '#d4edda',
+                  borderRadius: '8px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '12px', color: '#155724', marginBottom: '5px' }}>Total Present</div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#155724' }}>
+                    {attendanceSummary.reduce((sum, c) => sum + c.present, 0)}
+                  </div>
+                </div>
+                <div style={{
+                  padding: '15px',
+                  backgroundColor: '#f8d7da',
+                  borderRadius: '8px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '12px', color: '#721c24', marginBottom: '5px' }}>Total Absent</div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#721c24' }}>
+                    {attendanceSummary.reduce((sum, c) => sum + c.absent, 0)}
+                  </div>
+                </div>
+                <div style={{
+                  padding: '15px',
+                  backgroundColor: '#e7f3ff',
+                  borderRadius: '8px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '12px', color: '#004085', marginBottom: '5px' }}>Total Students</div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#004085' }}>
+                    {attendanceSummary.reduce((sum, c) => sum + c.total_students, 0)}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

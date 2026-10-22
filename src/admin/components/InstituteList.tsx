@@ -526,6 +526,42 @@ export function InstituteList({
   const [gpsEditing, setGpsEditing] = useState<{ institute: InstituteRow; line: PortalGpsAdminLine } | null>(null)
   const [reportInstitute, setReportInstitute] = useState<InstituteRow | null>(null)
   const [pdfExporting, setPdfExporting] = useState(false)
+  const [facePhotoStats, setFacePhotoStats] = useState({ total: 0, registered: 0, notRegistered: 0 })
+
+  // Fetch face photo stats across all institutes
+  useEffect(() => {
+    async function fetchFaceStats() {
+      try {
+        const sb = getSupabase()
+        // Get registered count (NOT NULL)
+        const { data: registered, error: regError } = await sb
+          .from('students')
+          .select('id', { count: 'exact' })
+          .not('face_photo_url', 'is', null)
+
+        // Get total count
+        const { data: total, error: totalError } = await sb
+          .from('students')
+          .select('id', { count: 'exact' })
+
+        if (!regError && !totalError && registered && total) {
+          const regCount = registered.length
+          const totalCount = total.length
+          setFacePhotoStats({
+            total: totalCount,
+            registered: regCount,
+            notRegistered: Math.max(0, totalCount - regCount),
+          })
+        }
+      } catch {
+        // Silently fail - stats are optional
+      }
+    }
+
+    if (rows.length > 0) {
+      void fetchFaceStats()
+    }
+  }, [rows])
 
   const effectiveDistrictKey =
     portal.mode === 'district_viewer' && lockedDistrict ? lockedDistrict.key : districtKey
@@ -1135,6 +1171,37 @@ export function InstituteList({
         <span className="search-count" aria-live="polite">
           {listSummary}
         </span>
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.8rem',
+            padding: '0.4rem 0.8rem',
+            borderRadius: '0.375rem',
+            backgroundColor: 'var(--surface-hover)',
+            border: '1px solid var(--border-light)',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span>✅</span>
+              <span style={{ color: 'var(--success)' }}>{facePhotoStats.registered}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Reg</span>
+            </div>
+            <span style={{ color: 'var(--border)' }}>|</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span>⏳</span>
+              <span style={{ color: 'var(--warn)' }}>{facePhotoStats.notRegistered}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Pend</span>
+            </div>
+            <span style={{ color: 'var(--border)' }}>|</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span>👥</span>
+              <span style={{ color: 'var(--text)' }}>{facePhotoStats.total}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tot</span>
+            </div>
+          </div>
+        </div>
         {adminAccessFilter !== 'all' ? (
           <button
             type="button"
