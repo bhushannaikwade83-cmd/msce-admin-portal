@@ -121,10 +121,11 @@ export async function fetchStudentReport(
   if (allStudentIds.length > 0) {
     for (const chunk of chunkIds(allStudentIds, 100)) {
       const part = await fetchAllPaged((rangeFrom, rangeTo) =>
-        applyInstituteCodeFilter(
-          sb.from('attendance_in_out').select('student_id, attendance_date').in('student_id', chunk),
-          institute,
-        )
+        sb
+          .from('attendance')
+          .select('student_id, attendance_date')
+          .eq('institute_id', institute.id)
+          .in('student_id', chunk)
           .gte('attendance_date', startStr)
           .lte('attendance_date', endStr)
           .range(rangeFrom, rangeTo),
@@ -136,10 +137,11 @@ export async function fetchStudentReport(
   const holidays = autoDetectedHolidayDates(instituteRows, allStudentIds.length)
 
   const studentRows = await fetchAllPaged((rangeFrom, rangeTo) =>
-    applyInstituteCodeFilter(
-      sb.from('attendance_in_out').select('*').eq('student_id', studentId),
-      institute,
-    )
+    sb
+      .from('attendance')
+      .select('*')
+      .eq('institute_id', institute.id)
+      .eq('student_id', studentId)
       .gte('attendance_date', startStr)
       .lte('attendance_date', endStr)
       .order('attendance_date')

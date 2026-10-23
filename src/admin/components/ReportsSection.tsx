@@ -245,24 +245,16 @@ export function ReportsSection({
       if (data && data.length > 0) {
         try {
           const studentIds = (data as Student[]).map((s) => s.id)
-          const attQuery = applyInstituteCodeFilter(
-            sb.from('attendance_in_out').select('student_id, attendance_date, type, additional'),
-            inst,
-          )
-          const { data: attData, error: attErr } = await attQuery
+          const { data: attData, error: attErr } = await sb
+            .from('attendance')
+            .select('student_id, attendance_date, record_type, status, marked_time')
+            .eq('institute_id', inst.id)
             .eq('attendance_date', today)
             .in('student_id', studentIds)
 
           if (!attErr && attData) {
             for (const rec of attData) {
-              const add =
-                rec.additional !== null && typeof rec.additional === 'object'
-                  ? (rec.additional as Record<string, unknown>)
-                  : {}
-              const fromAdd = add.status != null ? String(add.status).toLowerCase() : ''
-              const status =
-                fromAdd ||
-                (String(rec.type ?? '') === 'entry' || String(rec.type ?? '') === 'exit' ? 'present' : 'absent')
+              const status = rec.status != null ? String(rec.status).toLowerCase() : 'absent'
               attMap.set(String(rec.student_id), {
                 status,
                 date: String(rec.attendance_date ?? today),

@@ -223,7 +223,7 @@ export function IntegrityInstituteLoader({
     try {
       const sb = getSupabase()
       const ids = students.map((s) => s.id)
-      const prefersInOut = attendanceTables.includes('attendance_in_out')
+      const prefersInOut = attendanceTables.includes('attendance')
 
       if (prefersInOut) {
         const chunks = chunkIds(ids, 100)
@@ -231,11 +231,12 @@ export function IntegrityInstituteLoader({
 
         for (const ch of chunks) {
           if (ch.length === 0) continue
-          const q = applyInstituteCodeFilter(
-            sb.from('attendance_in_out').select('*').eq('attendance_date', attDate).in('student_id', ch),
-            institute,
-          )
-          const { data, error: qErr } = await q
+          const { data, error: qErr } = await sb
+            .from('attendance')
+            .select('*')
+            .eq('attendance_date', attDate)
+            .eq('institute_id', institute.id)
+            .in('student_id', ch)
           if (qErr) throw qErr
           for (const row of data ?? []) {
             const sid = row.student_id != null ? String(row.student_id) : ''
@@ -327,19 +328,18 @@ export function IntegrityInstituteLoader({
       for (const s of students) byStudent[s.id] = []
       let scanned = 0
 
-      if (attendanceTables.includes('attendance_in_out')) {
+      if (attendanceTables.includes('attendance')) {
         const rows = await fetchAllPaged<Record<string, unknown>>((rangeFrom, rangeTo) =>
-          applyInstituteCodeFilter(
-            sb
-              .from('attendance_in_out')
-              .select(
-                'student_id,sr_no,attendance_date,type,photo_url,photo_path,additional,created_at',
-              )
-              .gte('attendance_date', historyFrom)
-              .lte('attendance_date', historyTo)
-              .order('attendance_date', { ascending: false }),
-            institute,
-          ).range(rangeFrom, rangeTo),
+          sb
+            .from('attendance')
+            .select(
+              'id,student_id,sr_no,attendance_date,record_type,photo_url,created_at,status,marked_time,similarity_score',
+            )
+            .eq('institute_id', institute.id)
+            .gte('attendance_date', historyFrom)
+            .lte('attendance_date', historyTo)
+            .order('attendance_date', { ascending: false })
+            .range(rangeFrom, rangeTo),
         )
         for (const raw of rows) {
           const cap = captureFromInOutRow(raw)

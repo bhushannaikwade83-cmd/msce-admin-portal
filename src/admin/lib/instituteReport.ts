@@ -156,8 +156,8 @@ export async function fetchInstituteReport(
     faceRegisteredByRoll.set(roll, facePhotoUrl.length > 0)
   }
 
-  const presenceSelect = 'student_id, attendance_date, additional, type'
-  const hoursSelect = 'student_id, credited_hours, type, attendance_date'
+  const presenceSelect = 'student_id, attendance_date, status, record_type'
+  const hoursSelect = 'student_id, attendance_alloted_hr, record_type, attendance_date'
 
   let presenceRows: Record<string, unknown>[] = []
   let hoursRows: Record<string, unknown>[] = []
@@ -165,10 +165,11 @@ export async function fetchInstituteReport(
   if (studentIds.length > 0) {
     for (const chunk of chunkIds(studentIds, 100)) {
       const partPresence = await fetchAllPaged((rangeFrom, rangeTo) =>
-        applyInstituteCodeFilter(
-          sb.from('attendance_in_out').select(presenceSelect).in('student_id', chunk),
-          institute,
-        )
+        sb
+          .from('attendance')
+          .select(presenceSelect)
+          .eq('institute_id', institute.id)
+          .in('student_id', chunk)
           .gte('attendance_date', startStr)
           .lte('attendance_date', endStr)
           .order('attendance_date')
@@ -177,10 +178,12 @@ export async function fetchInstituteReport(
       presenceRows = presenceRows.concat(partPresence)
 
       const partHours = await fetchAllPaged((rangeFrom, rangeTo) =>
-        applyInstituteCodeFilter(
-          sb.from('attendance_in_out').select(hoursSelect).in('student_id', chunk).eq('type', 'exit'),
-          institute,
-        )
+        sb
+          .from('attendance')
+          .select(hoursSelect)
+          .eq('institute_id', institute.id)
+          .in('student_id', chunk)
+          .eq('record_type', 'exit')
           .gte('attendance_date', startStr)
           .lte('attendance_date', endStr)
           .range(rangeFrom, rangeTo),
