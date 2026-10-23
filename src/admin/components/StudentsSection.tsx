@@ -843,11 +843,12 @@ function AttendanceView({
         return
       }
 
-      if (attTable === 'attendance_in_out') {
-        let q = applyInstituteCodeFilter(
-          sb.from(attTable).select('*').eq('student_id', student.id),
-          institute,
-        )
+      if (attTable === 'attendance') {
+        let q = sb
+          .from(attTable)
+          .select('*')
+          .eq('institute_id', institute.id)
+          .eq('student_id', student.id)
           .gte('attendance_date', from)
           .lte('attendance_date', to)
         const subjKey = subject.id?.trim()
@@ -983,7 +984,7 @@ function AttendanceView({
         >
           📥 Month CSV
         </button>
-        {attTable === 'attendance_in_out' ? (
+        {attTable === 'attendance' ? (
           <button
             type="button"
             className="btn btn-primary btn-sm"
@@ -1119,25 +1120,15 @@ function SubjectFolders({
 
       try {
         const sb = getSupabase()
-        if (attTable === 'attendance_in_out') {
-          const { data, error: qErr } = await applyInstituteCodeFilter(
-            sb.from(attTable).select('additional').eq('student_id', student.id),
-            institute,
-          ).limit(2000)
+        if (attTable === 'attendance') {
+          const { data, error: qErr } = await sb
+            .from(attTable)
+            .select('remark')
+            .eq('institute_id', institute.id)
+            .eq('student_id', student.id)
+            .limit(2000)
           if (qErr) throw new Error(qErr.message)
-          const names = new Set<string>()
-          for (const r of data ?? []) {
-            const add = parseDbJsonObject((r as Record<string, unknown>).additional)
-            const sub = add.subject != null ? String(add.subject).trim() : ''
-            if (sub !== '') names.add(sub)
-          }
-          if (names.size === 0) {
-            setSubjects([{ id: '', name: 'Attendance', subject_code: null } as Subject])
-          } else {
-            setSubjects(
-              [...names].sort().map((n) => ({ id: n, name: n, subject_code: null }) as Subject),
-            )
-          }
+          setSubjects([{ id: '', name: 'Attendance', subject_code: null } as Subject])
         } else if (attTable === 'teacher_attendance') {
           const keys = studentRollIdentifiers(student)
           if (keys.length === 0) throw new Error('Student has no roll / id for attendance lookup')
@@ -1421,7 +1412,7 @@ function StudentsList({
   }, [students])
 
   const showDayAttendance =
-    attendanceTables.includes('attendance_in_out') || attendanceTables.includes('teacher_attendance')
+    attendanceTables.includes('attendance') || attendanceTables.includes('teacher_attendance')
   const primaryAttTable = attendanceTables[0] ?? null
 
   const load = useCallback(async () => {
@@ -1523,13 +1514,11 @@ function StudentsList({
     try {
       const sb = getSupabase()
       const ids = students.map((s) => s.id)
-      const prefersAttendance = attendanceTables.includes('attendance')
-      const prefersInOut = attendanceTables.includes('attendance_in_out')
 
-      if (prefersAttendance || prefersInOut) {
+      if (attendanceTables.includes('attendance')) {
         const chunks = chunkIds(ids, 100)
         const byStudent: Record<string, Record<string, unknown>[]> = {}
-        const tableName = prefersAttendance ? 'attendance' : 'attendance_in_out'
+        const tableName = 'attendance'
 
         for (const ch of chunks) {
           if (ch.length === 0) continue

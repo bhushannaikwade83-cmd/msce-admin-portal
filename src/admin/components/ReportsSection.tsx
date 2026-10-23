@@ -4,7 +4,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getSupabase } from '../lib/supabase'
 import { fetchAllPaged } from '../lib/supabasePaged'
-import { applyInstituteCodeFilter } from '../lib/attendanceInOut'
 import {
   downloadInstituteReportPdf,
   fetchInstituteReport,

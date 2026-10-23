@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf'
-import { applyInstituteCodeFilter, type InstituteCodeSource } from './attendanceInOut'
+import { type InstituteCodeSource } from './attendanceInOut'
 import {
   autoDetectedHolidayDates,
   mergeAttendanceInOutRowsByDate,

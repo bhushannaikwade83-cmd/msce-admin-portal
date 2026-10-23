@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 import { downloadJsPdf, pdfAutoTable } from './pdfDownload'
-import { applyInstituteCodeFilter, type InstituteCodeSource } from './attendanceInOut'
+import { type InstituteCodeSource } from './attendanceInOut'
 import { studentDayPresentFromInOutRows } from './attendancePresence'
 import { getSupabase } from './supabase'
 import { fetchAllPaged } from './supabasePaged'

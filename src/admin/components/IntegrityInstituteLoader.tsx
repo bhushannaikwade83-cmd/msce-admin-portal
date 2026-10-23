@@ -5,7 +5,7 @@ import {
   buildStudentCaptureMismatches,
   type AttendanceCaptureFlag,
 } from '../lib/attendanceCaptureScan'
-import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
+import { flattenAttendanceInOutRow } from '../lib/attendanceInOut'
 import type { DayInOutMerge } from '../lib/photoCompare'
 import { fetchAllPaged } from '../lib/supabasePaged'
 import { getSupabase } from '../lib/supabase'
@@ -186,7 +186,7 @@ export function IntegrityInstituteLoader({
   )
 
   const showDayAttendance =
-    attendanceTables.includes('attendance_in_out') || attendanceTables.includes('teacher_attendance')
+    attendanceTables.includes('attendance') || attendanceTables.includes('teacher_attendance')
 
   const loadStudents = useCallback(async () => {
     setLoading(true)
