@@ -600,7 +600,7 @@ function AddStudentPanel({
       const nameCompare = `${fn.toLowerCase()} ${mn.toLowerCase()} ${ln.toLowerCase()}`.replace(/\s+/g, ' ').trim()
       const { data: dupRows } = await sb
         .from('students')
-        .select('id,fname,mname,lname,first_name,middle_name,last_name,name,student_name')
+        .select('id,fname,mname,lname,first_name,middle_name,last_name,student_name')
         .eq('institute_id', institute.id)
       for (const row of dupRows ?? []) {
         const r = row as Record<string, unknown>
