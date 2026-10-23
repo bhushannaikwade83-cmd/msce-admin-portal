@@ -233,7 +233,7 @@ export function ReportsSection({
         .from('students')
         .select('*')
         .eq('institute_id', inst.id)
-        .order('name')
+        .order('student_name')
       if (qErr) throw qErr
       setStudents((data ?? []) as Student[])
 
