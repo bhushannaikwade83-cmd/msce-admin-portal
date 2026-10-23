@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { sortByInstituteId } from '../lib/instituteSort'
 import { fetchAllPaged } from '../lib/supabasePaged'
 import { getSupabase } from '../lib/supabase'
-import { applyInstituteCodeFilter, flattenAttendanceInOutRow } from '../lib/attendanceInOut'
+import { flattenAttendanceInOutRow } from '../lib/attendanceInOut'
 import { parseDbJsonObject } from '../lib/parseDbJson'
 import {
   collectSubjectNamesFromTeacherPayload,
@@ -1121,12 +1121,12 @@ function SubjectFolders({
       try {
         const sb = getSupabase()
         if (attTable === 'attendance') {
-          const { data, error: qErr } = await sb
+          const { error: qErr } = await sb
             .from(attTable)
-            .select('remark')
+            .select('*')
             .eq('institute_id', institute.id)
             .eq('student_id', student.id)
-            .limit(2000)
+            .limit(1)
           if (qErr) throw new Error(qErr.message)
           setSubjects([{ id: '', name: 'Attendance', subject_code: null } as Subject])
         } else if (attTable === 'teacher_attendance') {
@@ -1522,14 +1522,12 @@ function StudentsList({
 
         for (const ch of chunks) {
           if (ch.length === 0) continue
-          let q = sb.from(tableName).select('*').eq('attendance_date', attDate).in('student_id', ch)
-
-          if (prefersAttendance) {
-            q = q.eq('institute_id', institute.id)
-          } else {
-            q = applyInstituteCodeFilter(q, institute)
-          }
-          const { data, error: qErr } = await q
+          const { data, error: qErr } = await sb
+            .from(tableName)
+            .select('*')
+            .eq('attendance_date', attDate)
+            .eq('institute_id', institute.id)
+            .in('student_id', ch)
           if (qErr) throw qErr
           for (const row of data ?? []) {
             const sid = row.student_id != null ? String(row.student_id) : ''
