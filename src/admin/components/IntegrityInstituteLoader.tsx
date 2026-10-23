@@ -80,7 +80,7 @@ function mergeAttendanceInOutDayForStudent(dateYmd: string, rawRows: Record<stri
 
   for (const raw of rawRows) {
     const flat = flattenAttendanceInOutRow(raw) as FlatAtt
-    const type = String(raw.type ?? '').toLowerCase()
+    const type = String(raw.record_type ?? raw.type ?? '').toLowerCase()
 
     if (type === 'entry') {
       const k = rowTimeKeyForInOut(dateYmd, flat, raw, 'entry')

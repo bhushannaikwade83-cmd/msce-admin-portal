@@ -28,7 +28,7 @@ export function captureFromInOutRow(raw: Record<string, unknown>): AttendanceCap
   const date = flat.date != null ? String(flat.date).slice(0, 10) : ''
   if (!date) return null
 
-  const type = String(raw.type ?? '').toLowerCase()
+  const type = String(raw.record_type ?? raw.type ?? '').toLowerCase()
   let kind: 'entry' | 'exit' | null = null
   let photoUrl: string | null = null
   let at: string | null = null

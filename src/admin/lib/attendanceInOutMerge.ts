@@ -73,7 +73,7 @@ function mergeInOutRowsForDateSubject(
 
   for (const data of list) {
     const add = additional(data)
-    const typ = String(data.type ?? '').toLowerCase()
+    const typ = String(data.record_type ?? data.type ?? '').toLowerCase()
     const st = statusFromRow(data)
     if (st === 'present') status = 'present'
 
@@ -99,7 +99,7 @@ function mergeInOutRowsForDateSubject(
 
   for (const data of list) {
     const add = additional(data)
-    const typ = String(data.type ?? '').toLowerCase()
+    const typ = String(data.record_type ?? data.type ?? '').toLowerCase()
     const created = parseAnyTimestamp(data.created_at)
     const etAdd = parseAnyTimestamp(add.entryTime)
     const xtAdd = parseAnyTimestamp(add.exitTime)
@@ -113,7 +113,7 @@ function mergeInOutRowsForDateSubject(
     }
   }
 
-  const typeEntry = list.some((d) => String(d.type ?? '').toLowerCase().trim() === 'entry')
+  const typeEntry = list.some((d) => String(d.record_type ?? d.type ?? '').toLowerCase().trim() === 'entry')
   const hasEntrySignal = entryTime != null || typeEntry
   const credited = (creditedHours != null && creditedHours > 0) || (hours != null && hours > 0)
   if (hasEntrySignal || autoClosedMissingExit || credited || (exitTime != null && status === 'present')) {

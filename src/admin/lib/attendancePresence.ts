@@ -52,7 +52,7 @@ export function parseAnyTimestamp(v: unknown): Date | null {
 }
 
 export function attendanceInOutRowHasEntry(row: Record<string, unknown>): boolean {
-  const type = String(row.type ?? '')
+  const type = String(row.record_type ?? row.type ?? '')
     .toLowerCase()
     .trim()
   if (type === 'entry') return true
@@ -61,7 +61,7 @@ export function attendanceInOutRowHasEntry(row: Record<string, unknown>): boolea
 }
 
 export function attendanceInOutRowHasPresentCredit(row: Record<string, unknown>): boolean {
-  const type = String(row.type ?? '')
+  const type = String(row.record_type ?? row.type ?? '')
     .toLowerCase()
     .trim()
   const add = additional(row)
