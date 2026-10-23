@@ -19,22 +19,24 @@ export function applyInstituteCodeFilter(q: any, inst: InstituteCodeSource): any
 }
 
 export function flattenAttendanceInOutRow(row: Record<string, unknown>): Record<string, unknown> {
-  const add = parseDbJsonObject(row.additional)
-  const type = String(row.type ?? '')
+  const add = parseDbJsonObject(row.additional ?? {})
+  const recordType = String(row.record_type ?? row.type ?? '')
   const dateVal = row.attendance_date ?? row.date
   const dateStr = dateVal != null ? String(dateVal).slice(0, 10) : null
 
-  const rawStatus = add.status != null ? String(add.status) : ''
+  const rawStatus = row.status != null ? String(row.status) : (add.status != null ? String(add.status) : '')
   const status =
     rawStatus.trim() ||
-    (type === 'entry' || type === 'exit' ? 'present' : '')
+    (recordType === 'entry' || recordType === 'exit' ? 'present' : '')
 
   let inTime: string | null = null
   let outTime: string | null = null
+  if (row.marked_time && recordType === 'entry') inTime = String(row.marked_time)
+  if (row.marked_time && recordType === 'exit') outTime = String(row.marked_time)
   if (add.entryTime) inTime = String(add.entryTime)
   if (add.exitTime) outTime = String(add.exitTime)
-  if (type === 'entry' && !inTime && row.created_at != null) inTime = String(row.created_at)
-  if (type === 'exit' && !outTime && row.created_at != null) outTime = String(row.created_at)
+  if (recordType === 'entry' && !inTime && row.created_at != null) inTime = String(row.created_at)
+  if (recordType === 'exit' && !outTime && row.created_at != null) outTime = String(row.created_at)
 
   const photoPrimary =
     row.photo_url != null && String(row.photo_url).trim() !== ''
@@ -43,11 +45,11 @@ export function flattenAttendanceInOutRow(row: Record<string, unknown>): Record<
         ? String(row.photo_path).trim()
         : ''
   const inPhoto =
-    type === 'entry'
+    recordType === 'entry'
       ? photoPrimary || (add.entryPhoto != null ? String(add.entryPhoto) : '') || null
       : add.entryPhoto != null ? String(add.entryPhoto) : null
   const outPhoto =
-    type === 'exit'
+    recordType === 'exit'
       ? photoPrimary || (add.exitPhoto != null ? String(add.exitPhoto) : '') || null
       : add.exitPhoto != null ? String(add.exitPhoto) : null
 
