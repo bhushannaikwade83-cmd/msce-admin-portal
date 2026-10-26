@@ -125,9 +125,12 @@ type InstituteEditForm = {
   country: string
   mobile_no: string
   is_active: boolean
+  admin_full_name: string
+  admin_mobile: string
+  admin_email: string
 }
 
-function formFromInstituteRow(row: Record<string, unknown>): InstituteEditForm {
+function formFromInstituteRow(row: Record<string, unknown>, adminInvite?: AdminInviteRow | null): InstituteEditForm {
   const pickR = (...keys: string[]): string =>
     keys.map((k) => row[k]).find((v) => v !== null && v !== undefined && String(v) !== '')?.toString() ?? ''
   return {
@@ -143,6 +146,9 @@ function formFromInstituteRow(row: Record<string, unknown>): InstituteEditForm {
     country: pickR('country') || 'India',
     mobile_no: pickR('mobile_no'),
     is_active: row.is_active !== false,
+    admin_full_name: String(adminInvite?.full_name ?? ''),
+    admin_mobile: String(adminInvite?.phone ?? ''),
+    admin_email: String(adminInvite?.email ?? ''),
   }
 }
 
@@ -194,8 +200,16 @@ function InstituteEditDialog({
         const sb = getSupabase()
         const { data, error: qErr } = await sb.from('institutes').select('*').eq('id', institute.id).single()
         if (qErr) throw qErr
+
+        // Fetch admin invite data
+        const { data: adminInvite, error: adminErr } = await sb
+          .from('admin_invites')
+          .select('full_name, phone, email')
+          .eq('institute_id', institute.id)
+          .maybeSingle()
+
         if (!cancelled && data) {
-          setForm(formFromInstituteRow(data as Record<string, unknown>))
+          setForm(formFromInstituteRow(data as Record<string, unknown>, adminInvite as AdminInviteRow | null))
         }
       } catch (e) {
         if (!cancelled) {
@@ -223,6 +237,8 @@ function InstituteEditDialog({
     try {
       const sb = getSupabase()
       const pin = form.pincode.replace(/\D/g, '').slice(0, 6)
+
+      // Update institute details
       const { error: uErr } = await sb
         .from('institutes')
         .update({
@@ -242,6 +258,27 @@ function InstituteEditDialog({
         })
         .eq('id', institute.id)
       if (uErr) throw uErr
+
+      // Update admin invite details
+      const adminName = form.admin_full_name.trim()
+      const adminMobile = form.admin_mobile.trim()
+      const adminEmail = form.admin_email.trim().toLowerCase()
+
+      if (adminName || adminMobile || adminEmail) {
+        const { error: adminErr } = await sb
+          .from('admin_invites')
+          .update({
+            full_name: adminName || null,
+            phone: adminMobile || null,
+            email: adminEmail || null,
+          })
+          .eq('institute_id', institute.id)
+        if (adminErr && adminErr.code !== 'PGRST116') {
+          // PGRST116 = no rows found, which is ok if no invite exists yet
+          throw adminErr
+        }
+      }
+
       onSaved()
       onClose()
     } catch (e) {
@@ -430,6 +467,43 @@ function InstituteEditDialog({
               Institute is active (visible in app listings when your RLS allows)
             </label>
           </div>
+
+          <p className="form-section-label">Admin details</p>
+          <div className="field span-2">
+            <label htmlFor="inst-edit-admin-name">Admin full name</label>
+            <input
+              id="inst-edit-admin-name"
+              type="text"
+              value={form.admin_full_name}
+              onChange={(e) => setForm((f) => ({ ...f, admin_full_name: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="name"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="inst-edit-admin-mobile">Admin mobile number</label>
+            <input
+              id="inst-edit-admin-mobile"
+              type="tel"
+              inputMode="tel"
+              value={form.admin_mobile}
+              onChange={(e) => setForm((f) => ({ ...f, admin_mobile: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="tel"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="inst-edit-admin-email">Admin email ID</label>
+            <input
+              id="inst-edit-admin-email"
+              type="email"
+              value={form.admin_email}
+              onChange={(e) => setForm((f) => ({ ...f, admin_email: e.target.value }))}
+              disabled={inputDisabled}
+              autoComplete="email"
+            />
+          </div>
+
           <p className="form-section-label span-2">GPS</p>
           <p className="muted small span-2" style={{ margin: 0, lineHeight: 1.45 }}>
             Per-admin GPS: use <strong>Clear GPS</strong> in the institutes table to save the current location as
