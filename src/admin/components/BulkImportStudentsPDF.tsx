@@ -1,10 +1,16 @@
 import { useState, useRef, type FormEvent } from 'react'
-import * as pdfjsLib from 'pdfjs-dist'
 import { getSupabase } from '../lib/supabase'
 
-// Set worker for PDF parsing - use CDN with proper protocol
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`
+// Dynamic import of pdfjs-dist with worker disabled for simplicity
+let pdfjsLib: typeof import('pdfjs-dist') | null = null
+const loadPdfJs = async () => {
+  if (!pdfjsLib) {
+    const imported = await import('pdfjs-dist')
+    pdfjsLib = imported
+    // Disable worker - use single-threaded mode
+    pdfjsLib.GlobalWorkerOptions.workerSrc = undefined as any
+  }
+  return pdfjsLib
 }
 
 interface ExtractedStudent {
@@ -37,14 +43,20 @@ export function BulkImportStudentsPDF({ onImported }: Props) {
   const [showPreview, setShowPreview] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
 
-  // Extract text from PDF using pdfjs-dist
+  // Extract text from PDF using pdfjs-dist (single-threaded mode)
   async function extractTextFromPDF(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = async (e) => {
         try {
           const arrayBuffer = e.target?.result as ArrayBuffer
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+          const pdfModule = await loadPdfJs()
+
+          if (!pdfModule) {
+            throw new Error('Failed to load PDF.js library')
+          }
+
+          const pdf = await pdfModule.getDocument({ data: arrayBuffer }).promise
           let fullText = ''
 
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
