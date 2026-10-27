@@ -319,7 +319,6 @@ export function BulkImportStudentsPDF({ onImported }: Props) {
                 onClick={() => {
                   setShowPreview(false)
                   setPreview([])
-                  setUploadedFiles([])
                   if (fileInputRef.current) fileInputRef.current.value = ''
                 }}
               >
