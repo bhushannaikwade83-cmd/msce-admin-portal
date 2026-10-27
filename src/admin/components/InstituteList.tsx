@@ -202,7 +202,7 @@ function InstituteEditDialog({
         if (qErr) throw qErr
 
         // Fetch admin invite data
-        const { data: adminInvite, error: adminErr } = await sb
+        const { data: adminInvite } = await sb
           .from('admin_invites')
           .select('full_name, phone, email')
           .eq('institute_id', institute.id)

@@ -41,7 +41,6 @@ export function BulkImportStudentsPDF({ onImported }: Props) {
   const [err, setErr] = useState<string | null>(null)
   const [preview, setPreview] = useState<ExtractedStudent[]>([])
   const [showPreview, setShowPreview] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
 
   // Extract text from PDF using pdfjs-dist (single-threaded mode)
   async function extractTextFromPDF(file: File): Promise<string> {
@@ -165,7 +164,6 @@ export function BulkImportStudentsPDF({ onImported }: Props) {
       }
 
       setPreview(extractedStudents)
-      setUploadedFiles(files)
       setShowPreview(true)
       setMsg(`✅ Extracted ${extractedStudents.length} students from ${files.length} PDF(s). Review and click "Import" to save.`)
     } catch (e) {
@@ -237,7 +235,6 @@ export function BulkImportStudentsPDF({ onImported }: Props) {
 
       setMsg(resultMsg)
       setPreview([])
-      setUploadedFiles([])
       setShowPreview(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
       onImported()
