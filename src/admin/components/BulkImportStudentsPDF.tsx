@@ -53,7 +53,7 @@ export function BulkImportStudentsPDF({ onImported }: Props) {
             throw new Error('Failed to load PDF.js library')
           }
 
-          const pdf = await pdfModule.getDocument({ data: arrayBuffer, disableWorker: true }).promise
+          const pdf = await pdfModule.getDocument({ data: arrayBuffer, disableWorker: true } as any).promise
           let fullText = ''
 
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
