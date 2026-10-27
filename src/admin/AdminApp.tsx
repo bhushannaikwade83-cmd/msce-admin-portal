@@ -6,6 +6,7 @@ import { DashboardLayout, type DashboardTab } from './layouts/DashboardLayout'
 import { LoginPage } from './pages/LoginPage'
 import { AddInstituteForm } from './components/AddInstituteForm'
 import { AddStudentForm } from './components/AddStudentForm'
+import { BulkImportStudentsPDF } from './components/BulkImportStudentsPDF'
 import { InstituteAdminsSection } from './components/InstituteAdminsSection'
 import { InstituteInstructorsSection } from './components/InstituteInstructorsSection'
 import { InstituteList } from './components/InstituteList'
@@ -88,6 +89,7 @@ function loadStoredAdminTab(): DashboardTab {
     case 'exams':
     case 'students':
     case 'addstudent':
+    case 'bulkimport':
     case 'quicksearch':
     case 'integrity':
     case 'reports':
@@ -203,6 +205,11 @@ function AuthenticatedApp() {
       {visibleTabs.includes('addstudent') && activeTab === 'addstudent' ? (
         <TabPanel active>
           <AddStudentForm />
+        </TabPanel>
+      ) : null}
+      {visibleTabs.includes('bulkimport') && activeTab === 'bulkimport' ? (
+        <TabPanel active>
+          <BulkImportStudentsPDF onImported={() => setTab('students')} />
         </TabPanel>
       ) : null}
       {visibleTabs.includes('integrity') && activeTab === 'integrity' ? (
