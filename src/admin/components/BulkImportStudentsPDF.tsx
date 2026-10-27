@@ -1,14 +1,12 @@
 import { useState, useRef, type FormEvent } from 'react'
 import { getSupabase } from '../lib/supabase'
 
-// Dynamic import of pdfjs-dist with worker disabled for simplicity
+// Dynamic import of pdfjs-dist
 let pdfjsLib: typeof import('pdfjs-dist') | null = null
 const loadPdfJs = async () => {
   if (!pdfjsLib) {
     const imported = await import('pdfjs-dist')
     pdfjsLib = imported
-    // Disable worker - use single-threaded mode
-    pdfjsLib.GlobalWorkerOptions.workerSrc = undefined as any
   }
   return pdfjsLib
 }
@@ -55,7 +53,7 @@ export function BulkImportStudentsPDF({ onImported }: Props) {
             throw new Error('Failed to load PDF.js library')
           }
 
-          const pdf = await pdfModule.getDocument({ data: arrayBuffer }).promise
+          const pdf = await pdfModule.getDocument({ data: arrayBuffer, disableWorker: true }).promise
           let fullText = ''
 
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
