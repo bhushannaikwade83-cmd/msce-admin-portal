@@ -2,8 +2,10 @@ import { useState, useRef, type FormEvent } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
 import { getSupabase } from '../lib/supabase'
 
-// Set worker for PDF parsing
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+// Set worker for PDF parsing - use CDN with proper protocol
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`
+}
 
 interface ExtractedStudent {
   student_name: string
