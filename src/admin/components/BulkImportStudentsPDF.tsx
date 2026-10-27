@@ -1,5 +1,9 @@
 import { useState, useRef, type FormEvent } from 'react'
+import * as pdfjsLib from 'pdfjs-dist'
 import { getSupabase } from '../lib/supabase'
+
+// Set worker for PDF parsing
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
 
 interface ExtractedStudent {
   student_name: string
@@ -31,35 +35,30 @@ export function BulkImportStudentsPDF({ onImported }: Props) {
   const [showPreview, setShowPreview] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
 
-  // Simple PDF text extraction using PDFjs
+  // Extract text from PDF using pdfjs-dist
   async function extractTextFromPDF(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = async (e) => {
         try {
           const arrayBuffer = e.target?.result as ArrayBuffer
-          // Use pdfjs-dist if available, otherwise parse manually
-          const text = await extractPDFText(arrayBuffer)
-          resolve(text)
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+          let fullText = ''
+
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum)
+            const textContent = await page.getTextContent()
+            const pageText = textContent.items.map((item: any) => item.str).join(' ')
+            fullText += pageText + '\n'
+          }
+
+          resolve(fullText)
         } catch (error) {
           reject(error)
         }
       }
       reader.readAsArrayBuffer(file)
     })
-  }
-
-  // Basic PDF text extraction (works with modern PDFs)
-  async function extractPDFText(arrayBuffer: ArrayBuffer): Promise<string> {
-    try {
-      // For simplicity, convert PDF to text using a basic approach
-      // In production, use pdfjs-dist library
-      const uint8Array = new Uint8Array(arrayBuffer)
-      const text = new TextDecoder().decode(uint8Array)
-      return text
-    } catch {
-      return ''
-    }
   }
 
   function parseFormData(text: string): ExtractedStudent | null {
