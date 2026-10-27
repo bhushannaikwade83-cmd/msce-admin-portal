@@ -34,12 +34,13 @@ const ALL_TABS: DashboardTab[] = [
   'exams',
   'students',
   'addstudent',
+  'bulkimport',
   'quicksearch',
   'integrity',
   'reports',
 ]
 
-const DISTRICT_TABS: DashboardTab[] = ['institutes', 'instructors', 'students', 'addstudent', 'quicksearch', 'integrity', 'reports']
+const DISTRICT_TABS: DashboardTab[] = ['institutes', 'instructors', 'students', 'addstudent', 'bulkimport', 'quicksearch', 'integrity', 'reports']
 
 const VALID_TABS = new Set<DashboardTab>(ALL_TABS)
 
