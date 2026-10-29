@@ -895,12 +895,15 @@ export default function GccTbcExamsPage({ onBack }: Props) {
             <div
               style={{
                 position: 'relative',
-                maxWidth: '90vw',
-                maxHeight: '90vh',
+                maxWidth: '80vw',
+                maxHeight: '80vh',
                 background: 'white',
                 borderRadius: '8px',
-                overflow: 'hidden',
+                overflow: 'auto',
                 boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -908,9 +911,11 @@ export default function GccTbcExamsPage({ onBack }: Props) {
                 src={viewingPhotoUrl}
                 alt="Full size"
                 style={{
-                  width: '100%',
-                  height: '100%',
+                  maxWidth: '100%',
+                  maxHeight: '100%',
                   objectFit: 'contain',
+                  width: 'auto',
+                  height: 'auto',
                 }}
               />
               <button
