@@ -662,7 +662,7 @@ export default function GccTbcExamsPage({ onBack }: Props) {
                       <tr key={s.id}>
                         <td>
                           {s.photo ? (
-                            <div className="exam-photo-box" style={{ width: 120, height: 120, cursor: 'pointer' }} onClick={() => setViewingPhotoUrl(s.photo)}>
+                            <div className="exam-photo-box" style={{ width: 90, height: 90, cursor: 'pointer' }} onClick={() => setViewingPhotoUrl(s.photo)}>
                               <img src={s.photo} alt={s.student_name ?? ''} />
                             </div>
                           ) : (
@@ -675,7 +675,7 @@ export default function GccTbcExamsPage({ onBack }: Props) {
                         <td>{s.exam_date ? new Date(s.exam_date).toLocaleDateString() : '—'}</td>
                         <td>
                           {s.entry_photo_url ? (
-                            <div className="exam-photo-box" style={{ width: 120, height: 120, cursor: 'pointer' }} onClick={() => setViewingPhotoUrl(s.entry_photo_url)}>
+                            <div className="exam-photo-box" style={{ width: 90, height: 90, cursor: 'pointer' }} onClick={() => setViewingPhotoUrl(s.entry_photo_url)}>
                               <img src={s.entry_photo_url} alt="entry" />
                             </div>
                           ) : (
