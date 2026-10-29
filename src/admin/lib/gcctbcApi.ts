@@ -6,7 +6,7 @@
  * the production API so this works out of the box with no setup.
  */
 
-const DEFAULT_API_BASE = 'https://digitrixmedia.com/MSCE_EXAM_APP/api'
+const DEFAULT_API_BASE = 'https://api1.digitrixmedia.com/MSCE_EXAM_APP/api'
 
 function apiBase(): string {
   const fromEnv = (import.meta.env.VITE_GCCTBC_API_BASE as string | undefined)?.trim()
