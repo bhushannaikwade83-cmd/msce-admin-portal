@@ -5,8 +5,8 @@ import { StudentDisplayPhoto } from '../components/StudentDisplayPhoto';
 // Global CSS for photo boxes
 const photoBoxStyles = `
   .exam-photo-box {
-    width: 120px;
-    height: 120px;
+    width: 250px;
+    height: 250px;
     overflow: hidden;
     border-radius: 4px;
     border: 2px solid #ddd;
@@ -77,6 +77,7 @@ export default function ExamStudentsPage({ onBack }: Props) {
   const [selectedCentre, setSelectedCentre] = useState<string>('');  // ✅ Centre filter
   const [centres, setCentres] = useState<string[]>([]);  // ✅ All centre codes
   const [resettingId, setResettingId] = useState<string | null>(null);  // ✅ Track resetting state
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);  // ✅ Modal photo viewer
 
   useEffect(() => {
     // ✅ Load centres ONLY - no students loading
@@ -633,7 +634,7 @@ export default function ExamStudentsPage({ onBack }: Props) {
                           <td style={{ padding: '8px 16px', textAlign: 'center', verticalAlign: 'middle', width: '140px' }}>
                             {detail.entry_photo_url ? (
                               <div>
-                                <div className="exam-photo-box" style={{ marginBottom: '8px' }}>
+                                <div className="exam-photo-box" style={{ marginBottom: '8px', cursor: 'pointer' }} onClick={() => setViewingPhotoUrl(detail.entry_photo_url)}>
                                   <StudentDisplayPhoto
                                     student={{ photo_url: detail.entry_photo_url }}
                                     displayName={`${student.student_name} - Entry`}
@@ -775,6 +776,70 @@ export default function ExamStudentsPage({ onBack }: Props) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Photo Viewer Modal */}
+      {viewingPhotoUrl && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '20px',
+          }}
+          onClick={() => setViewingPhotoUrl(null)}
+        >
+          <div
+            style={{
+              position: 'relative',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              background: 'white',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={viewingPhotoUrl}
+              alt="Full size"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+              }}
+            />
+            <button
+              onClick={() => setViewingPhotoUrl(null)}
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                background: '#e74c3c',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                fontSize: '20px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 

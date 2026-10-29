@@ -53,6 +53,7 @@ export default function GccTbcExamsPage({ onBack }: Props) {
 
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null)
 
   async function loadCentres() {
     try {
@@ -661,7 +662,7 @@ export default function GccTbcExamsPage({ onBack }: Props) {
                       <tr key={s.id}>
                         <td>
                           {s.photo ? (
-                            <div className="exam-photo-box" style={{ width: 48, height: 48 }}>
+                            <div className="exam-photo-box" style={{ width: 120, height: 120, cursor: 'pointer' }} onClick={() => setViewingPhotoUrl(s.photo)}>
                               <img src={s.photo} alt={s.student_name ?? ''} />
                             </div>
                           ) : (
@@ -674,7 +675,7 @@ export default function GccTbcExamsPage({ onBack }: Props) {
                         <td>{s.exam_date ? new Date(s.exam_date).toLocaleDateString() : '—'}</td>
                         <td>
                           {s.entry_photo_url ? (
-                            <div className="exam-photo-box" style={{ width: 48, height: 48 }}>
+                            <div className="exam-photo-box" style={{ width: 120, height: 120, cursor: 'pointer' }} onClick={() => setViewingPhotoUrl(s.entry_photo_url)}>
                               <img src={s.entry_photo_url} alt="entry" />
                             </div>
                           ) : (
@@ -870,6 +871,70 @@ export default function GccTbcExamsPage({ onBack }: Props) {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Photo Viewer Modal */}
+        {viewingPhotoUrl && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.85)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000,
+              padding: '20px',
+            }}
+            onClick={() => setViewingPhotoUrl(null)}
+          >
+            <div
+              style={{
+                position: 'relative',
+                maxWidth: '90vw',
+                maxHeight: '90vh',
+                background: 'white',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={viewingPhotoUrl}
+                alt="Full size"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                }}
+              />
+              <button
+                onClick={() => setViewingPhotoUrl(null)}
+                style={{
+                  position: 'absolute',
+                  top: '10px',
+                  right: '10px',
+                  background: '#e74c3c',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                ✕
+              </button>
+            </div>
           </div>
         )}
       </div>
