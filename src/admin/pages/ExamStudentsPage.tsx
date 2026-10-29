@@ -5,8 +5,8 @@ import { StudentDisplayPhoto } from '../components/StudentDisplayPhoto';
 // Global CSS for photo boxes
 const photoBoxStyles = `
   .exam-photo-box {
-    width: 250px;
-    height: 250px;
+    width: 100px;
+    height: 100px;
     overflow: hidden;
     border-radius: 4px;
     border: 2px solid #ddd;
