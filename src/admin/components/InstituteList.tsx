@@ -660,8 +660,8 @@ export function InstituteList({
     return adminAccessFilteredRows.filter((r) => {
       const searchFields = [r.name, r.institute_code, r.id, r.city, r.state, r.pincode]
       const adminInvite = adminInvitesByInstitute[r.id]
-      if (adminInvite?.admin_full_name) {
-        searchFields.push(adminInvite.admin_full_name)
+      if (adminInvite?.full_name) {
+        searchFields.push(adminInvite.full_name)
       }
       return searchFields
         .filter(Boolean)
