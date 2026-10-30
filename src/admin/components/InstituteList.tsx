@@ -657,12 +657,17 @@ export function InstituteList({
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return adminAccessFilteredRows
-    return adminAccessFilteredRows.filter((r) =>
-      [r.name, r.institute_code, r.id, r.city, r.state, r.pincode]
+    return adminAccessFilteredRows.filter((r) => {
+      const searchFields = [r.name, r.institute_code, r.id, r.city, r.state, r.pincode]
+      const adminInvite = adminInvitesByInstitute[r.id]
+      if (adminInvite?.admin_full_name) {
+        searchFields.push(adminInvite.admin_full_name)
+      }
+      return searchFields
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
-    )
-  }, [adminAccessFilteredRows, search])
+        .some((v) => String(v).toLowerCase().includes(q))
+    })
+  }, [adminAccessFilteredRows, search, adminInvitesByInstitute])
 
   const stats = useMemo(
     () => computeInstituteStats(districtFilteredRows, adminInvitesByInstitute),
